@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2019-2020 Nelson Alves Ferreira Neto
+ * Copyright 2020 Nelson Alves Ferreira Neto
  * All Rights Reserved Worldwide
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,7 +26,7 @@
 /* 
  * Module: instruction_fetch
  *
- * The instruction Fetch module is responsible for update Program Counter PC and 
+ * The Instruction Fetch module is responsible for update Program Counter PC and 
  * get the next instruction from the program memory. 
  *
  * Maintainer: Nelson Alves <nelsonafn@gmail.com>
