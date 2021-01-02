@@ -301,7 +301,8 @@ package riscv_definitions;
      * Architect data BUS size definition.
      */
     typedef union packed {
-        logic [31:0] bus;
+        logic [31:0] u_data;
+        logic signed [31:0] s_data;
         logic [0:3] [7:0] memory;
     } dataBus_u;
 

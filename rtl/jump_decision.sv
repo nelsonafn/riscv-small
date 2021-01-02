@@ -62,15 +62,6 @@ module jump_decision (
 	dataBus_u base_addr;
 
 	/* 
-     * Used for signed version os sources
-     */
-	signed dataBus_u sig_rs1; // Signed reg source one data
-	signed dataBus_u sig_rs2; // Signed reg source two data
-
-	assign sig_rs1 = rs1;
-	assign sig_rs2 = rs2;
-
-	/* 
      * Make the comparison of rs1 and rs2
      */
 	always_comb begin: comp
@@ -82,7 +73,7 @@ module jump_decision (
 		end
 
 		// Unsigned comparison 
-		if (rs1 < rs2) begin
+		if (rs1.u_data < rs2.u_data) begin
 			less_u = 1'b1;
 		end
 		else begin
@@ -90,7 +81,7 @@ module jump_decision (
 		end
 
 		// Signed comparison 
-		if (sig_rs1 < sig_rs2) begin
+		if (rs1.s_data < rs2.s_data) begin
 			less_s = 1'b1;
 		end
 		else begin
