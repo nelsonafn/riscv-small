@@ -37,14 +37,24 @@
 
 
 package riscv_definitions;
+
     /* 
      * Type for select the next pc source.
      */
     typedef enum logic [1:0] {
         PC_PLUS4 = 2'b00, 
         JUMP     = 2'b01,
-        TRAP     = 2'b10
+        TRAP     = 2'b1?
     } nextPCType_e;
+
+    /* 
+     * Type for select the branch base source.
+     * It is used by decoder to inform with should be the base address source for the jump_decision.
+     */
+    typedef enum logic {
+        PC  = 1'b0, 
+        RS1 = 1'b1
+    } branchBaseSrcType_e;
 
     /* 
      * Opcode types enum.
@@ -286,4 +296,13 @@ package riscv_definitions;
         instJType_s j_type;
         logic [0:3] [7:0] memory; 
     } instruction_u;
+
+    /* 
+     * Architect data BUS size definition.
+     */
+    typedef union packed {
+        logic [31:0] bus;
+        logic [0:3] [7:0] memory;
+    } dataBus_u;
+
 endpackage: riscv_definitions

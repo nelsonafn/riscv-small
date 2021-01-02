@@ -40,26 +40,23 @@
 
 import riscv_definitions::*; // import package into $unit space
 
-module instruction_fetch #(
-    parameter INST_WIDTH = 32,
-    parameter ARCH_WIDTH = 32
-    )(
+module instruction_fetch (
     input logic clk,    // Clock
     input logic clk_en, // Clock Enable
     input logic rst_n,  // Asynchronous reset active low
     // Communication with the instruction memory
     input instruction_u inst_data, // Data from instruction memory
-    output logic [ARCH_WIDTH-1:0] inst_addr,// Address of next instruction
+    output dataBus_u inst_addr,// Address of next instruction
     // Communication instruction decoder
     output instruction_u inst_id,// Registered instruction to be decode
-    output logic [ARCH_WIDTH-1:0] pc_id,  // PC of current instruction to decode
+    output dataBus_u pc_id,  // PC of current instruction to decode
     // Next PC control
-    input logic [ARCH_WIDTH-1:0] jump_address,// Jump address
-    input logic [ARCH_WIDTH-1:0] trap_address,// Exception/interruption address
+    input dataBus_u jump_address,// Jump address
+    input dataBus_u trap_address,// Exception/interruption address
     input nextPCType_e pc_sel
 );
 
-    logic [INST_WIDTH-1:0] pc;
+    dataBus_u pc;
 
     assign inst_addr = pc;
 
@@ -69,8 +66,8 @@ module instruction_fetch #(
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_if_id
         if(~rst_n) begin
-            pc_id <= {ARCH_WIDTH{1'b0}};
-            inst_id <= {INST_WIDTH{1'b0}};
+            pc_id <= 'b0;
+            inst_id <= 'b0;
         end else if(clk_en) begin
             pc_id <= pc;
             inst_id <= inst_data;
@@ -84,9 +81,9 @@ module instruction_fetch #(
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_pc
         if(~rst_n) begin
-            pc <= {ARCH_WIDTH{1'b0}};
+            pc <= 'b0;
         end else if(clk_en) begin
-            case (pc_sel)
+            case (pc_sel) inside
                 PC_PLUS4: begin
                     pc <= pc + 4;
                 end

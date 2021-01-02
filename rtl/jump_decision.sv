@@ -26,7 +26,8 @@
 /*
  * Package: jump_decision
  *
- * <Description>.
+ * This module is responsible for compare sources data (rs1 and rs2), calculate 
+ * the branch address and take the decision regarding the branch should be taken.
  *
  * Maintainer: Nelson Alves <nelsonafn@gmail.com>
  * Revision : $Revision$
@@ -35,11 +36,141 @@
  * $Log$ 
  */
 
+ import riscv_definitions::*; // import package into $unit space
+
 module jump_decision (
 	input clk,    // Clock
 	input clk_en, // Clock Enable
 	input rst_n,  // Asynchronous reset active low 123
-	
+	input dataBus_u rs1, // Reg source one data
+	input dataBus_u rs2, // Reg source two data
+	input dataBus_u imm, // Generated immediate value
+	input dataBus_u pc,  // PC value of the current instruction
+	input funct3BType_e funct3, // Indicates in which condition branch should be taken
+	input logic cbranch_decoded, // Used to indicate a conditional branch have been decoded
+	input logic ubranch_decoded, // Used to indicate an unconditional branch have been decoded
+	input branchBaseSrcType_e base_addr_sel, // Indicates the branch base address source (rs1 or pc)
+	output dataBus_u jump_address, // Jump address
+	output logic branch_taken,  // Indicates that a branch should be taken
+	output logic equal,
+	output logic less_u,
+	output logic less_s
 );
+	/* 
+     * Used for the mux for base address
+     */
+	dataBus_u base_addr;
+
+	/* 
+     * Used for signed version os sources
+     */
+	signed dataBus_u sig_rs1; // Signed reg source one data
+	signed dataBus_u sig_rs2; // Signed reg source two data
+
+	assign sig_rs1 = rs1;
+	assign sig_rs2 = rs2;
+
+	/* 
+     * Make the comparison of rs1 and rs2
+     */
+	always_comb begin: comp
+		if (rs1 == rs2) begin
+			equal = 1'b1;
+		end
+		else begin
+			equal = 1'b0;
+		end
+
+		// Unsigned comparison 
+		if (rs1 < rs2) begin
+			less_u = 1'b1;
+		end
+		else begin
+			less_u = 1'b0;
+		end
+
+		// Signed comparison 
+		if (sig_rs1 < sig_rs2) begin
+			less_s = 1'b1;
+		end
+		else begin
+			less_s = 1'b0;
+		end
+		
+	end: comp
+
+	/* 
+     * Calculate the address of the branch.
+	 * It uses only the less 20 significative bits of the immediate since J-type 
+	 * and B-type immediate is maximum 20 bit long.
+     */
+	always_comb begin: addr_calc
+		case (base_addr_sel)
+			PC: begin
+				base_addr = pc;
+			end
+			RS1:begin
+				base_addr = rs1;
+			end
+			default: begin
+				base_addr = pc;
+			end
+		endcase
+
+		jump_address = base_addr + imm[20:0];
+	end: addr_calc
+
+	/* 
+     * Make the decision about take or not the branch
+     */
+	always_comb begin: decision
+		branch_taken = 1'b0;
+		if (cbranch_decoded) begin
+			case (funct3)
+				BEQ: begin
+					if (equal) begin
+						branch_taken = 1'b1;
+					end
+				end    
+				BNE: begin
+					if (!equal) begin
+						branch_taken = 1'b1;
+					end
+				end    
+				// rs1 is less than rs2 using signed comparison
+				BLT: begin 
+					if (less_s) begin
+						branch_taken = 1'b1;
+					end
+				end    
+				// rs1 is greater than or equal to rs2 using signed comparison
+				BGE: begin 
+					if (!less_s) begin
+						branch_taken = 1'b1;
+					end
+				end    
+				// rs1 is less than rs2 using unsigned comparison
+				BLTU: begin
+					if (less_u) begin
+						branch_taken = 1'b1;
+					end
+				end    
+				// rs1 is greater than or equal to rs2 using unsigned comparison
+				BGEU: begin 
+					if (!less_u) begin
+						branch_taken = 1'b1;
+					end
+				end 
+				default: begin
+					branch_taken = 1'b0;
+				end
+			endcase
+		end 
+		else if (ubranch_decoded) begin
+			branch_taken = 1'b1;
+		end
+   
+	end: decision
+
 
 endmodule: jump_decision
