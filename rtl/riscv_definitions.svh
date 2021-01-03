@@ -207,7 +207,7 @@ package riscv_definitions;
      * I-type instruction definition.
      */
     typedef struct packed {
-        logic [11:0] imm0;
+        signed logic [11:0] imm0;
         logic [4:0] rs1;
         logic [2:0] funct3;
         logic [4:0] rd;
@@ -218,19 +218,19 @@ package riscv_definitions;
      * I-type LOAD instruction definition.
      */
     typedef struct packed {
-        logic [11:0] imm0;
+        signed logic [11:0] imm0;
         logic [4:0] rs1;
         funct3ITypeLOAD_e funct3;
         logic [4:0] rd;
         opcodeType_e opcode; // logic [6:0]
-    } instITypeLOAD_s;
+    } instITypeLoad_s;
 
 
     /* 
      * I-type ALU instruction definition.
      */
     typedef struct packed {
-        logic [11:0] imm0;
+        signed logic [11:0] imm0;
         logic [4:0] rs1;
         funct3ITypeALU_e funct3;
         logic [4:0] rd;
@@ -267,7 +267,7 @@ package riscv_definitions;
      * U-type instruction definition.
      */
     typedef struct packed {
-        logic [19:0] imm1; //imm0 is predefined as 12,b0 {imm1, 12'b0}
+        logic [19:0] imm1; //imm0 is predefined as 12'b0 {imm1, 12'b0}
         logic [4:0] rd;
         opcodeType_e opcode; // logic [6:0]
     } instUType_s;
@@ -290,6 +290,8 @@ package riscv_definitions;
     typedef union packed {
         instRType_s r_type;
         instIType_s i_type;
+        instITypeLoad_s i_type_load;
+        instITypeALU_s i_type_alu;
         instSType_s s_type;
         instBType_s b_type;
         instUType_s u_type;
@@ -305,5 +307,8 @@ package riscv_definitions;
         logic signed [31:0] s_data;
         logic [0:3] [7:0] memory;
     } dataBus_u;
+
+    typedef logic [4:0] regAddr_t;
+
 
 endpackage: riscv_definitions

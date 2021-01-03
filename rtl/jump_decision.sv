@@ -35,8 +35,10 @@
  * History:
  * $Log$ 
  */
+ 
+ 
 
- import riscv_definitions::*; // import package into $unit space
+import riscv_definitions::*; // import package into $unit space
 
 module jump_decision (
 	input clk,    // Clock
@@ -47,14 +49,14 @@ module jump_decision (
 	input dataBus_u imm, // Generated immediate value
 	input dataBus_u pc,  // PC value of the current instruction
 	input funct3BType_e funct3, // Indicates in which condition branch should be taken
-	input logic cbranch_decoded, // Used to indicate a conditional branch have been decoded
-	input logic ubranch_decoded, // Used to indicate an unconditional branch have been decoded
+	input logic cond_jump, // Used to indicate a conditional branch have been decoded
+	input logic uncond_jump, // Used to indicate an unconditional branch have been decoded
 	input branchBaseSrcType_e base_addr_sel, // Indicates the branch base address source (rs1 or pc)
-	output dataBus_u jump_address, // Jump address
+	output dataBus_u jump_addr, // Jump address
 	output logic branch_taken,  // Indicates that a branch should be taken
-	output logic equal,
-	output logic less_u,
-	output logic less_s
+	output logic equal, // Indicates rs1 is equal to rs2
+	output logic less_u, // Indicates unsigned rs1 is less then unsigned rs2
+	output logic less_s // Indicates rs1 is less then rs2
 );
 	/* 
      * Used for the mux for base address
@@ -64,7 +66,7 @@ module jump_decision (
 	/* 
      * Make the comparison of rs1 and rs2
      */
-	always_comb begin: comp
+	always_comb begin: compare
 		if (rs1 == rs2) begin
 			equal = 1'b1;
 		end
@@ -88,7 +90,7 @@ module jump_decision (
 			less_s = 1'b0;
 		end
 		
-	end: comp
+	end: compare
 
 	/* 
      * Calculate the address of the branch.
@@ -108,7 +110,7 @@ module jump_decision (
 			end
 		endcase
 
-		jump_address = base_addr + imm[20:0];
+		jump_addr = base_addr + imm[20:0];
 	end: addr_calc
 
 	/* 

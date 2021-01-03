@@ -51,8 +51,8 @@ module instruction_fetch (
     output instruction_u inst_id,// Registered instruction to be decode
     output dataBus_u pc_id,  // PC of current instruction to decode
     // Next PC control
-    input dataBus_u jump_address,// Jump address
-    input dataBus_u trap_address,// Exception/interruption address
+    input dataBus_u jump_addr,// Jump address
+    input dataBus_u trap_addr,// Exception/interruption address
     input nextPCType_e pc_sel
 );
 
@@ -88,10 +88,10 @@ module instruction_fetch (
                     pc <= pc + 4;
                 end
                 JUMP: begin 
-                    pc <= jump_address;
+                    pc <= jump_addr;
                 end
                 TRAP: begin 
-                    pc <= trap_address;
+                    pc <= trap_addr;
                 end
                 default: begin 
                     pc <= pc + 4;
