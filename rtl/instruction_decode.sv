@@ -41,13 +41,20 @@ module instruction_decode (
 	input clk,    // Clock
 	input clk_en, // Clock Enable
 	input rst_n,  // Asynchronous reset active low
-	input instruction_u inst,
-	input logic rd_wr_en_wb,
-	output logic rd_wr_en,
+	input instruction_u inst, // Instruction from IF
+	input logic rd_wr_en_wb, // Destination register (rd) write enable from Write Back stage
+	output logic rd_wr_en, // Destination register (rd) write enable 
+	output aluSrc1_e alu_src1, // ALU source one mux selection (possible values PC/RS1)
+	output aluSrc2_e alu_src2, // ALU source two mux selection (possible values RS2/IMM)
+	output dataBus_u imm, // Immediate value 
+	output logic data_rd_en, // Data memory read enable to be used together with funct3
+	output logic data_wr_en, // Data memory write enable to be used together with funct3
+	output aluOpType_e alu_op, // Opcode for alu operation (always be composed by funct3ITypeALU_e)
 );
 	
-	dataBus_u imm;
-
+	/*
+	 * Jump Decision file instantiation
+	 */
 	jump_decision u_jump_decision (
     	.clk              (clk), // Clock
 	    .clk_en           (clk_en), // Clock Enable
@@ -67,6 +74,9 @@ module instruction_decode (
 		.less_s           (less_s) // Indicates rs1 is less then rs2
 	);
 
+	/*
+	 * Registration File instantiation
+	 */
 	reg_file u_reg_file (
 		.clk         (clk), // Clock
 		.clk_en      (clk_en), // Clock Enable
@@ -80,6 +90,9 @@ module instruction_decode (
 		.rs2         (rs2),
 	);
 
+	/*
+	 * Immediate generation
+	 */
 	always_comb begin: imm_gen
 		case (inst.i_type.opcode) inside
 			JALR, LOAD_C, ALUI_C, ECBK_C: begin //I-type
@@ -104,49 +117,102 @@ module instruction_decode (
 		endcase
 	end: imm_gen
 
+	/*
+	 * Instruction decoder
+	 */
 	always_comb begin: decode
 		uncond_jump = '0;
 		cond_jump = '0;
 		rd_wr_en = '0;
 		base_addr_sel = PC;
+		alu_src1 = RS1; 
+		alu_src2 = RS2; 
+		data_rd_en = '0;
+		data_wr_en = '0; 
+		alu_op = ADD;
 		case  (inst.i_type.opcode) 
 		LUI: begin
-
+			//bypass src2 (funct7 and funct3 is undefined)
+			alu_op = BPS2;
+			alu_src2 = IMM;
 		end
         AUIPC: begin
-
+			//add+4 (funct7 and funct3 is undefined)
+			alu_op = ADD;
+			alu_src1 = PC;
+			alu_src2 = IMM;
 		end
 		JAL: begin
 			uncond_jump = '1;
 			rd_wr_en = '1
 			base_addr_sel = PC;
+			//add+4 (funct7 and funct3 is undefined)
+			alu_op = ADD4; 
+			alu_src1 = PC;
 		end
+		// Branch are calculated and decided independent of ALU in a specific unit
 		JALR: begin
 			uncond_jump = '1;
-			rd_wr_en = '1
+			rd_wr_en = '1;
 			base_addr_sel = RS1;
+			//add+4 (funct7 and funct3 is undefined)
+			alu_op = ADD4;
+			alu_src1 = PC;
 		end
+		// Branch are calculated and decided independent of ALU in a specific unit
 		BRCH_C:begin
 			cond_jump = '1;
 			base_addr_sel = PC;
 		end
 		LOAD_C: begin
+			//add+4 (funct7 is undefined, funct3 have other use)
+			alu_op = ADD;
+			alu_src1 = RS1;
+			alu_src2 = IMM;
 
+			/*
+			 * funct3 should be used in WB stage to define Load type (LW=32, LH=16bit signal extended, 
+			 * LB=8bit signal extended, LHU=16bit zero extended and , LBU=8bit zero extended).
+			 * funct3[1:0] defines how many bytes should be read ('b00=8bit 'b01=16bits '11=32bits).
+			 * funct3[2] defines if zero or signal extended ('b0=signal extended 'b1= zero extended).
+			 */
+			data_rd_en = '1;
 		end
         STORE_C: begin
+			//bypass src2 (funct7 is undefined, funct3 have other use)
+			alu_op = BPS2; 
+			alu_src2 = RS2;
 
+			/*
+			 * funct3 should be used in WB stage to define STORE type (SW=32, SH=16bit, SB=8bit).
+			 * funct3[1:0] defines how many bytes should be write ('b00=8bit 'b01=16bits '11=32bits).
+			 */
+			data_wr_en = '1;
 		end 
         ALUI_C: begin
-
+			// funct7[5],funct3 (don't have SUBI, SRAI uses funct7). See ISA spec.
+			// In this special case, this instruction can be interpreted as R-Type to get funct7[5]
+			if (inst.i_type_alu.funct3 == SRLI_SRAI) begin
+				alu_op = {inst.r_type.funct7[5], inst.r_type.funct3};
+			end
+			//In other case it is always zero. See ISA spec.
+			else begin
+				alu_op = {1'b0, inst.r_type.funct3};
+			end
+			alu_src1 = RS1;
+			alu_src2 = IMM;
 		end
         ALU_C: begin
-
+			//TODO: alu_op = funct3+funct7 (SUB and SRA uses funct7)
+			alu_op = {inst.r_type.funct7[5], inst.r_type.funct3};
+			alu_src1 = RS1; 
+			alu_src2 = RS2; 
 		end
         FENCE: begin
-
+			//TODO:
 		end
         ECBK_C: begin
-
+			//TODO:
 		end
 		endcase
 	end: decode
