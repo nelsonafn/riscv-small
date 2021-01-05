@@ -43,15 +43,22 @@ module instruction_decode (
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
 	input logic rd_wr_en_wb, // Destination register (rd) write enable from Write Back stage
-	output logic rd_wr_en, // Destination register (rd) write enable 
-	output aluSrc1_e alu_src1, // ALU source one mux selection (possible values PC/RS1)
-	output aluSrc2_e alu_src2, // ALU source two mux selection (possible values RS2/IMM)
-	output dataBus_u imm, // Immediate value 
-	output logic data_rd_en, // Data memory read enable to be used together with funct3
-	output logic data_wr_en, // Data memory write enable to be used together with funct3
-	output aluOpType_e alu_op, // Opcode for alu operation (always be composed by funct3ITypeALU_e)
+	output logic rd_wr_en_ex, // Destination register (rd) write enable 
+	output aluSrc1_e alu_src1_ex, // ALU source one mux selection (possible values PC/RS1)
+	output aluSrc2_e alu_src2_ex, // ALU source two mux selection (possible values RS2/IMM)
+	output dataBus_u imm_ex, // Immediate value 
+	output logic data_rd_en_ex, // Data memory read enable to be used together with funct3
+	output logic data_wr_en_ex, // Data memory write enable to be used together with funct3
+	output aluOpType_e alu_op_ex, // Opcode for alu operation (always be composed by funct3ITypeALU_e)
 );
 	
+	logic rd_wr_en; // Destination register (rd) write enable 
+	aluSrc1_e alu_src1; // ALU source one mux selection (possible values PC/RS1)
+	aluSrc2_e alu_src2; // ALU source two mux selection (possible values RS2/IMM)
+	dataBus_u imm; // Immediate value 
+	logic data_rd_en; // Data memory read enable to be used together with funct3
+	logic data_wr_en; // Data memory write enable to be used together with funct3
+	aluOpType_e alu_op;  // Opcode for alu operation (always be composed by funct3ITypeALU_e)
 	/*
 	 * Jump Decision file instantiation
 	 */
@@ -190,7 +197,7 @@ module instruction_decode (
 			data_wr_en = '1;
 		end 
         ALUI_C: begin
-			// funct7[5],funct3 (don't have SUBI, SRAI uses funct7). See ISA spec.
+			// funct7[5],funct3 or 1'b0,funct3 (don't have SUBI, SRAI uses funct7). See ISA spec.
 			// In this special case, this instruction can be interpreted as R-Type to get funct7[5]
 			if (inst.i_type_alu.funct3 == SRLI_SRAI) begin
 				alu_op = {inst.r_type.funct7[5], inst.r_type.funct3};
@@ -203,7 +210,7 @@ module instruction_decode (
 			alu_src2 = IMM;
 		end
         ALU_C: begin
-			//TODO: alu_op = funct3+funct7 (SUB and SRA uses funct7)
+			//funct7[0],funct3 (SUB and SRA uses funct7)
 			alu_op = {inst.r_type.funct7[5], inst.r_type.funct3};
 			alu_src1 = RS1; 
 			alu_src2 = RS2; 
