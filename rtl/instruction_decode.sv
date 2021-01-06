@@ -42,14 +42,16 @@ module instruction_decode (
 	input clk_en, // Clock Enable
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
+	input dataBus_u pc; // PC value from IF
 	input logic rd_wr_en_wb, // Destination register (rd) write enable from Write Back stage
 	output logic rd_wr_en_ex, // Destination register (rd) write enable 
 	output aluSrc1_e alu_src1_ex, // ALU source one mux selection (possible values PC/RS1)
 	output aluSrc2_e alu_src2_ex, // ALU source two mux selection (possible values RS2/IMM)
 	output dataBus_u imm_ex, // Immediate value 
-	output logic data_rd_en_ex, // Data memory read enable to be used together with funct3
+	output logic data_rd_en_ex, // Data memory read enable to be used together with funct3 and wb_mux_sel
 	output logic data_wr_en_ex, // Data memory write enable to be used together with funct3
 	output aluOpType_e alu_op_ex, // Opcode for alu operation (always be composed by funct3ITypeALU_e)
+	input dataBus_u pc_ex; // PC value to EX
 );
 	
 	logic rd_wr_en; // Destination register (rd) write enable 
@@ -59,48 +61,58 @@ module instruction_decode (
 	logic data_rd_en; // Data memory read enable to be used together with funct3
 	logic data_wr_en; // Data memory write enable to be used together with funct3
 	aluOpType_e alu_op;  // Opcode for alu operation (always be composed by funct3ITypeALU_e)
+
+	always_ff @(posedge clk or negedge rst_n) begin: proc_id_ex
+		if (!rst_n) begin: proc_id_ex_rst
+			proc_id_ex <= '0
+		end: proc_id_ex_rst
+		else if (clk_en) begin
+			proc_id_ex <= 
+		end        
+	end: proc_id_ex
+
 	/*
 	 * Jump Decision file instantiation
 	 */
 	jump_decision u_jump_decision (
-    	.clk              (clk), // Clock
-	    .clk_en           (clk_en), // Clock Enable
-	    .rst_n            (rst_n), // Asynchronous reset active low 123
-	    .rs1              (rs1), // Reg source one data
-	    .rs2              (rs2), // Reg source two data
-	    .imm              (imm), // Generated immediate value
-	    .pc               (pc), // PC value of the current instruction
-	    .funct3           (funct3), // Indicates in which condition branch should be taken
+    	.clk              (clk), // Clock input
+	    .clk_en           (clk_en), // Clock Enable input
+	    .rst_n            (rst_n), // Asynchronous reset active low input
+	    .rs1              (rs1), // Reg source one data input
+	    .rs2              (rs2), // Reg source two data input
+	    .imm              (imm), // Immediate value input
+	    .pc               (pc), // PC value of the current instruction input
+	    .funct3           (inst.b_type.funct3), // Indicates in which condition branch should be taken input
 	    .cond_jump        (cond_jump), // Used to indicate a conditional branch have been decoded
 	    .uncond_jump      (uncond_jump), // Used to indicate an unconditional branch have been decoded
-	    .base_addr_sel    (base_addr_sel), // Indicates the branch base address source (rs1 or pc)
-	    .jump_addr        (jump_addr), // Jump address
-	    .branch_taken     (branch_taken), // Indicates that a branch should be taken
-	    .equal            (equal), // Indicates rs1 is equal to rs2
-	    .less_u           (less_u), // Indicates unsigned rs1 is less then unsigned rs2
-		.less_s           (less_s) // Indicates rs1 is less then rs2
+	    .base_addr_sel    (base_addr_sel), // Indicates the branch base address source (rs1 or pc) 
+	    .jump_addr        (jump_addr), // Jump address output
+	    .branch_taken     (branch_taken), // Indicates that a branch should be taken output
+	    .equal            (equal), // Indicates rs1 is equal to rs2 output
+	    .less_u           (less_u), // Indicates unsigned rs1 is less then unsigned rs2 output
+		.less_s           (less_s) // Indicates rs1 is less then rs2 output
 	);
 
 	/*
 	 * Registration File instantiation
 	 */
 	reg_file u_reg_file (
-		.clk         (clk), // Clock
-		.clk_en      (clk_en), // Clock Enable
-		.rst_n       (rst_n), // Asynchronous reset active low
-		.rs1_addr    (rs1_addr),
-		.rs2_addr    (rs2_addr),
-		.rd_addr     (rd_addr),
-		.rd_wr_en    (rd_wr_en_wb),
-		.rd_data     (rd_data),
-		.rs1         (rs1),
-		.rs2         (rs2),
+		.clk         (clk), // Clock input
+		.clk_en      (clk_en), // Clock Enable input
+		.rst_n       (rst_n), // Asynchronous reset active low input
+		.rs1_addr    (rs1_addr), // Reg source one address input
+		.rs2_addr    (rs2_addr), // Reg source two address input
+		.rd_addr     (rd_addr), // Reg destination address input
+		.rd_wr_en    (rd_wr_en_wb), // Reg destination write enable input
+		.rd_data     (rd_data), // Reg destination data input
+		.rs1         (rs1), // Reg source one data output
+		.rs2         (rs2), // Reg source two data output
 	);
 
 	/*
 	 * Immediate generation
 	 */
-	always_comb begin: imm_gen
+	always_comb begin: proc_imm_gen
 		case (inst.i_type.opcode) inside
 			JALR, LOAD_C, ALUI_C, ECBK_C: begin //I-type
 				imm.s_data = inst.i_type.imm0;
@@ -127,7 +139,7 @@ module instruction_decode (
 	/*
 	 * Instruction decoder
 	 */
-	always_comb begin: decode
+	always_comb begin: proc_decode
 		uncond_jump = '0;
 		cond_jump = '0;
 		rd_wr_en = '0;
@@ -137,7 +149,7 @@ module instruction_decode (
 		data_rd_en = '0;
 		data_wr_en = '0; 
 		alu_op = ADD;
-		case  (inst.i_type.opcode) 
+		case  (inst.r_type.opcode) 
 		LUI: begin
 			//bypass src2 (funct7 and funct3 is undefined)
 			alu_op = BPS2;
