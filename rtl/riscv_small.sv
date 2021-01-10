@@ -24,70 +24,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
 /*
- * Package: reg_file
+ * Package: riscv_small
  *
- * Description: This module is responsible for control the read and write of 
- * register for risc-v.
+ * Description: This is the top level of the riscv-small. Thi processor core is 
+ * 5 stage cpu that implements the RV32I.
  *
  * Maintainer: Nelson Alves <nelsonafn@gmail.com>
  *
  * History:
- * January 03, 2021 at 20:53 - Created by Nelson Alves <nelsonafn@gmail.com>
+ * January 07, 2021 at 22:29 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
-
- import riscv_definitions::*; // import package into $unit space
-    
-module reg_file (
+ 
+module riscv_small (
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
-    input regAddr_t rs1_addr, //[in] Reg source one address
-    input regAddr_t rs2_addr, //[in] Reg source two address
-    input regAddr_t rd_addr,  //[in] Reg destination address
-    input logic rd_wr_en, //[in] Reg destination write enable
-    input dataBus_u rd_data, //[in] Reg destination data
-    output dataBus_u rs1, //[out] Reg source one data 
-    output dataBus_u rs2  //[out] Reg source two data 
 );
-
-    /*
-     * Register bank. 
-     * Register x0 is always 32'b0.
-     */
-    dataBus_u regs [1:31];
-
-    /*
-     * Combinational read of source registers (rs1 and rs2). 
-     * x0 is always 32'b0.
-     */
-    always_comb begin: comb_rs_read
-        if (rs1_addr == '0) begin
-            rs1 = '0;
-        end
-        else begin
-            rs1 = regs[rs1_addr];
-        end
-
-        if (rs2_addr == '0) begin
-            rs2 = '0;
-        end
-        else begin
-            rs2 = regs[rs2_addr];
-        end
-    end: comb_rs_read
-
-    /*
-     * Synchronized write of destination (rd)
-     */
-    always_ff @(posedge clk or negedge rst_n) begin: rd_write
-        if (!rst_n) begin: rd_write_rst
-            regs <= '{default:0};
-        end: rd_write_rst
-        else if (clk_en) begin
-            if (rd_wr_en) begin
-                regs[rd_addr] <= rd_data;
-            end
-        end        
-    end: rd_write
     
-endmodule: reg_file
+    
+endmodule: riscv_small

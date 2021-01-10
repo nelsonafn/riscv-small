@@ -41,9 +41,6 @@
 import riscv_definitions::*; // import package into $unit space
 
 module jump_decision (
-	input clk,    // Clock
-	input clk_en, // Clock Enable
-	input rst_n,  // Asynchronous reset active low 123
 	input dataBus_u rs1, // Reg source one data
 	input dataBus_u rs2, // Reg source two data
 	input dataBus_u imm, // Generated immediate value
@@ -51,17 +48,18 @@ module jump_decision (
 	input funct3BType_e funct3, // Indicates in which condition branch should be taken
 	input logic cond_jump, // Used to indicate a conditional branch have been decoded
 	input logic uncond_jump, // Used to indicate an unconditional branch have been decoded
-	input branchBaseSrcType_e base_addr_sel, // Indicates the branch base address source (rs1 or pc)
+	input aluSrc1_e base_addr_sel, // Indicates the branch base address source (rs1 or pc)
 	output dataBus_u jump_addr, // Jump address
-	output logic branch_taken,  // Indicates that a branch should be taken
-	output logic equal, // Indicates rs1 is equal to rs2
-	output logic less_u, // Indicates unsigned rs1 is less then unsigned rs2
-	output logic less_s // Indicates rs1 is less then rs2
+	output logic branch_taken  // Indicates that a branch should be taken
 );
 	/* 
      * Used for the mux for base address
      */
 	dataBus_u base_addr;
+
+	logic equal; // Indicates rs1 is equal to rs2
+	logic less_u; // Indicates unsigned rs1 is less then unsigned rs2
+	logic less_s; // Indicates rs1 is less then rs2
 
 	/* 
      * Make the comparison of rs1 and rs2
@@ -118,7 +116,7 @@ module jump_decision (
      */
 	always_comb begin: decision
 		branch_taken = 1'b0;
-		if (cbranch_decoded) begin
+		if (cond_jump) begin
 			case (funct3)
 				BEQ: begin
 					if (equal) begin
@@ -159,7 +157,7 @@ module jump_decision (
 				end
 			endcase
 		end 
-		else if (ubranch_decoded) begin
+		else if (uncond_jump) begin
 			branch_taken = 1'b1;
 		end
    

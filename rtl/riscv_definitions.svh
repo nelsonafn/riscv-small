@@ -50,14 +50,6 @@ package riscv_definitions;
     /* 
      * Type for select the branch base source.
      * It is used by decoder to inform with should be the base address source for the jump_decision.
-     */
-    typedef enum logic {
-        PC  = 1'b0, 
-        RS1 = 1'b1
-    } branchBaseSrcType_e;
-
-
-    /* 
      * Type enum for select ALU source 1.
      */
     typedef enum logic {
@@ -77,19 +69,19 @@ package riscv_definitions;
      * Type enum for ALU operation code.
      * These ALU opcode should always be composed by ALU_C/ALUI_C funct3ITypeALU_e enum.
      */
-    typedef enum logic [2:0] {
-        ADD  = 4'b0000; // funct7 0000000, funct3 ADD  = 3'b000
-        SLL  = 4'b0001; // funct7 0000000, funct3 SLL  = 3'b001
-        SLT  = 4'b0010; // funct7 0000000, funct3 SLT  = 3'b010
-        SLTU = 4'b0011; // funct7 0000000, funct3 SLTU = 3'b011
-        XOR  = 4'b0100; // funct7 0000000, funct3 XOR  = 3'b100
-        SRL  = 4'b0101; // funct7 0000000, funct3 SRL  = 3'b101
-        OR   = 4'b0110; // funct7 0000000, funct3 OR   = 3'b110
-        AND  = 4'b0111; // funct7 0000000, funct3 AND  = 3'b111
-        SUB  = 4'b1000; // funct7 0100000, funct3 SUB  = 3'b000
-        SRA  = 4'b1101; // funct7 0100000, funct3 SRA  = 3'b101
-        ADD4 = 4'b1001; // Source one plus 4
-        BPS2 = 4'b1001; // By pass source 2
+    typedef enum logic [3:0] {
+        ALU_ADD  = 4'b0000, // funct7 0000000, funct3 ADD  = 3'b000
+        ALU_SLL  = 4'b0001, // funct7 0000000, funct3 SLL  = 3'b001
+        ALU_SLT  = 4'b0010, // funct7 0000000, funct3 SLT  = 3'b010
+        ALU_SLTU = 4'b0011, // funct7 0000000, funct3 SLTU = 3'b011
+        ALU_XOR  = 4'b0100, // funct7 0000000, funct3 XOR  = 3'b100
+        ALU_SRL  = 4'b0101, // funct7 0000000, funct3 SRL  = 3'b101
+        ALU_OR   = 4'b0110, // funct7 0000000, funct3 OR   = 3'b110
+        ALU_AND  = 4'b0111, // funct7 0000000, funct3 AND  = 3'b111
+        ALU_SUB  = 4'b1000, // funct7 0100000, funct3 SUB  = 3'b000
+        ALU_SRA  = 4'b1101, // funct7 0100000, funct3 SRA  = 3'b101
+        ALU_ADD4 = 4'b1001, // Source one plus 4
+        ALU_BPS2 = 4'b1010 // By pass source 2
     } aluOpType_e;
 
     /* 
@@ -243,7 +235,7 @@ package riscv_definitions;
      * I-type instruction definition.
      */
     typedef struct packed {
-        signed logic [11:0] imm0;
+        logic signed [11:0] imm0;
         logic [4:0] rs1;
         logic [2:0] funct3;
         logic [4:0] rd;
@@ -254,7 +246,7 @@ package riscv_definitions;
      * I-type LOAD instruction definition.
      */
     typedef struct packed {
-        signed logic [11:0] imm0;
+        logic signed [11:0] imm0;
         logic [4:0] rs1;
         funct3ITypeLOAD_e funct3;
         logic [4:0] rd;
@@ -266,7 +258,7 @@ package riscv_definitions;
      * I-type ALU instruction definition.
      */
     typedef struct packed {
-        signed logic [11:0] imm0;
+        logic signed [11:0] imm0;
         logic [4:0] rs1;
         funct3ITypeALU_e funct3;
         logic [4:0] rd;
