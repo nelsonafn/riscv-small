@@ -45,16 +45,22 @@ module instruction_decode (
 	input dataBus_u pc,   // PC value from IF
 	input logic rd_wr_en,    //[in] Reg register (rd) write enable from Write Back stage
 	input dataBus_u rd_data, //[in] Reg destination data
-	output logic rd_wr_en_ex, //[out] Reg register (rd) write enable to pipeline
+	output logic rd_wr_en_ex,//[out] Reg destination (rd) write enable to pipeline
 	output aluSrc1_e alu_src1_ex, //[out] ALU source one mux selection (possible values PC/RS1)
-	output aluSrc2_e alu_src2_ex, //[out] ALU source two mux selection (possible values RS2/IMM)
-	output dataBus_u imm_ex, //[out] Immediate value 
+	output aluSrc2_e alu_src2_ex, //[out] ALU source two mux selection (possible values RS2/IMM) 
+	output dataBus_u pc_ex, //[out] PC value to EX	
+	output dataBus_u rs1_ex, //[out] Reg source one (rs1) data
+	output dataBus_u rs2_ex, //[out] Reg source two (rs2) data
+	output dataBus_u imm_ex, //[out] Immediate value
 	output logic data_rd_en_ex, //[out] Data memory read enable (wb_mux_sel) to be used with funct3 
 	output logic data_wr_en_ex, //[out] Data memory write enable to be used together with funct3
 	output aluOpType_e alu_op_ex, //[out] Opcode for alu operation ( composed by funct3ITypeALU_e)
-	input dataBus_u pc_ex, //[out] PC value to EX
-	output logic branch_taken, //[out] Indicates that a branch should be taken to the control 
-	output dataBus_u jump_addr //[out] Jump address
+	output logic branch_taken,  //[out] Indicates that a branch should be taken to the control 
+	output dataBus_u jump_addr, //[out] Jump address
+	output funct3ITypeLOAD_e funct3_ex, //[out] funct3 LOAD
+	output regAddr_t rd_addr_ex,  //[out] Reg destination (rd) addr
+	output regAddr_t rs1_addr_ex, //[out] Reg source one (rs1) addr
+	output regAddr_t rs2_addr_ex  //[out] Reg source two (rs2) addr
 );
 	
 	/*
@@ -74,6 +80,8 @@ module instruction_decode (
 	logic data_wr_en; // Data memory write enable to be used together with funct3
 	aluOpType_e alu_op;  // Opcode for alu operation (always be composed by funct3ITypeALU_e)
 	dataBus_u rs1, rs2;
+    logic rd_wr_en_2pipe; //
+
 	/*
 	 * Register signals to be used in execute stage. 
 	 */
@@ -84,7 +92,15 @@ module instruction_decode (
 			alu_src1_ex <= RS1;
 			alu_src2_ex <= RS2;
 			alu_op_ex <= ALU_ADD;
+			pc_ex <= '0;
+			rs1_ex <= '0;
+			rs2_ex <= '0;
 			imm_ex <= '0;
+			rd_addr_ex <= '0;
+			rs1_addr_ex <= '0;
+			rs2_addr_ex <= '0;
+			rd_wr_en_ex <= '0;
+			funct3_ex <= LB;
 		end: proc_id_ex_rst
 		else if (clk_en) begin
 			data_rd_en_ex <= data_rd_en;
@@ -92,7 +108,15 @@ module instruction_decode (
 			alu_src1_ex <= alu_src1;
 			alu_src2_ex <= alu_src2;
 			alu_op_ex <= alu_op;
+			pc_ex <= pc;
+			rs1_ex <= rs1;
+			rs2_ex <= rs2;
 			imm_ex <= imm;
+			rd_addr_ex <= inst.r_type.rd;
+			rs1_addr_ex <= inst.r_type.rs1;
+			rs2_addr_ex <= inst.r_type.rs2;
+			rd_wr_en_ex <= rd_wr_en_2pipe;
+			funct3_ex <= inst.i_type_load.funct3;
 		end        
 	end: proc_id_ex
 
@@ -163,7 +187,7 @@ module instruction_decode (
 	always_comb begin: proc_decode
 		uncond_jump = '0;
 		cond_jump = '0;
-		rd_wr_en_ex = '0;
+		rd_wr_en_2pipe = '0;
 		base_addr_sel = PC;
 		alu_src1 = RS1; 
 		alu_src2 = RS2; 
@@ -184,7 +208,7 @@ module instruction_decode (
 		end
 		JAL: begin
 			uncond_jump = '1;
-			rd_wr_en_ex = '1;
+			rd_wr_en_2pipe = '1;
 			base_addr_sel = PC;
 			//add+4 (funct7 and funct3 is undefined)
 			alu_op = ALU_ADD4; 
@@ -193,7 +217,7 @@ module instruction_decode (
 		// Branch are calculated and decided independent of ALU in a specific unit
 		JALR: begin
 			uncond_jump = '1;
-			rd_wr_en_ex = '1;
+			rd_wr_en_2pipe = '1;
 			base_addr_sel = RS1;
 			//add+4 (funct7 and funct3 is undefined)
 			alu_op = ALU_ADD4;

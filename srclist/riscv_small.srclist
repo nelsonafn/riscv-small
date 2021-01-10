@@ -1,0 +1,3 @@
+srclist/instruction_decode.srclist 
+srclist/instruction_fetch.srclist
+rtl/riscv_small.sv

@@ -38,7 +38,7 @@
 module riscv_small (
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
-    input rst_n,  //[in] Asynchronous reset active low
+    input rst_n  //[in] Asynchronous reset active low
 );
     
     

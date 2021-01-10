@@ -1,0 +1,4 @@
+rtl/riscv_definitions.svh
+rtl/jump_decision.sv
+rtl/reg_file.sv
+rtl/instruction_decode.sv

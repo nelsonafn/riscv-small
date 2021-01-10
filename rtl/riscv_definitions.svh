@@ -66,6 +66,26 @@ package riscv_definitions;
     } aluSrc2_e;
 
     /* 
+     * Type enum for select ALU source 1 from control.
+     */
+    typedef enum logic [1:0] {
+        PC_S1 = 2'b00, 
+        RS1_S1 = 2'b01,
+        RD_MA_S1 = 2'b10, //Red destination (rd) from Memory Access (MA) to rs1 forward
+        RD_WB_S1 = 2'b11  //Red destination (rd) from Write Back (WB) to rs1 forward
+    } ctrlAluSrc1_e;
+
+    /* 
+     * Type enum for select ALU source 2 from control.
+     */
+    typedef enum logic [1:0] {
+        RS2_S2 = 2'b00, 
+        IMM_S2 = 2'b01,
+        RD_MA_S2 = 2'b10, //Red destination (rd) from Memory Access (MA) to rs2 forward
+        RD_WB_S2 = 2'b11  //Red destination (rd) from Write Back (WB) to rs2 forward
+    } ctrlAluSrc2_e;
+
+    /* 
      * Type enum for ALU operation code.
      * These ALU opcode should always be composed by ALU_C/ALUI_C funct3ITypeALU_e enum.
      */
@@ -83,6 +103,9 @@ package riscv_definitions;
         ALU_ADD4 = 4'b1001, // Source one plus 4
         ALU_BPS2 = 4'b1010 // By pass source 2
     } aluOpType_e;
+
+
+    typedef logic [4:0] regAddr_t;
 
     /* 
      * Opcode types enum.
@@ -224,10 +247,10 @@ package riscv_definitions;
      */
     typedef struct packed {
         logic [6:0] funct7;
-        logic [4:0] rs2;
-        logic [4:0] rs1;
+        regAddr_t rs2;
+        regAddr_t rs1;
         funct3RType_e funct3;
-        logic [4:0] rd;
+        regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instRType_s;
 
@@ -236,9 +259,9 @@ package riscv_definitions;
      */
     typedef struct packed {
         logic signed [11:0] imm0;
-        logic [4:0] rs1;
+        regAddr_t rs1;
         logic [2:0] funct3;
-        logic [4:0] rd;
+        regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instIType_s;
 
@@ -247,9 +270,9 @@ package riscv_definitions;
      */
     typedef struct packed {
         logic signed [11:0] imm0;
-        logic [4:0] rs1;
+        regAddr_t rs1;
         funct3ITypeLOAD_e funct3;
-        logic [4:0] rd;
+        regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instITypeLoad_s;
 
@@ -259,9 +282,9 @@ package riscv_definitions;
      */
     typedef struct packed {
         logic signed [11:0] imm0;
-        logic [4:0] rs1;
+        regAddr_t rs1;
         funct3ITypeALU_e funct3;
-        logic [4:0] rd;
+        regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instITypeALU_s;
 
@@ -270,8 +293,8 @@ package riscv_definitions;
      */
     typedef struct packed {
         logic [6:0] imm1;
-        logic [4:0] rs2;
-        logic [4:0] rs1;
+        regAddr_t rs2;
+        regAddr_t rs1;
         funct3SType_e funct3;
         logic [4:0] imm0;
         opcodeType_e opcode; // logic [6:0]
@@ -283,8 +306,8 @@ package riscv_definitions;
     typedef struct packed {
         logic [0:0] imm4;
         logic [5:0] imm2;
-        logic [4:0] rs2;
-        logic [4:0] rs1;
+        regAddr_t rs2;
+        regAddr_t rs1;
         funct3BType_e funct3;
         logic [4:1] imm1;
         logic [0:0] imm3; //imm0 is predefined as 0 {imm4,imm3,imm2, imm1, 1'b0} 
@@ -296,7 +319,7 @@ package riscv_definitions;
      */
     typedef struct packed {
         logic [19:0] imm1; //imm0 is predefined as 12'b0 {imm1, 12'b0}
-        logic [4:0] rd;
+        regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instUType_s;
 
@@ -308,7 +331,7 @@ package riscv_definitions;
         logic [9:0] imm1;
         logic [0:0] imm2;
         logic [7:0] imm3; //imm0 is predefined as 0 {imm4,imm3,imm2, imm1, 1'b0} 
-        logic [4:0] rd;
+        regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instJType_s;
             
@@ -335,8 +358,5 @@ package riscv_definitions;
         logic signed [31:0] s_data;
         logic [0:3] [7:0] memory;
     } dataBus_u;
-
-    typedef logic [4:0] regAddr_t;
-
 
 endpackage: riscv_definitions
