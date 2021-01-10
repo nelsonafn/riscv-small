@@ -51,8 +51,14 @@ module alu (
     output dataBus_u alu_result //[out] ALU result to pipeline 
 );
 
+    /* 
+     * ALU source data from mux to ALU
+     */
     dataBus_u alu_data1, alu_data2;
 
+    /* 
+     * ALU mux 1
+     */
     always_comb begin: proc_alu_mux1
         case (alu_src1)
             PC_S1: begin
@@ -72,6 +78,9 @@ module alu (
         endcase
     end: proc_alu_mux1
 
+    /* 
+     * ALU mux 2
+     */
     always_comb begin: proc_alu_mux2
         case (alu_src2)
             RS2_S2: begin
@@ -91,6 +100,9 @@ module alu (
         endcase
     end: proc_alu_mux2
 
+    /* 
+     * ALU calculation
+     */
     always_comb begin: proc_alu
         case (alu_op)
             ALU_ADD : begin
