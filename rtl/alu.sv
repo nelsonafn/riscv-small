@@ -34,71 +34,16 @@
  * History:
  * January 10, 2021 at 22:13 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
+
+import riscv_definitions::*; // import package into $unit space
+
  
 module alu (
-    input clk,    //[in] Clock
-    input clk_en, //[in] Clock Enable
-    input rst_n,  //[in] Asynchronous reset active low
     input aluOpType_e alu_op, //[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
-    input ctrlAluSrc1_e alu_src1, //[in] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd_data)
-	input ctrlAluSrc2_e alu_src2, //[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd_data)
-    input dataBus_u pc, //[in] PC value to EX	
-	input dataBus_u rs1, //[in] Reg source one (rs1) data
-	input dataBus_u rs2, //[in] Reg source two (rs2) data
-	input dataBus_u imm, //[in] Immediate value
-    input dataBus_u rd_data, //[in] Reg destination (rd) data
-    input dataBus_u alu_ma, //[in] Registered alu result to memory access (ma) 
+    input dataBus_u alu_data1, //[in] Reg destination (rd) data
+    input dataBus_u alu_data2, //[in] Registered alu result to memory access (ma) 
     output dataBus_u alu_result //[out] ALU result to pipeline 
 );
-
-    /* 
-     * ALU source data from mux to ALU
-     */
-    dataBus_u alu_data1, alu_data2;
-
-    /* 
-     * ALU mux 1
-     */
-    always_comb begin: proc_alu_mux1
-        case (alu_src1)
-            PC_S1: begin
-                alu_data1 = pc;
-            end 
-            RS1_S1: begin
-                alu_data1 = rs1;
-            end
-            //Red destination (rd) from Memory Access (MA) to rs1 forward
-            RD_MA_S1: begin
-               alu_data1 = alu_ma;     
-            end 
-            //Red destination (rd) from Write Back (WB) to rs1 forward
-            RD_WB_S1: begin
-               alu_data1 = rd_data;     
-            end  
-        endcase
-    end: proc_alu_mux1
-
-    /* 
-     * ALU mux 2
-     */
-    always_comb begin: proc_alu_mux2
-        case (alu_src2)
-            RS2_S2: begin
-                alu_data2 = rs2;
-            end 
-            IMM_S2: begin
-                alu_data2 = imm;
-            end
-            //Red destination (rd) from Memory Access (MA) to rs2 forward
-            RD_MA_S2: begin
-               alu_data2 = alu_ma;     
-            end 
-            //Red destination (rd) from Write Back (WB) to rs2 forward
-            RD_WB_S2: begin
-               alu_data2 = rd_data;     
-            end  
-        endcase
-    end: proc_alu_mux2
 
     /* 
      * ALU calculation
@@ -144,7 +89,7 @@ module alu (
             default: begin
                 alu_result = alu_data2;
             end
-        endcase: proc_alu
-    end
+        endcase
+    end: proc_alu
     
 endmodule: alu

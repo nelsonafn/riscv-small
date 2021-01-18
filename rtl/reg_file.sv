@@ -43,9 +43,9 @@ module reg_file (
     input rst_n,  //[in] Asynchronous reset active low
     input regAddr_t rs1_addr, //[in] Reg source one address
     input regAddr_t rs2_addr, //[in] Reg source two address
-    input regAddr_t rd_addr,  //[in] Reg destination address
-    input logic rd_wr_en, //[in] Reg destination write enable
-    input dataBus_u rd_data, //[in] Reg destination data
+    input regAddr_t rd0_addr,  //[in] Reg destination address
+    input logic rd0_wr_en, //[in] Reg destination write enable
+    input dataBus_u rd0_data, //[in] Reg destination data
     output dataBus_u rs1, //[out] Reg source one data 
     output dataBus_u rs2  //[out] Reg source two data 
 );
@@ -79,15 +79,15 @@ module reg_file (
     /*
      * Synchronized write of destination (rd)
      */
-    always_ff @(posedge clk or negedge rst_n) begin: rd_write
-        if (!rst_n) begin: rd_write_rst
+    always_ff @(posedge clk or negedge rst_n) begin: rd0_write
+        if (!rst_n) begin: rd0_write_rst
             regs <= '{default:0};
-        end: rd_write_rst
+        end: rd0_write_rst
         else if (clk_en) begin
-            if (rd_wr_en) begin
-                regs[rd_addr] <= rd_data;
+            if (rd0_wr_en) begin
+                regs[rd0_addr] <= rd0_data;
             end
         end        
-    end: rd_write
+    end: rd0_write
     
 endmodule: reg_file

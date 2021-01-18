@@ -356,7 +356,10 @@ package riscv_definitions;
     typedef union packed {
         logic [31:0] u_data;
         logic signed [31:0] s_data;
-        logic [0:3] [7:0] memory;
+        logic [0:3] [7:0] u_bytes;
+        logic [0:1] [15:0] u_half;
+        logic signed [0:3] [7:0] s_bytes;
+        logic signed [0:1] [15:0] s_half;
     } dataBus_u;
 
 endpackage: riscv_definitions

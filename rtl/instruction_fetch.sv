@@ -46,6 +46,7 @@ module instruction_fetch (
     input logic rst_n,  // Asynchronous reset active low
     // Communication with the instruction memory
     input instruction_u inst_data, // Data from instruction memory
+    input logic flush, // Insert NOP
     output dataBus_u inst_addr,// Address of next instruction
     // Communication instruction decoder
     output instruction_u inst_id,// Registered instruction to be decode
@@ -53,7 +54,7 @@ module instruction_fetch (
     // Next PC control
     input dataBus_u jump_addr,// Jump address
     input dataBus_u trap_addr,// Exception/interruption address
-    input nextPCType_e pc_sel
+    input nextPCType_e pc_sel // PC source selector
 );
 
     dataBus_u pc;
@@ -65,7 +66,7 @@ module instruction_fetch (
      * stage.
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_if_id
-        if(~rst_n) begin
+        if(~rst_n || flush) begin
             pc_id <= 'b0;
             inst_id <= 'b0;
         end else if(clk_en) begin

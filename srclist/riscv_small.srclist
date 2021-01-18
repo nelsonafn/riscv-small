@@ -1,3 +1,6 @@
+srclist/memory_access.srclist
+srclist/execution.srclist
 srclist/instruction_decode.srclist 
 srclist/instruction_fetch.srclist
+rtl/control.sv
 rtl/riscv_small.sv
