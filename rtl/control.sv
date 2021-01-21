@@ -46,6 +46,7 @@ module control (
     input logic rd0_wr_en_ma,//[in] Reg destination (rd) write enable to pipeline
     input logic rd0_wr_en_wb,//[in] Reg destination (rd) write enable to pipeline
 	input logic data_rd_en_ma, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
+    input logic data_wr_en_ex,  //[in] Data memory write enable to be used with funct3
     input logic branch_taken,  //[in] Indicates that a branch should be taken to the control  
     input exception, //[in] Exception trigger
     input dataBus_u pc_ex, //[in] PC value to EX
@@ -53,8 +54,9 @@ module control (
     input logic data_ready, //[in] Indicates that data from memory is available
     input aluSrc1_e alu_src1_ex, //[in] ALU source one mux selection (possible values PC/RS1) (id)
 	input aluSrc2_e alu_src2_ex, //[in] ALU source two mux selection (possible values RS2/IMM) (id)
-    output ctrlAluSrc1_e alu_src1,//[out] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd_data)
-	output ctrlAluSrc2_e alu_src2,//[out] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd_data)
+    output ctrlAluSrc1_e alu_src1,//[out] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd0_data)
+	output ctrlAluSrc2_e alu_src2,//[out] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
+    output ctrlAluSrc2_e storage_src,//[out] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
 	output nextPCType_e pc_sel, //[out] PC source selector
     output dataBus_u trap_addr,  //[out] Trap Addr
     output logic inst_rd_en,    //[out] Instruction memory read enable
@@ -85,15 +87,18 @@ module control (
         
 
         // Forward write back
-        if (rs1_addr_ex == rd0_addr_wb && rd0_wr_en_wb) begin
+        if (rs1_addr_ex == rd0_addr_wb && rd0_wr_en_wb && alu_src1_ex == RS1) begin
             alu_src1 = RD_WB_S1;
         end
         if (rs2_addr_ex == rd0_addr_wb && rd0_wr_en_wb) begin
-            alu_src2 = RD_WB_S2;
+            if (alu_src2_ex == RS2) begin
+                alu_src2 = RD_WB_S2;
+            end
+            storage_src = RD_WB_S2;
         end
 
         // Forward from memory access
-        if (rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma) begin
+        if (rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1) begin
             // If the data is being read from memory
             if (data_rd_en_ma) begin
                 ex_ma_flush =  '1;// Insert NOP in EX_MA
@@ -105,7 +110,9 @@ module control (
                 alu_src1 = RD_MA_S1; //Do forward from memory access
             end
         end
-        if (rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma) begin
+        // If rs2 is coming from Memory Access, and ALU need rs2 or Storage will need it on next stage
+        if (rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 || data_wr_en_ex)) begin
+            // If the data is being read from memory
             if (data_rd_en_ma) begin
                 ex_ma_flush =  '1;// Insert NOP in EX_MA
                 if_id_clk_en = '0;// Pause IF_ID
@@ -114,6 +121,7 @@ module control (
             // If rd0 data is not from memory
             else begin
                 alu_src2 = RD_MA_S2; //Do forward from memory access
+                storage_src = RD_MA_S2;
             end
         end
 

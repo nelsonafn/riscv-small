@@ -245,8 +245,9 @@ module instruction_decode (
 		end
         STORE_C: begin
 			//bypass src2 (funct7 is undefined, funct3 have other use)
-			alu_op = ALU_BPS2; 
-			alu_src2 = RS2;
+			alu_op = ALU_ADD; 
+			alu_src1 = RS1;
+			alu_src2 = IMM;
 
 			/*
 			 * funct3 should be used in WB stage to define STORE type (SW=32, SH=16bit, SB=8bit).

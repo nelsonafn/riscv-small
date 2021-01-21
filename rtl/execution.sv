@@ -43,6 +43,7 @@ module execution (
     input aluOpType_e alu_op, //[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
     input ctrlAluSrc1_e alu_src1, //[in] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd0_data)
 	input ctrlAluSrc2_e alu_src2, //[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
+    input ctrlAluSrc2_e storage_src,//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
     input dataBus_u pc, //[in] PC value to EX	
 	input dataBus_u rs1, //[in] Reg source one (rs1) data
 	input dataBus_u rs2, //[in] Reg source two (rs2) data
@@ -55,6 +56,7 @@ module execution (
 	input regAddr_t rd0_addr,  //[out] Reg destination (rd) addr from instruction decode (id)
     input logic flush, // Insert NOP
     output dataBus_u alu_ma, //[out] ALU result to memory access (ma)
+    output dataBus_u rs2_ma, //[out] Reg source two (rs2) data
 	output logic rd0_wr_en_ma,//[out] Reg destination (rd) write enable to pipeline to memory access
     output logic data_rd_en_ma, //[out] Data memory read enable (wb_mux_sel) to be used with funct3 
 	output logic data_wr_en_ma, //[out] Data memory write enable to be used together with funct3
@@ -74,6 +76,11 @@ module execution (
     dataBus_u alu_data2;
 
     /* 
+     * rs2 to pipeline 
+     */
+    dataBus_u rs2_pipeline;
+
+    /* 
      * Register signals to be used in memory access (ma) stage. 
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_ex_ma
@@ -84,6 +91,7 @@ module execution (
             data_wr_en_ma <= '0;
             funct3_ma <= LB;
             rd0_addr_ma <= '0;
+            rs2_ma <= '0;
         end: proc_ex_ma_rst
         else if (clk_en) begin
             alu_ma <= alu_result;
@@ -92,6 +100,7 @@ module execution (
             data_wr_en_ma <= data_wr_en;
             funct3_ma <= funct3;
             rd0_addr_ma <= rd0_addr;
+            rs2_ma <= rs2_pipeline;
         end        
     end: proc_ex_ma
 
@@ -130,14 +139,36 @@ module execution (
             end
             //Red destination (rd) from Memory Access (MA) to rs2 forward
             RD_MA_S2: begin
-               alu_data2 = alu_ma;     
+                alu_data2 = alu_ma;     
             end 
             //Red destination (rd) from Write Back (WB) to rs2 forward
             RD_WB_S2: begin
-               alu_data2 = rd0_data;     
+                alu_data2 = rd0_data;     
             end  
         endcase
     end: proc_alu_mux2
+
+    /* 
+     * rs2 mux
+     */
+    always_comb begin: proc_rs2_mux
+        case (alu_src2)
+            RS2_S2: begin
+                rs2_pipeline = rs2;
+            end 
+            //Red destination (rd) from Memory Access (MA) to rs2 forward
+            RD_MA_S2: begin
+                rs2_pipeline = alu_ma;     
+            end 
+            //Red destination (rd) from Write Back (WB) to rs2 forward
+            RD_WB_S2: begin
+                rs2_pipeline = rd0_data;     
+            end  
+            default: begin
+                rs2_pipeline = rs2;
+            end
+        endcase
+    end: proc_rs2_mux
 
     /* 
      * ALU calculation
