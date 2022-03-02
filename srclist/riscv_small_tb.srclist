@@ -1,0 +1,3 @@
+srclist/riscv_small.srclist
+tb/clk_gen.sv
+tb/riscv_small_tb.sv
