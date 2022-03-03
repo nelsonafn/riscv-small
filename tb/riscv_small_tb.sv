@@ -35,6 +35,7 @@
  * March 01, 2022 at 21:10 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
  `timescale 1ns/1ps
+ import riscv_definitions::*; // import package into $unit space
 
 module riscv_small_tb;
 
@@ -56,6 +57,7 @@ module riscv_small_tb;
     dataBus_u data_wr; //[out] Data to data_memory
     logic [1:0] data_rd_wr_ctrl; //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
 
+    localparam INPUT_DELAY = 1;
 
     clk_gen #(
         .CLK_PERIOD (4), // Period in ns
@@ -98,6 +100,8 @@ module riscv_small_tb;
         //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
         .data_rd_wr_ctrl    (data_rd_wr_ctrl)
     );
+
+
     
 
     initial begin
@@ -106,22 +110,38 @@ module riscv_small_tb;
         rst_n <= '0;  //[in] Asynchronous reset active low
         exception <= '0; //[in] exception
         @(posedge clk);
-        @(posedge clk);
-        rst_n <= '1;
+        rst_n <= #(INPUT_DELAY) '1;
     end
 
     initial begin
         // Instruction Memory controls
-        inst_ready <= '1; //[in] Indicates that data instruction ready
+        inst_ready <= '0; //[in] Indicates that data instruction ready
         inst_data <= '0; //[in] Data from instruction memory
+        @(posedge clk);
+        //[in] Data from instruction memory            imm0, rs1, funct3,  rd, opcode
+        inst_data.i_type_load <= #(INPUT_DELAY) {12'd20, 5'd0,    LW, 5'd6, LOAD_C};
+        inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
+        @(posedge clk);
+        //[in] Data from instruction memory         imm0,  rs1, funct3,   rd, opcode
+        inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd100, 5'd6,   ADDI, 5'd7, ALUI_C};
+        inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
+        @(posedge clk);
+        //[in] Data from instruction memory         imm0, rs1, funct3,   rd, opcode
+        inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd150, 5'd6,  ADDI, 5'd8, ALUI_C};
+        inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
         //dataBus_u inst_addr;//[out] Address of next instruction
         //logic inst_rd_en; //[out] Instruction memory read enable 
     end
 
+
+
     initial begin
         // Data Memory controls
-        data_ready <= '1; //[in] Indicates that data is ready
+        data_ready <= '0; //[in] Indicates that data is ready
         data_rd <= '0; //[in] Data from data_memory
+        @(posedge clk);
+        data_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data is ready
+        data_rd.s_data <= #(INPUT_DELAY) 5; //[in] Data from data_memory
         //logic data_rd_en_ma; //[out] Data memory read enable to be used with data_rd_wr_ctrl 
         //logic data_wr_en_ma; //[out] Data memory write enable to be used with data_rd_wr_ctrl
         //dataBus_u data_wr; //[out] Data to data_memory
