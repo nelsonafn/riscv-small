@@ -66,7 +66,7 @@ module riscv_small (
     nextPCType_e pc_sel; // PC source selector
 
 	logic id_ex_clk_en; // Clock Enable
-	logic rd0_wr_en_;    //[in] Reg register (rd) write enable from Write Back stage
+	//logic rd0_wr_en_;    //[in] Reg register (rd) write enable from Write Back stage
 	dataBus_u rd0_data; //[in] Reg destination data
 	logic id_ex_flush; // Insert NOP
 	logic rd0_wr_en_ex;//[out] Reg destination (rd) write enable to pipeline
@@ -132,7 +132,8 @@ module riscv_small (
 	    .rst_n            (rst_n),// Asynchronous reset active low
 	    .inst             (inst_id),// Instruction from IF
 	    .pc               (pc_id),// PC value from IF
-	    .rd0_wr_en        (rd0_wr_en_wb),//[in] Reg register (rd) write enable from Write Back stage
+	    .rd0_wr_en        (rd0_wr_en_wb),//[in] Reg destination (rd) write enable from Write Back stage
+        .rd0_addr_wb      (rd0_addr_wb),//[in] Reg destination (rd) address from Write Back stage
 	    .rd0_data         (rd0_data_wb),//[in] Reg destination data
 	    .flush            (id_ex_flush),// Insert NOP
 	    .rd0_wr_en_ex     (rd0_wr_en_ex),//[out] Reg destination (rd) write enable to pipeline

@@ -43,7 +43,8 @@ module instruction_decode (
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
 	input dataBus_u pc,   // PC value from IF
-	input logic rd0_wr_en,    //[in] Reg register (rd) write enable from Write Back stage
+	input logic rd0_wr_en,    //[in] Reg destination (rd) write enable from Write Back stage
+	input regAddr_t rd0_addr_wb, //[in] Reg destination (rd) address from Write Back stage
 	input dataBus_u rd0_data, //[in] Reg destination data
 	input logic flush, // Insert NOP
 	output logic rd0_wr_en_ex,//[out] Reg destination (rd) write enable to pipeline
@@ -110,18 +111,30 @@ module instruction_decode (
 			alu_src2_ex <= alu_src2;
 			alu_op_ex <= alu_op;
 			pc_ex <= pc;
-			rs1_ex <= rs1;
-			rs2_ex <= rs2;
 			imm_ex <= imm;
 			rd0_addr_ex <= inst.r_type.rd;
 			rs1_addr_ex <= inst.r_type.rs1;
 			rs2_addr_ex <= inst.r_type.rs2;
 			rd0_wr_en_ex <= rd0_wr_en_2pipe;
 			funct3_ex <= inst.i_type_load.funct3;
+			//TODO: Check if rs1 and 2 also need be forward to jump decision
+			// Forward rd0 to rs1 if same address being write and read
+			if (rd0_addr_wb == inst.r_type.rs1) begin
+				rs1_ex <= rd0_data;
+			end else begin
+				rs1_ex <= rs1;
+			end
+			// Forward rd0 to rs2 if same address being write and read
+			if (rd0_addr_wb == inst.r_type.rs2) begin
+				rs2_ex <= rd0_data;
+			end else begin
+				rs2_ex <= rs2;
+			end
 		end        
 	end: proc_id_ex
 
 
+	//TODO: Check control regarding jump decision need forward also 
 	/*
 	 * Jump Decision file instantiation
 	 */
@@ -147,7 +160,7 @@ module instruction_decode (
 		.rst_n       (rst_n),  //[in] Asynchronous reset active low
 		.rs1_addr    (inst.r_type.rs1), //[in] Reg source one address
 		.rs2_addr    (inst.r_type.rs2), //[in] Reg source two address
-		.rd0_addr     (inst.r_type.rd),  //[in] Reg destination address
+		.rd0_addr     (rd0_addr_wb),  //[in] Reg destination address from write back
 		.rd0_wr_en    (rd0_wr_en), //[in] Reg destination write enable
 		.rd0_data     (rd0_data),  //[in] Reg destination data
 		.rs1         (rs1), //[out] Reg source one data 
@@ -200,12 +213,14 @@ module instruction_decode (
 			//bypass src2 (funct7 and funct3 is undefined)
 			alu_op = ALU_BPS2;
 			alu_src2 = IMM;
+			rd0_wr_en_2pipe = '1;
 		end
         AUIPC: begin
 			//add+4 (funct7 and funct3 is undefined)
 			alu_op = ALU_ADD;
 			alu_src1 = PC;
 			alu_src2 = IMM;
+			rd0_wr_en_2pipe = '1;
 		end
 		JAL: begin
 			uncond_jump = '1;
@@ -234,7 +249,7 @@ module instruction_decode (
 			alu_op = ALU_ADD;
 			alu_src1 = RS1;
 			alu_src2 = IMM;
-
+			rd0_wr_en_2pipe = '1;
 			/*
 			 * funct3 should be used in WB stage to define Load type (LW=32, LH=16bit signal extended, 
 			 * LB=8bit signal extended, LHU=16bit zero extended and , LBU=8bit zero extended).
@@ -267,12 +282,14 @@ module instruction_decode (
 			end
 			alu_src1 = RS1;
 			alu_src2 = IMM;
+			rd0_wr_en_2pipe = '1;
 		end
         ALU_C: begin
 			//funct7[0],funct3 (SUB and SRA uses funct7)
 			alu_op = aluOpType_e'({inst.r_type.funct7[5], inst.r_type.funct3});
 			alu_src1 = RS1; 
 			alu_src2 = RS2; 
+			rd0_wr_en_2pipe = '1;
 		end
         FENCE: begin
 			//TODO:

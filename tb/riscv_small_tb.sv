@@ -119,15 +119,15 @@ module riscv_small_tb;
         inst_data <= '0; //[in] Data from instruction memory
         @(posedge clk);
         //[in] Data from instruction memory            imm0, rs1, funct3,  rd, opcode
-        inst_data.i_type_load <= #(INPUT_DELAY) {12'd20, 5'd0,    LW, 5'd6, LOAD_C};
+        inst_data.i_type_load <= #(INPUT_DELAY) {12'd10, 5'd0,    LW, 5'd6, LOAD_C};
         inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
         @(posedge clk);
         //[in] Data from instruction memory         imm0,  rs1, funct3,   rd, opcode
-        inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd100, 5'd6,   ADDI, 5'd7, ALUI_C};
+        inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd1, 5'd6,   ADDI, 5'd7, ALUI_C};
         inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
         @(posedge clk);
         //[in] Data from instruction memory         imm0, rs1, funct3,   rd, opcode
-        inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd150, 5'd6,  ADDI, 5'd8, ALUI_C};
+        inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd2, 5'd6,  ADDI, 5'd8, ALUI_C};
         inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
         //dataBus_u inst_addr;//[out] Address of next instruction
         //logic inst_rd_en; //[out] Instruction memory read enable 
