@@ -33,7 +33,7 @@
  * History:
  * March 01, 2022 at 23:53 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
- 
+  
 module clk_gen (
     input logic en, //[in] Clock Enable   
     output logic clk    //[out] Clock 
