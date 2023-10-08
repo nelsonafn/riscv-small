@@ -43,9 +43,14 @@ module instruction_decode (
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
 	input dataBus_u pc,   // PC value from IF
+    // JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data (rd0_data_wb))
+    input dataBus_u rd0_data_ex,//[in] Reg destination data forward from EX
+    input dataBus_u rd0_data_ma,//[in] Reg destination data forward from MA
+    input dataBus_u rd0_data_wb,//[in] Reg destination data from WB
 	input logic rd0_wr_en,    //[in] Reg destination (rd) write enable from Write Back stage
 	input regAddr_t rd0_addr_wb, //[in] Reg destination (rd) address from Write Back stage
-	input dataBus_u rd0_data, //[in] Reg destination data
+	input ctrlCJmpSrc_e jmp_src1,//[out] JUMP forward mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+    input ctrlCJmpSrc_e jmp_src2,//[out] JUMP forward mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
 	input logic flush, // Insert NOP
 	output logic rd0_wr_en_ex,//[out] Reg destination (rd) write enable to pipeline
 	output aluSrc1_e alu_src1_ex, //[out] ALU source one mux selection (possible values PC/RS1)
@@ -59,6 +64,7 @@ module instruction_decode (
 	output aluOpType_e alu_op_ex, //[out] Opcode for alu operation ( composed by funct3ITypeALU_e)
 	output logic branch_taken,  //[out] Indicates that a branch should be taken to the control 
 	output dataBus_u jump_addr, //[out] Jump address
+    output logic cond_jump, // Used to indicate a conditional branch have been decoded
 	output funct3ITypeLOAD_e funct3_ex, //[out] funct3 LOAD
 	output regAddr_t rd0_addr_ex,  //[out] Reg destination (rd) addr
 	output regAddr_t rs1_addr_ex, //[out] Reg source one (rs1) addr
@@ -69,7 +75,6 @@ module instruction_decode (
 	 * Signals from proc_decode to jump_decision
 	 */
 	aluSrc1_e base_addr_sel;// Indicates the branch base address source (rs1 or pc)
-	logic cond_jump; // Used to indicate a conditional branch have been decoded
 	logic uncond_jump; // Used to indicate an unconditional branch have been decoded
 
 	/*
@@ -81,7 +86,7 @@ module instruction_decode (
 	logic data_rd_en; // Data memory read enable to be used together with funct3
 	logic data_wr_en; // Data memory write enable to be used together with funct3
 	aluOpType_e alu_op;  // Opcode for alu operation (always be composed by funct3ITypeALU_e)
-	dataBus_u rs1, rs2;
+	dataBus_u rs1, rs2, rs1_jump, rs2_jump;
     logic rd0_wr_en_2pipe; //
 
 	/*
@@ -117,30 +122,60 @@ module instruction_decode (
 			rs2_addr_ex <= inst.r_type.rs2;
 			rd0_wr_en_ex <= rd0_wr_en_2pipe;
 			funct3_ex <= inst.i_type_load.funct3;
-			//TODO: Check if rs1 and 2 also need be forward to jump decision
-			// Forward rd0 to rs1 if same address being write and read
-			if (rd0_addr_wb == inst.r_type.rs1) begin
-				rs1_ex <= rd0_data;
-			end else begin
-				rs1_ex <= rs1;
-			end
-			// Forward rd0 to rs2 if same address being write and read
-			if (rd0_addr_wb == inst.r_type.rs2) begin
-				rs2_ex <= rd0_data;
-			end else begin
-				rs2_ex <= rs2;
-			end
+			rs1_ex <= rs1;
+			rs2_ex <= rs2;
 		end        
 	end: proc_id_ex
 
-
-	//TODO: Check control regarding jump decision need forward also 
+	/*
+	 * Jump Decision mux
+	 */
+	always_comb begin: proc_jump_forward_mux
+		rs1_jump = rs1;
+		rs2_jump = rs2;
+        //JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+		case (jmp_src1)
+			RD_ID: begin
+				rs1_jump = rs1;
+			end
+			//Do forward from write back
+			RD_EX: begin 
+                rs1_jump = rd0_data_ex;
+			end
+			//Do forward from memory access
+			RD_MA: begin 
+                rs1_jump = rd0_data_ma;
+			end
+			//Do forward from write back
+			RD_WB: begin 
+                rs1_jump = rd0_data_wb;
+			end
+		endcase
+        //JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+		case (jmp_src2)
+			RD_ID: begin
+                rs2_jump = rs2;
+			end
+			//Do forward from write back
+			RD_EX: begin 
+                rs2_jump = rd0_data_ex;
+			end
+			//Do forward from memory access
+			RD_MA: begin 
+                rs2_jump = rd0_data_ma;
+			end
+			//Do forward from write back
+			RD_WB: begin 
+                rs2_jump = rd0_data_wb;
+			end
+		endcase
+	end: proc_jump_forward_mux
 	/*
 	 * Jump Decision file instantiation
 	 */
 	jump_decision u_jump_decision (
-	    .rs1           (rs1), //[in] Reg source one data 
-	    .rs2           (rs2), //[in] Reg source two data 
+	    .rs1           (rs1_jump), //[in] Reg source one data 
+	    .rs2           (rs2_jump), //[in] Reg source two data 
 	    .imm           (imm), //[in] Immediate value 
 	    .pc            (pc),  //[in] PC value of the current instruction 
 	    .funct3        (inst.b_type.funct3), //[in] Indicates which condition branch should be taken 
@@ -162,7 +197,7 @@ module instruction_decode (
 		.rs2_addr    (inst.r_type.rs2), //[in] Reg source two address
 		.rd0_addr     (rd0_addr_wb),  //[in] Reg destination address from write back
 		.rd0_wr_en    (rd0_wr_en), //[in] Reg destination write enable
-		.rd0_data     (rd0_data),  //[in] Reg destination data
+		.rd0_data     (rd0_data_wb),  //[in] Reg destination data
 		.rs1         (rs1), //[out] Reg source one data 
 		.rs2         (rs2) //[out] Reg source two data 
 	);

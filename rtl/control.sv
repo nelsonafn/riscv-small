@@ -39,14 +39,20 @@ module control (
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
+    input regAddr_t rs1_addr_id, //[in] Reg source one (rs1) addr
+	input regAddr_t rs2_addr_id, //[in] Reg source two (rs2) addr
 	input regAddr_t rs1_addr_ex, //[in] Reg source one (rs1) addr
 	input regAddr_t rs2_addr_ex,  //[in] Reg source two (rs2) addr
+    input regAddr_t rd0_addr_ex,  //[in] Reg destination (rd) addr
     input regAddr_t rd0_addr_ma,  //[in] Reg destination (rd) addr
     input regAddr_t rd0_addr_wb,  //[in] Reg destination (rd) addr
+    input logic rd0_wr_en_ex,//[in] Reg destination (rd) write enable to pipeline
     input logic rd0_wr_en_ma,//[in] Reg destination (rd) write enable to pipeline
     input logic rd0_wr_en_wb,//[in] Reg destination (rd) write enable to pipeline
+    input logic data_rd_en_ex, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
 	input logic data_rd_en_ma, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
     input logic data_wr_en_ex,  //[in] Data memory write enable to be used with funct3
+    input logic cond_jump, // Used to indicate a conditional branch have been decoded
     input logic branch_taken,  //[in] Indicates that a branch should be taken to the control  
     input exception, //[in] Exception trigger
     input dataBus_u pc_ex, //[in] PC value to EX
@@ -56,7 +62,9 @@ module control (
 	input aluSrc2_e alu_src2_ex, //[in] ALU source two mux selection (possible values RS2/IMM) (id)
     output ctrlAluSrc1_e alu_src1,//[out] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd0_data)
 	output ctrlAluSrc2_e alu_src2,//[out] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
-    output ctrlAluSrc2_e storage_src,//[out] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
+    output ctrlAluSrc2_e storage_src,//[out] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) //TODO:TBR
+    output ctrlCJmpSrc_e jmp_src1,//[out] JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+    output ctrlCJmpSrc_e jmp_src2,//[out] JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
 	output nextPCType_e pc_sel, //[out] PC source selector
     output dataBus_u trap_addr,  //[out] Trap Addr
     output logic inst_rd_en,    //[out] Instruction memory read enable
@@ -67,12 +75,15 @@ module control (
     output logic if_id_flush, // Insert NOP in IF_ID
     output logic id_ex_flush, // Insert NOP in ID_EX
     output logic ex_ma_flush // Insert NOP in EX_MA
-);
+); 
+
 
     dataBus_u sepc;
     dataBus_u scause;
 
     always_comb begin: proc_forward_ctrl
+        jmp_src1 = RD_ID;
+        jmp_src2 = RD_ID;
         alu_src1 = ctrlAluSrc1_e'({1'b0, alu_src1_ex});
         alu_src2 = ctrlAluSrc2_e'({1'b0, alu_src2_ex});
         if_id_clk_en = '1;// Run IF_ID
@@ -85,43 +96,129 @@ module control (
         pc_sel = PC_PLUS4; 
         inst_rd_en = 1;
         
+        //TODO: Duplicated code. Move to function
+        /*
+         * Forward for JUMP Compare
+         */
+        //R0 is always zeros, it should not be forward
+        if (rs1_addr_id != '0 && cond_jump) begin
+            // TODO: Maybe it doesn't need jump forward from wb because it is already 
+            //       bypassed inside register file bank. We should try remove this after
+            //       verification be stable and check logic and paths length
+            // Forward write back
+            if (rs1_addr_id == rd0_addr_wb && rd0_wr_en_wb) begin
+                jmp_src1 = RD_WB; //Do forward from write back
+            end
+            // Forward from memory access
+            if (rs1_addr_id == rd0_addr_ma && rd0_wr_en_ma) begin
+                // If the data is being read from memory
+                if (data_rd_en_ma) begin
+                    ex_ma_flush =  '1;// Insert NOP in EX_MA
+                    if_id_clk_en = '0;// Pause IF_ID
+                    id_ex_clk_en = '0;// Pause ID_EX
+                end
+                // If rd0 data is not from memory
+                else begin
+                    jmp_src1 = RD_MA; //Do forward from memory access
+                end
+            end
+            // Forward execution
+            if (rs1_addr_id == rd0_addr_ex && rd0_wr_en_ex) begin
+                // If the data is being read from memory
+                if (data_rd_en_ex) begin
+                    id_ex_flush =  '1;// Insert NOP in ID_EX
+                    if_id_clk_en = '0;// Pause IF_ID
+                end
+                // If rd0 data is not from memory
+                else begin
+                    jmp_src1 = RD_EX; //Do forward from write back
+                end
+            end
+        end
 
-        // Forward write back
-        if (rs1_addr_ex == rd0_addr_wb && rd0_wr_en_wb && alu_src1_ex == RS1) begin
-            alu_src1 = RD_WB_S1;
-        end
-        if (rs2_addr_ex == rd0_addr_wb && rd0_wr_en_wb) begin
-            if (alu_src2_ex == RS2) begin
-                alu_src2 = RD_WB_S2;
+        //R0 is always zeros, it should not be forward
+        if (rs2_addr_id != '0 && cond_jump) begin
+            // TODO: Maybe it doesn't need jump forward from wb because it is already 
+            //       bypassed inside register file bank. We should try remove this after
+            //       verification be stable and check logic and paths length
+            // Forward write back to ID
+            if (rs2_addr_id == rd0_addr_wb && rd0_wr_en_wb) begin
+                jmp_src2 = RD_WB; //Do forward from write back
             end
-            storage_src = RD_WB_S2;
+            // Forward from memory access
+            if (rs2_addr_id == rd0_addr_ma && rd0_wr_en_ma) begin
+                // If the data is being read from memory
+                if (data_rd_en_ma) begin
+                    ex_ma_flush =  '1;// Insert NOP in EX_MA
+                    if_id_clk_en = '0;// Pause IF_ID
+                    id_ex_clk_en = '0;// Pause ID_EX
+                end
+                // If rd0 data is not from memory
+                else begin
+                    jmp_src2 = RD_MA; //Do forward from memory access
+                end
+            end
+            // Forward execution
+            if (rs2_addr_id == rd0_addr_ex && rd0_wr_en_ex) begin
+                // If the data is being read from memory
+                if (data_rd_en_ex) begin
+                    id_ex_flush =  '1;// Insert NOP in ID_EX
+                    if_id_clk_en = '0;// Pause IF_ID
+                end
+                // If rd0 data is not from memory
+                else begin
+                    jmp_src2 = RD_EX; //Do forward from execution
+                end
+            end
         end
 
-        // Forward from memory access
-        if (rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1) begin
-            // If the data is being read from memory
-            if (data_rd_en_ma) begin
-                ex_ma_flush =  '1;// Insert NOP in EX_MA
-                if_id_clk_en = '0;// Pause IF_ID
-                id_ex_clk_en = '0;// Pause ID_EX
+        /*
+         * Forward for ALU
+         */
+        //TODO: Duplicated code. Move to function
+        //R0 is always zeros, it should not be forward
+        if (rs1_addr_ex != '0) begin
+            // Forward write back
+            if (rs1_addr_ex == rd0_addr_wb && rd0_wr_en_wb && alu_src1_ex == RS1) begin
+                alu_src1 = RD_WB_S1;
             end
-            // If rd0 data is not from memory
-            else begin
-                alu_src1 = RD_MA_S1; //Do forward from memory access
+            // Forward from memory access
+            if (rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1) begin
+                // If the data is being read from memory
+                if (data_rd_en_ma) begin
+                    ex_ma_flush =  '1;// Insert NOP in EX_MA
+                    if_id_clk_en = '0;// Pause IF_ID
+                    id_ex_clk_en = '0;// Pause ID_EX
+                end
+                // If rd0 data is not from memory
+                else begin
+                    alu_src1 = RD_MA_S1; //Do forward from memory access
+                end
             end
         end
-        // If rs2 is coming from Memory Access, and ALU need rs2 or Storage will need it on next stage
-        if (rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 || data_wr_en_ex)) begin
-            // If the data is being read from memory
-            if (data_rd_en_ma) begin
-                ex_ma_flush =  '1;// Insert NOP in EX_MA
-                if_id_clk_en = '0;// Pause IF_ID
-                id_ex_clk_en = '0;// Pause ID_EX
+
+        //R0 is always zeros, it should not be forward
+        if (rs2_addr_ex != '0) begin
+            // Forward write back
+            if (rs2_addr_ex == rd0_addr_wb && rd0_wr_en_wb) begin
+                if (alu_src2_ex == RS2) begin
+                    alu_src2 = RD_WB_S2;
+                end
+                storage_src = RD_WB_S2; //TODO:TBR
             end
-            // If rd0 data is not from memory
-            else begin
-                alu_src2 = RD_MA_S2; //Do forward from memory access
-                storage_src = RD_MA_S2;
+            // If rs2 is coming from Memory Access, and ALU need rs2 or Storage will need it on next stage
+            if (rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 || data_wr_en_ex)) begin
+                // If the data is being read from memory
+                if (data_rd_en_ma) begin
+                    ex_ma_flush =  '1;// Insert NOP in EX_MA
+                    if_id_clk_en = '0;// Pause IF_ID
+                    id_ex_clk_en = '0;// Pause ID_EX
+                end
+                // If rd0 data is not from memory
+                else begin
+                    alu_src2 = RD_MA_S2; //Do forward from memory access
+                    storage_src = RD_MA_S2; //TODO:TBR
+                end
             end
         end
 
@@ -136,7 +233,7 @@ module control (
             pc_sel = TRAP;
         end
 
-        //Insert NOT if there is no instruction available
+        //Insert NOP if there is no instruction available
         if (!inst_ready) begin
             if_id_flush =  '1;
         end

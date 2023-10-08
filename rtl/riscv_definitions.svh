@@ -86,6 +86,16 @@ package riscv_definitions;
     } ctrlAluSrc2_e;
 
     /* 
+     * Type enum for select JUMP COMPARE source from control.
+     */
+    typedef enum logic [1:0] {
+        RD_ID = 2'b00, //Red destination (rd) from instruction Decoder (ID)
+        RD_EX = 2'b01, //Red destination (rd) from Execution (EX) to rsx forward
+        RD_MA = 2'b10, //Red destination (rd) from Memory Access (MA) to rsx forward
+        RD_WB = 2'b11  //Red destination (rd) from Write Back (WB) to rsx forward
+    } ctrlCJmpSrc_e;
+
+    /* 
      * Type enum for ALU operation code.
      * These ALU opcode should always be composed by ALU_C/ALUI_C funct3ITypeALU_e enum.
      */

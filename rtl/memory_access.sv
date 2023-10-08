@@ -37,6 +37,7 @@
 
  import riscv_definitions::*; // import package into $unit space
  
+// TODO: rename data to dtm_data and rd0 to rdst_data
 module memory_access (
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable

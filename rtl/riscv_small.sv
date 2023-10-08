@@ -51,6 +51,7 @@ module riscv_small (
     output logic data_rd_en_ma, //[out] Data memory read enable to be used with data_rd_wr_ctrl 
 	output logic data_wr_en_ma, //[out] Data memory write enable to be used with data_rd_wr_ctrl
     output dataBus_u data_wr, //[out] Data to data_memory
+    output dataBus_u data_addr,//[out] Address of next data
     output logic [1:0] data_rd_wr_ctrl //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
 );
 
@@ -64,6 +65,8 @@ module riscv_small (
     dataBus_u jump_addr;// Jump address
     dataBus_u trap_addr;// Exception/interruption address
     nextPCType_e pc_sel; // PC source selector
+
+    logic cond_jump; // Used to indicate a conditional branch have been decode
 
 	logic id_ex_clk_en; // Clock Enable
 	//logic rd0_wr_en_;    //[in] Reg register (rd) write enable from Write Back stage
@@ -88,10 +91,14 @@ module riscv_small (
     logic ex_ma_clk_en; //[in] Clock Enable
     ctrlAluSrc1_e alu_src1; //[in] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd0_data)
 	ctrlAluSrc2_e alu_src2; //[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
-    ctrlAluSrc2_e storage_src;//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
+    ctrlAluSrc2_e storage_src;//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) //TODO:TBR
 
     logic ex_ma_flush; // Insert NOP
+    ctrlCJmpSrc_e jmp_src1;//[out] JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+    ctrlCJmpSrc_e jmp_src2;//[out] JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+    dataBus_u alu_ex; //[out] ALU result from execution not registered to jump forward (ex)
     dataBus_u alu_ma; //[out] ALU result to memory access (ma)
+    
     dataBus_u rs2_ma; //[out] Reg source two (rs2) data
 	logic rd0_wr_en_ma;//[out] Reg destination (rd) write enable to pipeline to memory access
 	regAddr_t rd0_addr_ma; //[out] Reg destination (rd) addr to memory access (ma)
@@ -106,8 +113,10 @@ module riscv_small (
 
     dataBus_u rd0_data_wb; //[out] Reg destination (rd) data from write back (wb)
 
-
     assign data_rd_wr_ctrl = logic'(rd_wr_ctrl);
+    assign data_addr = alu_ma;
+
+
     
     instruction_fetch u_instruction_fetch (
         .clk          (clk), // Clock
@@ -132,9 +141,12 @@ module riscv_small (
 	    .rst_n            (rst_n),// Asynchronous reset active low
 	    .inst             (inst_id),// Instruction from IF
 	    .pc               (pc_id),// PC value from IF
+        // JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data (rd0_data_wb))
+        .rd0_data_ex      (alu_ex),//[in] Reg destination data forward from EX
+        .rd0_data_ma      (alu_ma),//[in] Reg destination data forward from MA
+        .rd0_data_wb      (rd0_data_wb),//[in] Reg destination data
 	    .rd0_wr_en        (rd0_wr_en_wb),//[in] Reg destination (rd) write enable from Write Back stage
         .rd0_addr_wb      (rd0_addr_wb),//[in] Reg destination (rd) address from Write Back stage
-	    .rd0_data         (rd0_data_wb),//[in] Reg destination data
 	    .flush            (id_ex_flush),// Insert NOP
 	    .rd0_wr_en_ex     (rd0_wr_en_ex),//[out] Reg destination (rd) write enable to pipeline
 	    .alu_src1_ex      (alu_src1_ex),//[out] ALU source one mux selection (possible values PC/RS1)
@@ -148,6 +160,7 @@ module riscv_small (
 	    .alu_op_ex        (alu_op_ex),//[out] Opcode for alu operation ( composed by funct3ITypeALU_e)
 	    .branch_taken     (branch_taken),//[out] Indicates that a branch should be taken to the control 
 	    .jump_addr        (jump_addr),//[out] Jump address
+        .cond_jump        (cond_jump),// Used to indicate a conditional branch have been decode
 	    .funct3_ex        (funct3_ex),//[out] funct3 LOAD
 	    .rd0_addr_ex      (rd0_addr_ex),//[out] Reg destination (rd) addr
 	    .rs1_addr_ex      (rs1_addr_ex),//[out] Reg source one (rs1) addr
@@ -161,7 +174,7 @@ module riscv_small (
         .alu_op           (alu_op_ex),//[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
         .alu_src1         (alu_src1),//[in] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd0_data)
         .alu_src2         (alu_src2),//[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
-        .storage_src      (storage_src),//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
+        .storage_src      (storage_src),//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) //TODO:TBR
         .pc               (pc_ex),//[in] PC value to EX	
         .rs1              (rs1_ex),//[in] Reg source one (rs1) data
         .rs2              (rs2_ex),//[in] Reg source two (rs2) data
@@ -173,6 +186,7 @@ module riscv_small (
         .funct3           (funct3_ex),//[out] funct3 LOAD from instruction decode (id)
         .rd0_addr         (rd0_addr_ex),//[out] Reg destination (rd) addr from instruction decode (id)
         .flush            (ex_ma_flush),// Insert NOP
+        .alu_ex           (alu_ex), //[out] ALU result from execution not registered to jump forward (ex)
         .alu_ma           (alu_ma),//[out] ALU result to memory access (ma)
         .rs2_ma           (data_wr), //[out] Reg source two (rs2) data to data memory
         .rd0_wr_en_ma     (rd0_wr_en_ma),//[out] Reg destination (rd) write enable to pipeline to memory access
@@ -202,19 +216,24 @@ module riscv_small (
     //Write Back mux
     assign rd0_data_wb = wb_mux_sel_wb? ld_data_wb : alu_wb;
 
-
     control u_control (
         .clk              (clk),//[in] Clock
         .clk_en           (clk_en),//[in] Clock Enable
         .rst_n            (rst_n),//[in] Asynchronous reset active low
+        .rs1_addr_id      (inst_id.r_type.rs1),//[in] Reg source one (rs1) addr
+	    .rs2_addr_id      (inst_id.r_type.rs2),//[in] Reg source two (rs2) addr
         .rs1_addr_ex      (rs1_addr_ex),//[in] Reg source one (rs1) addr
         .rs2_addr_ex      (rs2_addr_ex),//[in] Reg source two (rs2) addr
+        .rd0_addr_ex      (rd0_addr_ex),//[in] Reg destination (rd) addr
         .rd0_addr_ma      (rd0_addr_ma),//[in] Reg destination (rd) addr
         .rd0_addr_wb      (rd0_addr_wb),//[in] Reg destination (rd) addr
+        .rd0_wr_en_ex     (rd0_wr_en_ex),//[in] Reg destination (rd) write enable to pipeline
         .rd0_wr_en_ma     (rd0_wr_en_ma),//[in] Reg destination (rd) write enable to pipeline
         .rd0_wr_en_wb     (rd0_wr_en_wb),//[in] Reg destination (rd) write enable to pipeline
+        .data_rd_en_ex    (data_rd_en_ex),//[in] Data memory read enable (wb_mux_sel) to be used with funct3
         .data_rd_en_ma    (data_rd_en_ma),//[in] Data memory read enable (wb_mux_sel) to be used with funct3
-        .data_wr_en_ex    (data_wr_en_ex),  //[in] Data memory write enable to be used with funct3
+        .data_wr_en_ex    (data_wr_en_ex),//[in] Data memory write enable to be used with funct3
+        .cond_jump        (cond_jump),//Used to indicate a conditional branch have been decoded
         .branch_taken     (branch_taken),//[in] Indicates that a branch should be taken to the control  
         .exception        (exception),//[in] Exception trigger
         .pc_ex            (pc_ex),//[in] PC value to EX
@@ -224,7 +243,9 @@ module riscv_small (
         .alu_src2_ex      (alu_src2_ex),//[in] ALU source two mux selection (possible values RS2/IMM) (id)
         .alu_src1         (alu_src1),//[out] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd_data)
         .alu_src2         (alu_src2),//[out] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd_data)
-        .storage_src      (storage_src),//[out] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
+        .storage_src      (storage_src),//[out] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) //TODO:TBR
+        .jmp_src1         (jmp_src1),//[out] JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
+        .jmp_src2         (jmp_src2),//[out] JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
         .pc_sel           (pc_sel),//[out] PC source selector
         .trap_addr        (trap_addr),//[out] Trap Addr
         .inst_rd_en       (inst_rd_en),//[out] Instruction memory read enable

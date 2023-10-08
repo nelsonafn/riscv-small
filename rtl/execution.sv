@@ -43,7 +43,7 @@ module execution (
     input aluOpType_e alu_op, //[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
     input ctrlAluSrc1_e alu_src1, //[in] ALU mux1 sel (PC/RS1/RD MA forward [alu_ma]/ RD WB rd0_data)
 	input ctrlAluSrc2_e alu_src2, //[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
-    input ctrlAluSrc2_e storage_src,//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data)
+    input ctrlAluSrc2_e storage_src,//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) TODO:TBR
     input dataBus_u pc, //[in] PC value to EX	
 	input dataBus_u rs1, //[in] Reg source one (rs1) data
 	input dataBus_u rs2, //[in] Reg source two (rs2) data
@@ -55,6 +55,8 @@ module execution (
     input funct3ITypeLOAD_e funct3, //[out] funct3 LOAD from instruction decode (id)
 	input regAddr_t rd0_addr,  //[out] Reg destination (rd) addr from instruction decode (id)
     input logic flush, // Insert NOP
+    //TODO: Check critical path of forward from not registered ALU (alu_ex)
+    output dataBus_u alu_ex, //[out] ALU result from execution not registered to jump forward (ex)
     output dataBus_u alu_ma, //[out] ALU result to memory access (ma)
     output dataBus_u rs2_ma, //[out] Reg source two (rs2) data
 	output logic rd0_wr_en_ma,//[out] Reg destination (rd) write enable to pipeline to memory access
