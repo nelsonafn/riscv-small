@@ -61,16 +61,27 @@ module reg_file (
      * x0 is always 32'b0.
      */
     always_comb begin: comb_rs_read
+
+        //R0 is always zeros, it should not be forward
         if (rs1_addr == '0) begin
             rs1 = '0;
         end
+        // Forward rd0 to rs1 if same address being write and read
+        else if (rd0_addr == rs1_addr) begin
+            rs1 = rd0_data;
+        end 
         else begin
             rs1 = regs[rs1_addr];
         end
 
+        //R0 is always zeros, it should not be forward
         if (rs2_addr == '0) begin
             rs2 = '0;
         end
+        // Forward rd0 to rs2 if same address being write and read
+        else if (rd0_addr == rs2_addr) begin
+            rs2 = rd0_data;
+        end 
         else begin
             rs2 = regs[rs2_addr];
         end
