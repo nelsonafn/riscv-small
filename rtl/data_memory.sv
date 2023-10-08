@@ -43,7 +43,7 @@ module data_memory (
     input logic data_rd_en,
     input logic data_wr_en,
     input dataBus_u addr,// Address of next instruction
-    output data_ready
+    output logic data_ready
 );
     
         /*
@@ -57,21 +57,22 @@ module data_memory (
      * x0 is always 32'b0.
      */
     always_comb begin: proc_comb_read
-        instruction = mem[addr];
-    end: comb_rs_read
+        data_out = mem[addr.u_data];
+        data_ready = addr.u_data <= 1023 || !data_rd_en;
+    end: proc_comb_read
 
     /*
      * Synchronized write 
      */
-    always_ff @(posedge clk or negedge rst_n) begin: rd0_write
-        if (!rst_n) begin: rd0_write_rst
+    always_ff @(posedge clk or negedge rst_n) begin: data_write
+        if (!rst_n) begin: data_write_rst
             mem <= '{default:0};
-        end: rd0_write_rst
+        end: data_write_rst
         else if (clk_en) begin
-            if (rd0_wr_en) begin
-                mem[rd0_addr] <= rd0_data;
+            if (data_rd_en) begin
+                mem[addr] <= data_in;
             end
         end        
-    end: rd0_write
+    end: data_write
     
 endmodule: data_memory

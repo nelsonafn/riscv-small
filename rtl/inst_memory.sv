@@ -36,7 +36,7 @@
  */
  
 module inst_memory #(
-    parameter ADDR_WIDTH = 10,
+    parameter ADDR_WIDTH = 10
 )(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
@@ -52,12 +52,17 @@ module inst_memory #(
      */
     dataBus_u mem [0:1023];
 
+    initial begin
+        $display("Loading rom program.");
+        $readmemh("/home/nelson/projects/riscv-tests/rv32ui-p-addi.hex", mem);
+    end
+
     assign inst_ready = addr < 1023;
     /*
      * Combinational read of instruction
      */
     always_comb begin: proc_comb_read
         instruction = mem[addr];
-    end: comb_rs_read
+    end: proc_comb_read
     
 endmodule: inst_memory

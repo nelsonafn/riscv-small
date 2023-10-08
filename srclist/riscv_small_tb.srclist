@@ -1,3 +1,5 @@
 srclist/riscv_small.srclist
 tb/clk_gen.sv
+rtl/data_memory.sv
+rtl/inst_memory.sv
 tb/riscv_small_tb.sv

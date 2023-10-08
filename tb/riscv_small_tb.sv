@@ -55,9 +55,11 @@ module riscv_small_tb;
     logic data_rd_en_ma; //[out] Data memory read enable to be used with data_rd_wr_ctrl 
 	logic data_wr_en_ma; //[out] Data memory write enable to be used with data_rd_wr_ctrl
     dataBus_u data_wr; //[out] Data to data_memory
+    dataBus_u data_addr; //[out] Address of next data
     logic [1:0] data_rd_wr_ctrl; //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
 
     localparam INPUT_DELAY = 1;
+    localparam PROGRAM_HEX = "/home/nelson/projects/riscv-tests/rv64ui-p-addi.hex";
 
     clk_gen #(
         .CLK_PERIOD (4), // Period in ns
@@ -97,8 +99,10 @@ module riscv_small_tb;
         //[out] Data memory write enable to be used with data_rd_wr_ctrl
         .data_wr            (data_wr),
         //[out] Data to data_memory
-        //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
+        .data_addr          (data_addr),
+        //[out] Address of next data
         .data_rd_wr_ctrl    (data_rd_wr_ctrl)
+        //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
     );
 
 
@@ -113,8 +117,21 @@ module riscv_small_tb;
         rst_n <= #(INPUT_DELAY) '1;
     end
 
+    inst_memory u_inst_memory (
+        .clk           (clk),
+        //[in] Clock
+        .clk_en        (clk_en),
+        //[in] Clock Enable
+        .rst_n         (rst_n),
+        //[in] Asynchronous reset active low
+        .rd_en         (inst_rd_en),
+        .addr          ({2'b0,inst_addr.u_data[31:2]}),// Address of next instruction
+        .instruction   (inst_data), // Data from instruction memory
+        .inst_ready    (inst_ready)        
+    );
+
     initial begin
-        // Instruction Memory controls
+/*         // Instruction Memory controls
         inst_ready <= '0; //[in] Indicates that data instruction ready
         inst_data <= '0; //[in] Data from instruction memory
         @(posedge clk);
@@ -130,13 +147,27 @@ module riscv_small_tb;
         inst_data.i_type_alu <= #(INPUT_DELAY) { 12'd2, 5'd6,  ADDI, 5'd8, ALUI_C};
         inst_ready <= #(INPUT_DELAY) '1; //[in] Indicates that data instruction ready
         //dataBus_u inst_addr;//[out] Address of next instruction
-        //logic inst_rd_en; //[out] Instruction memory read enable 
+        //logic inst_rd_en; //[out] Instruction memory read enable  */
     end
 
-
+    data_memory u_data_memory (
+        .clk           (clk),
+        //[in] Clock
+        .clk_en        (clk_en),
+        //[in] Clock Enable
+        .rst_n         (rst_n),
+        //[in] Asynchronous reset active low
+        .data_in       (data_wr),
+        .data_out      (data_rd),
+        .data_rd_en    (data_rd_en_ma),
+        .data_wr_en    (data_wr_en_ma),
+        .addr          (data_addr), //read each 4 bytes
+        // Address of next instruction
+        .data_ready    (data_ready)
+    );
 
     initial begin
-        // Data Memory controls
+/*         // Data Memory controls
         data_ready <= '0; //[in] Indicates that data is ready
         data_rd <= '0; //[in] Data from data_memory
         @(posedge clk);
@@ -146,6 +177,7 @@ module riscv_small_tb;
         //logic data_wr_en_ma; //[out] Data memory write enable to be used with data_rd_wr_ctrl
         //dataBus_u data_wr; //[out] Data to data_memory
         //logic [1:0] data_rd_wr_ctrl; //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
+         */
     end
     
 endmodule: riscv_small_tb
