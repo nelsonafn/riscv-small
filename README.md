@@ -15,7 +15,7 @@ Run the xrun script
 $ ../bin/xrun.sh 
 ```
 
-# Testes
+# Tests
 
 To run the tests install riscv-gnu-toolchain
 
