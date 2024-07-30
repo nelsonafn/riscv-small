@@ -2,6 +2,18 @@
 Five stage RISC-V core for embedded application.
 
 
+# How to run
+Go inside build and do Vivado or Vits source 
+```
+$ source /opt/Xilinx/Vitis/2024.1/settings64.sh 
+or
+$ source /opt/Xilinx/Vivado/2024.1/.settings64-Vivado.sh 
+```
+
+Run the xrun script
+```
+$ ../bin/xrun.sh 
+```
 
 # Testes
 
