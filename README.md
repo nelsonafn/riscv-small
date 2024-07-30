@@ -1,7 +1,16 @@
 # riscv-small
 Five stage RISC-V core for embedded application.
 
+## Implementation Status
 
+- [x] Conception
+- [x] Microarchitecture
+- [x] RTL Design
+- [ ] TB environment
+- [ ] Testcases
+- [ ] Functional Verification
+- [ ] RTL signoff 
+      
 # How to run
 Go inside build and do Vivado or Vits source 
 ```
