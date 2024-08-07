@@ -12,61 +12,65 @@ $ source /opt/Xilinx/Vivado/2024.1/.settings64-Vivado.sh
 
 Run the xrun script
 ```
+$ ../bin/xrun.sh -g
+```
+Or
+```
 $ ../bin/xrun.sh 
 ```
-
-# Testes
-
+You need before [install Toolchain for cross-compiler](#install-toolchain-for-cross-compiler) and [install/clone RISC-V tests](#install-or-clone-risc-v-tests) to support compiling the tests.
+## Install Toolchain for cross-compiler
 To run the tests install riscv-gnu-toolchain
 
-https://github.com/riscv-collab/riscv-gnu-toolchain
-
-Remember of
+Install dependencies 
 ```
-$ export RISCV=/opt/riscv"
+$ sudo apt update 
+$ sudo apt-get install autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev libusb-1.0-0-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev device-tree-compiler pkg-config libexpat-dev 
 ```
+ 
 
-Install it with support to multilib like.
+Install the toolchain (Compilers) (https://github.com/riscv-collab/riscv-gnu-toolchain) 
 ```
-$ ./configure --prefix=$RISCV --enable-multilib
+$ clone git@github.com:riscv-collab/riscv-gnu-toolchain.git  
+$ export RISCV=/opt/riscv/toolchain 
+$ cd riscv-gnu-toolchain 
+$ ./configure --prefix=${RISCV} --enable-multilib 
 ```
-Make sure you have installed riscv64-unknown-elf
+ 
 
-Then, install the risc tools
-
-https://github.com/riscv-software-src/riscv-tools
-
-
-
-Update submodule 
+Install (Use "sudo" if installation path ${RISCV} is protected) 
 ```
-$ cd riscv-pk/
-$ git checkout master
-$ cd ..
+$ sudo make -j20  
 ```
+ 
+Add source (It can be added into your ~/.bashrc) 
+```
+$ export PATH=${PATH:+${PATH}:}${RISCV}/bin 
+```
+ 
 
-```
-$ cd riscv-isa-sim/
-$ git checkout v1.1.0
-$ cd ..
-```
+## Install or clone RISC-V tests
+Install riscv-tools (Simulator and Tests) 
 
+Make sure you have add source (It can be added into your ~/.bashrc) 
 ```
-$ cd ../riscv-tests/
-$ git checkout master
-$ git submodule update --init --recursive
-$ cd ..
+$ export PATH=${PATH:+${PATH}:}${RISCV}/bin 
 ```
-Used submodules 
-+530af85d83781a3dae31a4ace84a573ec255fefa riscv-isa-sim (v1.1.0)
- 7c3db437d8d3b6961f8eb2931792eaea1c469ff3 riscv-opcodes (remotes/origin/confprec-99-g7c3db43)
- 35eed36ffdd082f5abfc16d4cc93511f6e225284 riscv-openocd (v20180629-198-g35eed36ff)
-+0d3339c73e8401a6dcfee2f0b97f6f52c81181c6 riscv-pk (v1.0.0-85-g0d3339c)
-+bd050de178cb1ffcfaae6bf1c79e6e640600b22f riscv-tests (heads/master)
+ 
 
-
-
+Clone repo 
 ```
-$ riscv64-unknown-elf-objcopy -O verilog -j .text -j .text.startup -j .text.init -j .data \
---gap-fill 00000000 --reverse-bytes=4 isa/rv32ui-p-addi -v --verilog-data-width 4  rv32ui-p-addi.hex
+$ git clone git@github.com:riscv-software-src/riscv-tests.git 
+$ cd riscv-tests/ 
+$ git submodule update --init –recursive 
+$ autoupdate 
+$ autoconf 
+$ ./configure --prefix=$RISCV/target 
+$ make -j24 -p isa 
+```
+ 
+
+Do not forget export tests path 
+```
+$ export RISCV_TESTS=/path/to/riscv-tests/ 
 ```
