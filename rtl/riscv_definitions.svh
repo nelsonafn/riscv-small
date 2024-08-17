@@ -38,6 +38,10 @@
 
 package riscv_definitions;
 
+    /*
+    * General definitions
+    */
+
     /* 
      * Type for select the next pc source.
      */
@@ -357,19 +361,22 @@ package riscv_definitions;
         instBType_s b_type;
         instUType_s u_type;
         instJType_s j_type;
-        logic [0:3] [7:0] memory; 
+        logic [0:3] [7:0] memory_b; 
+        logic [31:0] memory_w;
     } instruction_u;
 
     /* 
      * Architect data BUS size definition.
      */
+    typedef logic [31:0] dataBus_t;
     typedef union packed {
-        logic [31:0] u_data;
+        dataBus_t u_data;
         logic signed [31:0] s_data;
         logic [0:3] [7:0] u_bytes;
         logic [0:1] [15:0] u_half;
         logic signed [0:3] [7:0] s_bytes;
         logic signed [0:1] [15:0] s_half;
     } dataBus_u;
+
 
 endpackage: riscv_definitions

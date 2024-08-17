@@ -42,11 +42,11 @@ module instruction_decode (
 	input clk_en, // Clock Enable
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
-	input dataBus_u pc,   // PC value from IF
+	input dataBus_t pc,   // PC value from IF
     // JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data (rd0_data_wb))
-    input dataBus_u rd0_data_ex,//[in] Reg destination data forward from EX
-    input dataBus_u rd0_data_ma,//[in] Reg destination data forward from MA
-    input dataBus_u rd0_data_wb,//[in] Reg destination data from WB
+    input dataBus_t rd0_data_ex,//[in] Reg destination data forward from EX
+    input dataBus_t rd0_data_ma,//[in] Reg destination data forward from MA
+    input dataBus_t rd0_data_wb,//[in] Reg destination data from WB
 	input logic rd0_wr_en,    //[in] Reg destination (rd) write enable from Write Back stage
 	input regAddr_t rd0_addr_wb, //[in] Reg destination (rd) address from Write Back stage
 	input ctrlCJmpSrc_e jmp_src1,//[out] JUMP forward mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
@@ -55,15 +55,15 @@ module instruction_decode (
 	output logic rd0_wr_en_ex,//[out] Reg destination (rd) write enable to pipeline
 	output aluSrc1_e alu_src1_ex, //[out] ALU source one mux selection (possible values PC/RS1)
 	output aluSrc2_e alu_src2_ex, //[out] ALU source two mux selection (possible values RS2/IMM) 
-	output dataBus_u pc_ex, //[out] PC value to EX	
-	output dataBus_u rs1_ex, //[out] Reg source one (rs1) data
-	output dataBus_u rs2_ex, //[out] Reg source two (rs2) data
-	output dataBus_u imm_ex, //[out] Immediate value
+	output dataBus_t pc_ex, //[out] PC value to EX	
+	output dataBus_t rs1_ex, //[out] Reg source one (rs1) data
+	output dataBus_t rs2_ex, //[out] Reg source two (rs2) data
+	output dataBus_t imm_ex, //[out] Immediate value
 	output logic data_rd_en_ex, //[out] Data memory read enable (wb_mux_sel) to be used with funct3 
 	output logic data_wr_en_ex, //[out] Data memory write enable to be used together with funct3
 	output aluOpType_e alu_op_ex, //[out] Opcode for alu operation ( composed by funct3ITypeALU_e)
 	output logic branch_taken,  //[out] Indicates that a branch should be taken to the control 
-	output dataBus_u jump_addr, //[out] Jump address
+	output dataBus_t jump_addr, //[out] Jump address
     output logic cond_jump, // Used to indicate a conditional branch have been decoded
 	output funct3ITypeLOAD_e funct3_ex, //[out] funct3 LOAD
 	output regAddr_t rd0_addr_ex,  //[out] Reg destination (rd) addr
@@ -86,7 +86,7 @@ module instruction_decode (
 	logic data_rd_en; // Data memory read enable to be used together with funct3
 	logic data_wr_en; // Data memory write enable to be used together with funct3
 	aluOpType_e alu_op;  // Opcode for alu operation (always be composed by funct3ITypeALU_e)
-	dataBus_u rs1, rs2, rs1_jump, rs2_jump;
+	dataBus_t rs1, rs2, rs1_jump, rs2_jump;
     logic rd0_wr_en_2pipe; //
 
 	/*

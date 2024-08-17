@@ -42,7 +42,7 @@ module inst_memory #(
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
     input logic rd_en,
-    input dataBus_u addr,// Address of next instruction
+    input dataBus_t addr,// Address of next instruction
     output instruction_u instruction, // Data from instruction memory
     output inst_ready
 );

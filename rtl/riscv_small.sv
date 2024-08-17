@@ -43,7 +43,7 @@ module riscv_small (
     // Instruction Memory controls
     input logic inst_ready, //[in] Indicates that data instruction ready
     input instruction_u inst_data, //[in] Data from instruction memory
-    output dataBus_u inst_addr,//[out] Address of next instruction
+    output dataBus_t inst_addr,//[out] Address of next instruction
     output logic inst_rd_en, //[out] Instruction memory read enable 
     // Data Memory controls
     input logic data_ready, //[in] Indicates that data is ready
@@ -60,10 +60,10 @@ module riscv_small (
     logic if_id_flush; // Insert NOP
     // Communication instruction decoder
     instruction_u inst_id;// Registered instruction to be decode
-    dataBus_u pc_id;  // PC of current instruction to decode
+    dataBus_t pc_id;  // PC of current instruction to decode
     // Next PC control
-    dataBus_u jump_addr;// Jump address
-    dataBus_u trap_addr;// Exception/interruption address
+    dataBus_t jump_addr;// Jump address
+    dataBus_t trap_addr;// Exception/interruption address
     nextPCType_e pc_sel; // PC source selector
 
     logic cond_jump; // Used to indicate a conditional branch have been decode

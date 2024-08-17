@@ -92,7 +92,8 @@ module reg_file (
      */
     always_ff @(posedge clk or negedge rst_n) begin: rd0_write
         if (!rst_n) begin: rd0_write_rst
-            regs <= '{default:0};
+            // TODO: Remove X from reset after tests
+            regs <= '{default:'X};
         end: rd0_write_rst
         else if (clk_en) begin
             if (rd0_wr_en) begin

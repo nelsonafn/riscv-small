@@ -47,17 +47,17 @@ module instruction_fetch (
     // Communication with the instruction memory
     input instruction_u inst_data, // Data from instruction memory
     input logic flush, // Insert NOP
-    output dataBus_u inst_addr,// Address of next instruction
+    output dataBus_t inst_addr,// Address of next instruction
     // Communication instruction decoder
     output instruction_u inst_id,// Registered instruction to be decode
-    output dataBus_u pc_id,  // PC of current instruction to decode
+    output dataBus_t pc_id,  // PC of current instruction to decode
     // Next PC control
-    input dataBus_u jump_addr,// Jump address
-    input dataBus_u trap_addr,// Exception/interruption address
+    input dataBus_t jump_addr,// Jump address
+    input dataBus_t trap_addr,// Exception/interruption address
     input nextPCType_e pc_sel // PC source selector
 );
 
-    dataBus_u pc;
+    dataBus_t pc;
 
     assign inst_addr = pc;
 
