@@ -1,5 +1,5 @@
 # riscv-small
-Five stage RISC-V core for embedded application.
+Five-stage RISC-V core for embedded applications.
 
 ## Implementation Status
 
@@ -9,29 +9,29 @@ Five stage RISC-V core for embedded application.
 - [ ] TB environment
 - [ ] Testcases
 - [ ] Functional Verification
-- [ ] RTL signoff 
-      
-# How to run
-Go inside build and do Vivado or Vits source 
-```
-$ source /opt/Xilinx/Vitis/2024.1/settings64.sh 
-or
-$ source /opt/Xilinx/Vivado/2024.1/.settings64-Vivado.sh 
-```
+- [ ] RTL signoff
 
-Run the xrun script
-```
-$ ../bin/xrun.sh -g
-```
-Or
-```
-$ ../bin/xrun.sh 
-```
-You need before [install Toolchain for cross-compiler](#install-toolchain-for-cross-compiler) and [install/clone RISC-V tests](#install-or-clone-risc-v-tests) to support compiling the tests.
-## Install Toolchain for cross-compiler
-To run the tests install riscv-gnu-toolchain
+## How to Run
 
-Install dependencies 
+1. **Source Vivado or Vitis environment:**
+    ```sh
+    $ source /opt/Xilinx/Vitis/2024.1/settings64.sh
+    # or
+    $ source /opt/Xilinx/Vivado/2024.1/.settings64-Vivado.sh
+    ```
+
+2. **Run the simulation script from the `build` directory:**
+    ```sh
+    $ ../bin/xrun.sh -g
+    ```
+    Or, for command-line mode:
+    ```sh
+    $ ../bin/xrun.sh
+    ```
+
+    > **Note:** Before running, make sure to [install the toolchain for cross-compilation](#install-toolchain-for-cross-compiler) and [install or clone the RISC-V tests](#install-or-clone-risc-v-tests).
+
+##
 ```
 $ sudo apt update 
 $ sudo apt-get install autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev libusb-1.0-0-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev device-tree-compiler pkg-config libexpat-dev 
