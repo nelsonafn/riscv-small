@@ -36,7 +36,8 @@
  */
  
 module inst_memory #(
-    parameter ADDR_WIDTH = 10
+    parameter ADDR_WIDTH = 10,
+    parameter PROGRAM_HEX = "../build/rv64ui-p-addi.hex"
 )(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
@@ -54,7 +55,7 @@ module inst_memory #(
 
     initial begin
         $display("Loading rom program.");
-        $readmemh("/home/nelson/projects/riscv-tests/rv32ui-p-addi.hex", mem);
+        $readmemh(PROGRAM_HEX, mem);
     end
 
     assign inst_ready = addr < 1023;

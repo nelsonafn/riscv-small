@@ -59,7 +59,7 @@ module riscv_small_tb;
     logic [1:0] data_rd_wr_ctrl; //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
 
     localparam INPUT_DELAY = 1;
-    localparam PROGRAM_HEX = "../build/rv64ui-p-addi.hex";
+    localparam PROGRAM_HEX = "./../build/rv32ui-p-addi.hex";
 
     clk_gen #(
         .CLK_PERIOD (4), // Period in ns
@@ -117,7 +117,10 @@ module riscv_small_tb;
         rst_n <= #(INPUT_DELAY) '1;
     end
 
-    inst_memory u_inst_memory (
+    inst_memory #(
+        .PROGRAM_HEX(PROGRAM_HEX) // Path to the program hex file
+    )
+    u_inst_memory (
         .clk           (clk),
         //[in] Clock
         .clk_en        (clk_en),
@@ -131,6 +134,8 @@ module riscv_small_tb;
     );
 
     initial begin
+        $display("str = %s",PROGRAM_HEX);
+//        $display("str = %s",PROJECT_ROOT);
 /*         // Instruction Memory controls
         inst_ready <= '0; //[in] Indicates that data instruction ready
         inst_data <= '0; //[in] Data from instruction memory
