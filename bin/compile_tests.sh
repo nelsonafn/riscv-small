@@ -49,8 +49,9 @@ fi
 
 # Get the directory where this script is located
 CURRENT_DIR=$(dirname "$0")
-
+TEST_NAME=rv32ui-p-addi
 # Convert the RISC-V ELF test to Verilog hex format for simulation
+
 riscv64-unknown-elf-objcopy -O verilog -j .text -j .text.startup -j .text.init -j .data \
     --gap-fill 00000000 --set-start=0 --reverse-bytes=4 \
     "${RISCV_TESTS}/isa/rv32ui-p-addi" \
