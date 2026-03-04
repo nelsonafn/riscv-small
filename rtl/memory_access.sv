@@ -35,10 +35,11 @@
  * January 17, 2021 at 18:42 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
 
- import riscv_definitions::*; // import package into $unit space
  
 // TODO: rename data to dtm_data and rd0 to rdst_data
-module memory_access (
+module memory_access 
+import riscv_definitions_pkg::*;
+(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low

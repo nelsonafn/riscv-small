@@ -35,10 +35,10 @@
  * January 10, 2021 at 22:13 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
 
-import riscv_definitions::*; // import package into $unit space
-
  
-module alu (
+module alu 
+import riscv_definitions_pkg::*;
+(
     input aluOpType_e alu_op, //[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
     input dataBus_u alu_data1, //[in] Reg destination (rd) data
     input dataBus_u alu_data2, //[in] Registered alu result to memory access (ma) 

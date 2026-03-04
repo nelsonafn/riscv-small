@@ -35,7 +35,9 @@
  * January 07, 2021 at 22:29 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
  
-module riscv_small (
+module riscv_small 
+import riscv_definitions_pkg::*;
+(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low

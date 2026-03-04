@@ -35,7 +35,9 @@
  * January 19, 2021 at 21:23 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
  
-module inst_memory #(
+module inst_memory 
+import riscv_definitions_pkg::*;
+#(
     parameter ADDR_WIDTH = 10,
     parameter PROGRAM_HEX = "../build/rv64ui-p-addi.hex"
 )(

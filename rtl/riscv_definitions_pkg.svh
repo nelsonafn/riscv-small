@@ -35,8 +35,10 @@
  * $Log$ 
  */
 
+`ifndef RISCV_DEFINITIONS_PKG
+`define RISCV_DEFINITIONS_PKG
 
-package riscv_definitions;
+package riscv_definitions_pkg;
 
     /*
     * General definitions
@@ -379,4 +381,6 @@ package riscv_definitions;
     } dataBus_u;
 
 
-endpackage: riscv_definitions
+endpackage: riscv_definitions_pkg
+
+`endif

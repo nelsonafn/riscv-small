@@ -1,3 +1,4 @@
+srclist/pkg.srclist
 srclist/memory_access.srclist
 srclist/execution.srclist
 srclist/instruction_decode.srclist 

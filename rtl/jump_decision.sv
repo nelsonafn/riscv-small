@@ -38,9 +38,9 @@
  
  
 
-import riscv_definitions::*; // import package into $unit space
-
-module jump_decision (
+module jump_decision 
+import riscv_definitions_pkg::*;
+(
 	input dataBus_u rs1, // Reg source one data
 	input dataBus_u rs2, // Reg source two data
 	input dataBus_u imm, // Generated immediate value

@@ -34,7 +34,9 @@
  * January 19, 2021 at 22:35 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
  
-module data_memory (
+module data_memory 
+import riscv_definitions_pkg::*;
+(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low

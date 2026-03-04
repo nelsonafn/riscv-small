@@ -35,10 +35,11 @@
  * March 01, 2022 at 21:10 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
  `timescale 1ns/1ps
- import riscv_definitions::*; // import package into $unit space
 
 module riscv_small_tb;
+    import riscv_definitions_pkg::*; // import package into $unit space
 
+    // Clock and reset
     logic clk;    //[in] Clock
     logic en;
     logic clk_en; //[in] Clock Enable

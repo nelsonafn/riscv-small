@@ -38,9 +38,10 @@
 
 
 
-import riscv_definitions::*; // import package into $unit space
 
-module instruction_fetch (
+module instruction_fetch 
+import riscv_definitions_pkg::*;
+(
     input logic clk,    // Clock
     input logic clk_en, // Clock Enable
     input logic rst_n,  // Asynchronous reset active low

@@ -1,3 +1,2 @@
-rtl/riscv_definitions.svh
 rtl/execution.sv
 rtl/alu.sv

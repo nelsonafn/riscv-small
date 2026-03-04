@@ -35,7 +35,9 @@
  * January 17, 2021 at 21:01 - Created by Nelson Alves <nelsonafn@gmail.com>
  */
  
-module control (
+module control 
+import riscv_definitions_pkg::*; // import package into $unit space
+(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
