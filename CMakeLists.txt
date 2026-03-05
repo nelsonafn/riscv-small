@@ -57,7 +57,7 @@ set(VIVADO_PARMS "--R" CACHE STRING "Pass extra Vivado parameters for xsim (e.g.
 # Verify if the Vivado toolchain is properly loaded and initialized.
 # This prevents obscure errors later in the compilation/simulation steps.
 if(NOT DEFINED ENV{XILINX_VIVADO})
-    message(WARNING "XILINX_VIVADO environment variable is not set. Ensure you have sourced settings64.sh! Look at scripts/setup.sh for more info. Fix it, source it, and try again.")
+    message(FATAL_ERROR "XILINX_VIVADO environment variable is not set. Ensure you have sourced settings64.sh! Look at scripts/setup.sh for more info. Fix it, source it, and try again. $ source scripts/setup.sh")
 endif()
 
 # Convert VIVADO_PARMS into a list format.
@@ -327,3 +327,9 @@ foreach(TEST_FILE IN LISTS TEST_FILES)
         USES_TERMINAL
     )
 endforeach()
+
+# ==============================================================================
+# 9. External Targets (Tests compilation)
+# ==============================================================================
+# Injects the separate logic to sync and compile external RISC-V tests
+include(${CMAKE_SOURCE_DIR}/scripts/compile_sanity_tests.cmake)

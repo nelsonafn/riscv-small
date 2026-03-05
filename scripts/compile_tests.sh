@@ -22,37 +22,39 @@ magenta='\033[0;35m'
 cyan='\033[0;36m'
 clear='\033[0m' # Reset color
 
+# Get the directory where this script is located
+CURRENT_DIR=$(dirname "$0")
+TEST_NAME=rv32ui-p-addi
+
+export RISCV_TESTS="${CURRENT_DIR}/../src/riscv-tests"
+
 # Announce which test is being compiled
 echo "Compiling test \"isa/rv32ui-p-addi\"..."
 
 # Check if RISCV_TESTS environment variable is set
 if [[ ! ${RISCV_TESTS} ]]; then
     echo -e "${red}ERROR: Variable \${RISCV_TESTS} is undefined!"
-    echo "       Make sure you have cloned riscv-tests and have riscv-toolchain installed!"
-    echo "       Do not forget to export the tests path!"
-    echo "       Clone repo: git@github.com:riscv-software-src/riscv-tests.git" 
+    echo "       Make sure you have cloned riscv-tests!"
+    echo "       git submodule update --init --recursive src/riscv-tests" 
     echo -e "$       export RISCV_TESTS=/path/to/riscv-tests/${clear}\n"
     exit 1
 else
+    cd "${RISCV_TESTS}" 
     echo "\${RISCV_TESTS}=${RISCV_TESTS}"
 fi
 
-# Check if riscv64-unknown-elf-objcopy is available in PATH
-if [[ ! $(type -P riscv64-unknown-elf-objcopy) ]]; then
-    echo -e "${red}ERROR: riscv64-unknown-elf-objcopy not found!"
-    echo "       Please compile and install: git@github.com:riscv-collab/riscv-gnu-toolchain.git"
-    echo "       Add the toolchain to your PATH (can be added to ~/.bashrc):" 
-    echo "       export RISCV=/opt/riscv/toolchain"
-    echo -e "       export PATH=\${PATH:+\${PATH}:}\${RISCV}/bin${clear}\n"
+# Check if riscv64-linux-gnu-objcopy is available in PATH
+if [[ ! $(type -P riscv64-linux-gnu-objcopy) ]]; then
+    echo -e "${red}ERROR: riscv64-linux-gnu-objcopy not found!"
+    echo "       Please install: sudo apt install binutils-riscv64-linux-gnu"
     exit 1
 fi
 
-# Get the directory where this script is located
-CURRENT_DIR=$(dirname "$0")
-TEST_NAME=rv32ui-p-addi
+
 # Convert the RISC-V ELF test to Verilog hex format for simulation
 
-riscv64-unknown-elf-objcopy -O verilog -j .text -j .text.startup -j .text.init -j .data \
+# It needs "sudo apt install binutils-riscv64-linux-gnu" to work
+riscv64-linux-gnu-objcopy -O verilog -j .text -j .text.startup -j .text.init -j .data \
     --gap-fill 00000000 --set-start=0 --reverse-bytes=4 \
     "${RISCV_TESTS}/isa/rv32ui-p-addi" \
     -v --verilog-data-width 4 \

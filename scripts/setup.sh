@@ -15,14 +15,5 @@
 #   source /path/to/proj_config.sh
 # -----------------------------------------------------------------------------
 
-# Set the path to the RISC-V tests directory
-export RISCV_TESTS=~/Projetos/riscv-tests/
-
-# Set the path to the RISC-V toolchain installation
-export RISCV=/opt/riscv/
-
-# Add the RISC-V toolchain binaries to the PATH environment variable
-export PATH=${PATH:+${PATH}:}${RISCV}/bin
-
 # Source the Xilinx Vivado environment setup script
 source /opt/Xilinx/Vivado/2024.1/.settings64-Vivado.sh

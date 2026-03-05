@@ -51,14 +51,15 @@ You do not need to `cd build/`. You can immediately execute targets from the roo
 - **`make gui_<test_name>`**: Injects the test dynamically into the GUI directly (e.g. `make gui_adder_corner_test`).
 
 #### Option B: Running from inside the `build/` directory
-When inside the strictly generated CMake target directory, you can utilize the auto-generated target configurations. (Note: spaces denote multiple targets inside native Make!)
+When inside the strictly generated CMake target directory, you can utilize the auto-generated target configurations.
 
 ```bash
 $ cd build/
 ```
 - **`make sim`**: Runs the default test configured.
 - **`make elaborate`**: Explicitly compiles the library code (`xlog`) without running simulation.
-- **`make <test_name>`**: Runs a specific test dynamically discovered natively (e.g. `make adder_corner_test`).
+- **`make compile_sanity_tests`**: Compiles native RISC-V structural tests (e.g. `rv32ui-p-addi`) inside the `src/riscv-tests` submodule and extracts the raw memory `.hex` payload for simulations.
+- **`make <test_name>`**: Runs a specific test dynamically discovered natively (e.g. `make rv32ui-p-addi`).
 - **`make sim_<test_name>`**: Explicitly runs the auto-generated test strictly in SIM terminal mode.
 - **`make gui_<test_name>`**: Explicitly runs the auto-generated test natively triggering the Vivado GUI.
 
@@ -96,9 +97,8 @@ $ make clean
    - Use the `--vivado "--g"` option to open the GUI for debugging.
    - Check the `build/` directory for logs and intermediate files if issues arise during simulation.
 
-4. **Extending the Template**:
-   - To add new tests, create sequences in `tb/tests/sequence_lib/` and include them in `tb/tests/adder_test_list.sv`.
-   - For additional coverage, extend the coverage model in `tb/env/top/adder_coverage.sv`.
+4. **Extending Tests**:
+   - To add new tests, configure standard UVM sequences inside your `tb/` folder or leverage the standard riscv-tests definitions inside `src/riscv-tests`. 
 
 5. **Support**:
    - For questions or issues, contact the maintainer at `nelsonafn@gmail.com`.
@@ -106,59 +106,22 @@ $ make clean
 6. **License**:
    - This project is distributed under the BSD license. Refer to the `LICENSE` file for details.
 
-This section provides essential details to ensure smooth usage and extension of the verification template.
+## Compiling RISC-V Sanity Tests
+The project features a submodule containing the official RISC-V ISA test-suite. We've automated its compilation natively into CMake!
 
-    > **Note:** Before running, make sure to [install the toolchain for cross-compilation](#install-toolchain-for-cross-compiler) and [install or clone the RISC-V tests](#install-or-clone-risc-v-tests).
+**1. Install Linux GCC Cross-Compiler requirements:**
+Unlike heavy cross-builds, you only require the standard GCC utility packages available in your apt repository! Note: This replaces the need to build the `riscv-gnu-toolchain` manually.
+```bash
+$ sudo apt update
+$ sudo apt install autoconf gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu
+```
 
-##
+**2. Execute the integrated CMake target:**
+Once in your build folder, you can recursively pull the submodule, compile the tests via GNU make, and parse the payload out cleanly.
+```bash
+$ cd build/
+$ make compile_sanity_tests
 ```
-$ sudo apt update 
-$ sudo apt-get install autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev libusb-1.0-0-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev device-tree-compiler pkg-config libexpat-dev 
-```
- 
 
-Install the toolchain (Compilers) (https://github.com/riscv-collab/riscv-gnu-toolchain) 
-```
-$ clone git@github.com:riscv-collab/riscv-gnu-toolchain.git  
-$ export RISCV=/opt/riscv/toolchain 
-$ cd riscv-gnu-toolchain 
-$ ./configure --prefix=${RISCV} --enable-multilib 
-```
- 
-
-Install (Use "sudo" if installation path ${RISCV} is protected) 
-```
-$ sudo make -j20  
-```
- 
-Add source (It can be added into your ~/.bashrc) 
-```
-$ export PATH=${PATH:+${PATH}:}${RISCV}/bin 
-```
- 
-
-## Install or clone RISC-V tests
-Install riscv-tools (Simulator and Tests) 
-
-Make sure you have add source (It can be added into your ~/.bashrc) 
-```
-$ export PATH=${PATH:+${PATH}:}${RISCV}/bin 
-```
- 
-
-Clone repo 
-```
-$ git clone git@github.com:riscv-software-src/riscv-tests.git 
-$ cd riscv-tests/ 
-$ git submodule update --init –recursive 
-$ autoupdate 
-$ autoconf 
-$ ./configure --prefix=$RISCV/target 
-$ make -j24 -p isa 
-```
- 
-
-Do not forget export tests path 
-```
-$ export RISCV_TESTS=/path/to/riscv-tests/ 
-```
+**3. Test Payload:**
+The generated instruction payload will be automatically placed into your build directory: `build/rv32ui-p-addi.hex`. You can invoke it immediately using the dynamic Make test configurations!
