@@ -45,6 +45,7 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
     
     set(SV_FILES "")
     set(TARGET_DEPENDENCIES "")
+    set(LOCAL_XVLOG_LIBS "")
 
     foreach(LINE IN LISTS LINES)
         # Remove comments and whitespace
@@ -64,6 +65,37 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
             
             list(APPEND TARGET_DEPENDENCIES "compile_${SUBLIST_LIB}")
             set_property(GLOBAL APPEND PROPERTY ALL_SIM_LIBS "${SUBLIST_LIB}")
+            list(APPEND LOCAL_XVLOG_LIBS "${SUBLIST_LIB}")
+        elseif(LINE MATCHES "pkg\\.svh?$")
+            # If package, compile into independent lib
+            get_filename_component(PKG_BASE_NAME "${LINE}" NAME_WE)
+            set(PKG_LIB "${PKG_BASE_NAME}_lib")
+            
+            get_property(COMPILED_PKGS GLOBAL PROPERTY PROCESSED_PKGS)
+            if(NOT "${PKG_LIB}" IN_LIST COMPILED_PKGS)
+                set_property(GLOBAL APPEND PROPERTY PROCESSED_PKGS "${PKG_LIB}")
+                
+                set(PKG_TARGET_NAME "compile_${PKG_LIB}")
+                set(PKG_STAMP_FILE "${CMAKE_BINARY_DIR}/${PKG_LIB}.stamp")
+                set(PKG_SV_FILE "${CMAKE_SOURCE_DIR}/${LINE}")
+                
+                add_custom_command(
+                    OUTPUT "${PKG_STAMP_FILE}"
+                    COMMAND xvlog -work ${PKG_LIB} -sv ${PKG_SV_FILE}
+                    COMMAND touch "${PKG_STAMP_FILE}"
+                    DEPENDS ${PKG_SV_FILE}
+                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                    COMMENT "Compiling package ${PKG_LIB}..."
+                    VERBATIM
+                )
+                
+                add_custom_target(${PKG_TARGET_NAME} DEPENDS "${PKG_STAMP_FILE}")
+                set_property(GLOBAL APPEND PROPERTY ALL_COMPILE_TARGETS "${PKG_TARGET_NAME}")
+                set_property(GLOBAL APPEND PROPERTY ALL_SIM_LIBS "${PKG_LIB}")
+            endif()
+            
+            list(APPEND TARGET_DEPENDENCIES "compile_${PKG_LIB}")
+            list(APPEND LOCAL_XVLOG_LIBS "${PKG_LIB}")
         else()
             # It's a systemverilog file
             list(APPEND SV_FILES "${CMAKE_SOURCE_DIR}/${LINE}")
@@ -86,13 +118,11 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
             list(REMOVE_DUPLICATES ALL_DEPENDS)
         endif()
         
-        # Gather currently known libraries up to this point so xvlog can search them for packages
-        get_property(CURRENT_SIM_LIBS GLOBAL PROPERTY ALL_SIM_LIBS)
-        set(XVLOG_LIBS "")
-        if(CURRENT_SIM_LIBS)
-            list(REMOVE_DUPLICATES CURRENT_SIM_LIBS)
-            foreach(LIB_NAME IN LISTS CURRENT_SIM_LIBS)
-                list(APPEND XVLOG_LIBS "-L" "${LIB_NAME}")
+        set(LOCAL_XVLOG_ARGS "")
+        if(LOCAL_XVLOG_LIBS)
+            list(REMOVE_DUPLICATES LOCAL_XVLOG_LIBS)
+            foreach(LIB_NAME IN LISTS LOCAL_XVLOG_LIBS)
+                list(APPEND LOCAL_XVLOG_ARGS "-L" "${LIB_NAME}")
             endforeach()
         endif()
 
@@ -100,7 +130,7 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
         # compilation only runs when the `.sv` dependencies are newer than the stamp file.
         add_custom_command(
             OUTPUT "${STAMP_FILE}"
-            COMMAND xvlog -work ${TARGET_LIB} -L uvm ${XVLOG_LIBS} -sv "$ENV{XILINX_VIVADO}/data/system_verilog/uvm_1.2/uvm_macros.svh" ${SV_FILES}
+            COMMAND xvlog -work ${TARGET_LIB} ${LOCAL_XVLOG_ARGS} -sv ${SV_FILES}
             COMMAND touch "${STAMP_FILE}"
             DEPENDS ${ALL_DEPENDS}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -111,18 +141,19 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
         # The custom target just drives the creation of the stamp file
         add_custom_target(${TARGET_NAME} DEPENDS "${STAMP_FILE}")
         
-        get_property(CURRENT_COMPILE_TARGETS GLOBAL PROPERTY ALL_COMPILE_TARGETS)
-        if(CURRENT_COMPILE_TARGETS)
-            add_dependencies(${TARGET_NAME} ${CURRENT_COMPILE_TARGETS})
-        endif()
-
         if(TARGET_DEPENDENCIES)
             add_dependencies(${TARGET_NAME} ${TARGET_DEPENDENCIES})
         endif()
         
         # Register this compilation target globally
         set_property(GLOBAL APPEND PROPERTY ALL_COMPILE_TARGETS "${TARGET_NAME}")
+    elseif(TARGET_DEPENDENCIES)
+        set(TARGET_NAME "compile_${TARGET_LIB}")
+        add_custom_target(${TARGET_NAME})
+        add_dependencies(${TARGET_NAME} ${TARGET_DEPENDENCIES})
+        set_property(GLOBAL APPEND PROPERTY ALL_COMPILE_TARGETS "${TARGET_NAME}")
     endif()
+    
 endfunction()
 
 # 1. Start parsing from the TOP_NAME.srclist (which goes into the 'work' library)

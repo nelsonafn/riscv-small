@@ -2,7 +2,7 @@
 
 # Default CMake variables
 TOP_NAME="riscv_small_tb"
-TEST_NAME="riscv_small_tb"
+TEST_NAME="no_test"
 VIVADO_PARMS="--R"
 
 # Parse arguments

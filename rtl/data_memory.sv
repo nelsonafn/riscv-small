@@ -59,7 +59,7 @@ import riscv_definitions_pkg::*;
      * x0 is always 32'b0.
      */
     always_comb begin: proc_comb_read
-        data_out = mem[addr.u_data];
+        data_out.u_data = mem[addr.u_data];
         data_ready = addr.u_data <= 1023 || !data_rd_en;
     end: proc_comb_read
 

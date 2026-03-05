@@ -1,1 +1,2 @@
+rtl/riscv_definitions_pkg.svh
 rtl/instruction_fetch.sv
