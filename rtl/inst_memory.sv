@@ -39,7 +39,7 @@ module inst_memory
 import riscv_definitions_pkg::*;
 #(
     parameter ADDR_WIDTH = 10,
-    parameter PROGRAM_HEX = "../build/rv64ui-p-addi.hex"
+    parameter PROGRAM_HEX = "../build/sanity_tests/rv32ui-p-addi.hex"
 )(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable

@@ -60,7 +60,7 @@ module riscv_small_tb;
     logic [1:0] data_rd_wr_ctrl; //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
 
     localparam INPUT_DELAY = 1;
-    localparam PROGRAM_HEX = "./../build/rv32ui-p-addi.hex";
+    localparam PROGRAM_HEX = "./../build/sanity_tests/rv32ui-p-addi.hex";
 
     clk_gen #(
         .CLK_PERIOD (4), // Period in ns

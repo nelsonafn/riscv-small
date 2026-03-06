@@ -1,6 +1,6 @@
 #!/bin/bash
 # -----------------------------------------------------------------------------
-# proj_config.sh
+# setup.sh
 #
 # This script is used to configure environment variables required for building
 # and running the RISC-V small project. 
@@ -12,7 +12,7 @@
 #   - RISCV_TARGET:   Target architecture for the build (e.g., riscv32-unknown-elf).
 #
 # Make sure to source this script in your shell session:
-#   source /path/to/proj_config.sh
+#   source /path/to/setup.sh
 # -----------------------------------------------------------------------------
 
 # Source the Xilinx Vivado environment setup script
