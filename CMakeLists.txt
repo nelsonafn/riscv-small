@@ -293,7 +293,7 @@ add_custom_target(gui
 
 # Define simulation artifacts natively to automatically get wiped out upon running `make clean`.
 set_directory_properties(PROPERTIES ADDITIONAL_CLEAN_FILES 
-    "xsim.dir;xvlog.log;xvlog.pb;xelab.log;xelab.pb;xsim.log;xsim.jou;webtalk_pn.xml;webtalk.jou;xsim_webtalk.tcl;xsim.covdb;top_sim.wdb;tr_db.log;*.stamp"
+    "xsim.dir;xvlog.log;xvlog.pb;xelab.log;xelab.pb;xsim.log;xsim.jou;webtalk_pn.xml;webtalk.jou;xsim_webtalk.tcl;xsim.covdb;top_sim.wdb;tr_db.log;*.stamp;*.hex"
 )
 
 # ==============================================================================

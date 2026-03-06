@@ -109,19 +109,19 @@ $ make clean
 ## Compiling RISC-V Sanity Tests
 The project features a submodule containing the official RISC-V ISA test-suite. We've automated its compilation natively into CMake!
 
-**1. Install Linux GCC Cross-Compiler requirements:**
-Unlike heavy cross-builds, you only require the standard GCC utility packages available in your apt repository! Note: This replaces the need to build the `riscv-gnu-toolchain` manually.
+**1. Install embedded GCC cross-compiler requirements:**
+Unlike heavy cross-builds, you only require the standard GCC embedded utility packages natively available in your apt repository! Note: This safely replaces the need to manually build the `riscv-gnu-toolchain` from source.
 ```bash
 $ sudo apt update
-$ sudo apt install autoconf gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu
+$ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 ```
 
 **2. Execute the integrated CMake target:**
-Once in your build folder, you can recursively pull the submodule, compile the tests via GNU make, and parse the payload out cleanly.
+Once in your localized build folder, CMake elegantly processes an out-of-tree configure script, safely passes variables to trick the compiler into only tracking your target test (e.g., `rv32ui-p-addi`), and skips the heavy unneeded benchmarks—without leaving a single trash artifact inside the native `src/riscv-tests` submodule!
 ```bash
 $ cd build/
 $ make compile_sanity_tests
 ```
 
 **3. Test Payload:**
-The generated instruction payload will be automatically placed into your build directory: `build/rv32ui-p-addi.hex`. You can invoke it immediately using the dynamic Make test configurations!
+The generated instruction payload will be automatically cleanly dumped inside your build configuration directly at: `build/sanity_tests/rv32ui-p-addi.hex`. You can invoke it immediately using the dynamic Make test commands!
