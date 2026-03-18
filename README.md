@@ -43,15 +43,15 @@ Because of the smart wrapper generated in the project root, you have several way
 #### Option A: Running from the Project Root (Smart Proxy)
 You do not need to `cd build/`. You can immediately execute targets from the root, and it will intentionally forward your requests into CMake. It allows you to inject individual test names via spaces.
 
-- **`make compile`**: Explicitly compiles the library code (`xlog`) without running simulation.
-- **`make elaborate`**: Explicitly compiles the library code (`xlog`) without running simulation.
+- **`make compile`**: Explicitly compiles the SV source code (`xvlog`) without running simulation.
+- **`make elaborate`**: Elaborates the compiled design into a simulation snapshot (`xelab`) without running simulation.
 - **`make sim`**: Runs the default test configuration (e.g. `adder_basic_test`) silently in terminal.
 - **`make gui`**: Opens Vivado XSim GUI using your defined waveform layout.
 - **`make sim_<test_name>`**: Injects the test dynamically (e.g. `make sim_adder_corner_test`) replacing defaults.
 - **`make gui_<test_name>`**: Injects the test dynamically into the GUI directly (e.g. `make gui_adder_corner_test`).
 
 #### Option B: Running from inside the `build/` directory
-When inside the strictly generated CMake target directory, you can utilize the auto-generated target configurations.
+When inside the strictly generated CMake target directory, you can utilize the auto-generated target configurations. (Note: spaces denote multiple targets inside native Make!)
 
 ```bash
 $ cd build/
@@ -97,14 +97,20 @@ $ make clean
    - Use the `--vivado "--g"` option to open the GUI for debugging.
    - Check the `build/` directory for logs and intermediate files if issues arise during simulation.
 
-4. **Extending Tests**:
-   - To add new tests, configure standard UVM sequences inside your `tb/` folder or leverage the standard riscv-tests definitions inside `src/riscv-tests`. 
+4. **Extending the Template**:
+   - To add new tests, create sequences in `tb/tests/sequence_lib/` and include them in `tb/tests/<name>_seq_list_pkg.sv` and `tb/tests/<name>_test_list_pkg.sv`.
+   - To add standalone shared components (like interfaces), map them to an `.srclist` module to build them as an independent library.
+   - For additional coverage, extend the coverage model in `tb/env/top/<name>_coverage.sv`.
 
 5. **Support**:
    - For questions or issues, contact the maintainer at `nelsonafn@gmail.com`.
 
 6. **License**:
    - This project is distributed under the BSD license. Refer to the `LICENSE` file for details.
+
+## Install cmake
+sudo apt install cmake
+sudo apt install autoconf
 
 ## Compiling RISC-V Sanity Tests
 The project features a submodule containing the official RISC-V ISA test-suite. We've automated its compilation natively into CMake!
