@@ -1,0 +1,2 @@
+rtl/riscv_definitions_pkg.svh
+tb/riscv_small_interface.sv

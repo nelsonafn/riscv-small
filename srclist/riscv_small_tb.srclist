@@ -1,6 +1,9 @@
-srclist/riscv_small.srclist
-tb/clk_gen.sv
-rtl/riscv_definitions_pkg.svh
-rtl/data_memory.sv
-rtl/inst_memory.sv
+srclist/riscv_small.srclist  
++incdir+tb/env/agents/riscv_small_agent
+srclist/riscv_small_interface.srclist
+tb/env/agents/riscv_small_agent/riscv_small_agent_pkg.sv 
+tb/env/ref_model/riscv_small_ref_model_pkg.sv 
+tb/env/top/riscv_small_env_pkg.sv
+tb/tests/sequence_lib/riscv_small_seq_list_pkg.sv 
+tb/tests/riscv_small_test_list_pkg.sv 
 tb/riscv_small_tb.sv

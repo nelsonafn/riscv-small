@@ -88,7 +88,7 @@ set_property(GLOBAL PROPERTY ALL_SIM_LIBS "")
 # with the appropriate stamp file and dependencies. This allows generalizing 
 # compilation for both standard sourcelists and isolated packages.
 # ==============================================================================
-function(compile_xvlog_library TARGET_LIB SV_FILES LOCAL_XVLOG_LIBS TARGET_DEPENDENCIES)
+function(compile_xvlog_library TARGET_LIB SV_FILES LOCAL_XVLOG_LIBS TARGET_DEPENDENCIES LOCAL_XVLOG_INCDIRS)
     set(TARGET_NAME "compile_${TARGET_LIB}")
     
     # Handle cases where there are no standalone .sv modules, only dependencies.
@@ -116,10 +116,14 @@ function(compile_xvlog_library TARGET_LIB SV_FILES LOCAL_XVLOG_LIBS TARGET_DEPEN
     endif()
     
     # Prepare xvlog parameters mapping the exact required libraries using the -L flag
-    set(LOCAL_XVLOG_ARGS "")
-    if(LOCAL_XVLOG_LIBS)
-        list(REMOVE_DUPLICATES LOCAL_XVLOG_LIBS)
-        foreach(LIB_NAME IN LISTS LOCAL_XVLOG_LIBS)
+    set(LOCAL_XVLOG_ARGS "-L" "uvm")
+    if(LOCAL_XVLOG_INCDIRS)
+        list(APPEND LOCAL_XVLOG_ARGS ${LOCAL_XVLOG_INCDIRS})
+    endif()
+    get_property(GLOBAL_SIM_LIBS GLOBAL PROPERTY ALL_SIM_LIBS)
+    if(GLOBAL_SIM_LIBS)
+        list(REMOVE_DUPLICATES GLOBAL_SIM_LIBS)
+        foreach(LIB_NAME IN LISTS GLOBAL_SIM_LIBS)
             list(APPEND LOCAL_XVLOG_ARGS "-L" "${LIB_NAME}")
         endforeach()
     endif()
@@ -186,6 +190,7 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
     set(SV_FILES "")
     set(TARGET_DEPENDENCIES "")
     set(LOCAL_XVLOG_LIBS "")
+    set(LOCAL_XVLOG_INCDIRS "")
 
     foreach(LINE IN LISTS LINES)
         # Remove trailing comments and strip whitespaces
@@ -195,7 +200,10 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
             continue() # Skip empty lines
         endif()
 
-        if(LINE MATCHES "\\.srclist$" OR LINE MATCHES "pkg\\.svh?$")
+        if(LINE MATCHES "^\\+incdir\\+(.*)$")
+            list(APPEND LOCAL_XVLOG_INCDIRS "-i" "${CMAKE_SOURCE_DIR}/${CMAKE_MATCH_1}")
+
+        elseif(LINE MATCHES "\\.srclist$" OR LINE MATCHES "pkg\\.svh?$")
             # For both sub-lists and packages, we create an independent library target
             # and inherit it as a dependency for the current parent module list.
             get_filename_component(CHILD_BASE_NAME "${LINE}" NAME_WE)
@@ -205,11 +213,12 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
                 # Recursively parse the target directory based on srclist structure
                 create_library_from_srclist("${CMAKE_SOURCE_DIR}/${LINE}" "${CHILD_LIB}")
             else()
-                # Packages shouldn't be parsed, simply compile them structurally using the helper
+                # Packages shouldn't be parsed, simply compile them structurally using the helper.
+                # We pass the accumulated LOCAL_XVLOG_LIBS and TARGET_DEPENDENCIES so it can resolve prior packages.
                 get_property(COMPILED_PKGS GLOBAL PROPERTY PROCESSED_PKGS)
                 if(NOT "${CHILD_LIB}" IN_LIST COMPILED_PKGS)
                     set_property(GLOBAL APPEND PROPERTY PROCESSED_PKGS "${CHILD_LIB}")
-                    compile_xvlog_library("${CHILD_LIB}" "${CMAKE_SOURCE_DIR}/${LINE}" "" "")
+                    compile_xvlog_library("${CHILD_LIB}" "${CMAKE_SOURCE_DIR}/${LINE}" "${LOCAL_XVLOG_LIBS}" "${TARGET_DEPENDENCIES}" "${LOCAL_XVLOG_INCDIRS}")
                 endif()
             endif()
             
@@ -225,7 +234,7 @@ function(create_library_from_srclist SRCLIST_PATH TARGET_LIB)
     endforeach()
 
     # Compile the aggregated files for this srclist using the common helper function
-    compile_xvlog_library("${TARGET_LIB}" "${SV_FILES}" "${LOCAL_XVLOG_LIBS}" "${TARGET_DEPENDENCIES}")
+    compile_xvlog_library("${TARGET_LIB}" "${SV_FILES}" "${LOCAL_XVLOG_LIBS}" "${TARGET_DEPENDENCIES}" "${LOCAL_XVLOG_INCDIRS}")
     
 endfunction()
 
