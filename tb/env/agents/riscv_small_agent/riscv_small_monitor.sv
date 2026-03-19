@@ -21,8 +21,18 @@ class riscv_small_monitor extends uvm_monitor;
     forever begin
       @(vif.rc_cb);
       
-      // Capturar apenas quando data_ready=1 (acesso concluído, dado estável)
-      if((vif.rc_cb.data_rd_en_ma || vif.rc_cb.data_wr_en_ma) && vif.rc_cb.data_ready) begin
+      // Capturar transação de busca de instrução
+      if(vif.rc_cb.inst_rd_en && vif.rc_cb.inst_ready) begin
+        riscv_small_transaction trans = riscv_small_transaction::type_id::create("inst_trans");
+        trans.op_is_inst = 1;
+        trans.captured_inst_addr = vif.rc_cb.inst_addr;
+        trans.captured_inst_data = vif.rc_cb.inst_data.memory_w;
+        `uvm_info(get_full_name(), $sformatf("FETCH MONITOR: PC=0x%0h INST=0x%0h", trans.captured_inst_addr, trans.captured_inst_data), UVM_HIGH);
+        // mon2sb_port.write(trans); // Opcional: enviar para SB se necessário
+      end
+
+      // Capturar toda transação de dado (zero-latência: cada ciclo com en=1 é válido)
+      if(vif.rc_cb.data_rd_en_ma || vif.rc_cb.data_wr_en_ma) begin
         riscv_small_transaction trans = riscv_small_transaction::type_id::create("trans");
         trans.op_is_data_read = vif.rc_cb.data_rd_en_ma;
         trans.op_is_data_write = vif.rc_cb.data_wr_en_ma;
@@ -30,7 +40,10 @@ class riscv_small_monitor extends uvm_monitor;
         trans.captured_data_rd = vif.rc_cb.data_rd.u_data;
         trans.captured_data_wr = vif.rc_cb.data_wr.u_data;
 
-        `uvm_info(get_full_name(), $sformatf("TRANSACTION MONITOR: DATA op captured at addr %0h", trans.captured_data_addr), UVM_LOW);
+        `uvm_info(get_full_name(), $sformatf("DATA MONITOR: %s addr=0x%0h data=0x%0h", 
+          trans.op_is_data_write ? "WRITE" : "READ", 
+          trans.captured_data_addr, 
+          trans.op_is_data_write ? trans.captured_data_wr : trans.captured_data_rd), UVM_LOW);
         mon2sb_port.write(trans);
       end
     end

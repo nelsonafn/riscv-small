@@ -38,72 +38,61 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     // Broadcast the full sequence item containing the subprogram
     drv2rm_port.write(req);
     
+    // Sente PC=0 imediatamente antes de começar o loop principal
+    // para que a primeira borda do clock capture LW0 corretamente.
+    if (inst_mem.exists(0)) begin
+      vif.inst_data.memory_w = inst_mem[0];
+    end
+
     seq_item_port.item_done();
 
-    // 2. Play memory behavior forever
-    forever begin
-      @(vif.dr_cb);
-      
-      // Instruction fetch behavior
-      if (vif.dr_cb.inst_rd_en) begin
-        int pc_word_addr = vif.dr_cb.inst_addr >> 2; // Word aligned index
-        if (inst_mem.exists(pc_word_addr)) begin
-            vif.dr_cb.inst_data.memory_w <= inst_mem[pc_word_addr];
-            vif.dr_cb.inst_ready <= 1;
-        end else begin
-            vif.dr_cb.inst_data.memory_w <= 0;
-            vif.dr_cb.inst_ready <= 1; // Emulate empty memory returning zeros without stalling
+    // 2. Play memory behavior
+    fork
+      // --- Processo de Busca de Instrução (Combinatorial) ---
+      forever begin
+        @(vif.inst_addr or vif.inst_rd_en);
+        if (vif.inst_rd_en) begin
+          int pc_word_addr = vif.inst_addr >> 2;
+          if (inst_mem.exists(pc_word_addr)) begin
+            vif.inst_data.memory_w = inst_mem[pc_word_addr];
+          end else begin
+            vif.inst_data.memory_w = 32'h00000033;
+          end
         end
-      end else begin
-        vif.dr_cb.inst_ready <= 1;
       end
 
-      // Modelo de RAM Síncrona com 1 ciclo de latência:
-      // Ciclo T  : data_rd_en_ma=1 → stall (data_ready=0), pré-carregar dado no barramento
-      // Ciclo T+1: data_ready=1 → DUT amostra dado no posedge de T+2
-      if (vif.dr_cb.data_rd_en_ma) begin
-        if (data_ready_delay == 0) begin
-            // Stall: DUT irá repetir este ciclo na próxima borda
-            vif.dr_cb.data_ready <= 0;
-            data_ready_delay = 1;
-            // Pré-carregar dado no barramento para estabilizar antes do próximo posedge
-            d_word_addr = vif.dr_cb.data_addr.u_data >> 2;
-            if (data_mem.exists(d_word_addr)) begin
-                `uvm_info(get_full_name(), $sformatf("Serving Read data %0h from addr %0d", data_mem[d_word_addr], vif.dr_cb.data_addr.u_data), UVM_LOW);
-                vif.dr_cb.data_rd.u_data <= data_mem[d_word_addr];
-            end else begin
-                vif.dr_cb.data_rd.u_data <= 0;
-            end
-        end else begin
-            // Libera stall: sinal data_rd agora está estável
-            vif.dr_cb.data_ready <= 1;
-            data_ready_delay = 0;
+      // --- Processo de Acesso a Dados (Combinatorial) ---
+      forever begin
+        @(vif.data_addr or vif.data_rd_en_ma or vif.data_wr_en_ma or vif.data_wr);
+        if (vif.data_rd_en_ma) begin
+          int d_word_addr = vif.data_addr.u_data >> 2;
+          if (data_mem.exists(d_word_addr)) begin
+            vif.data_rd.u_data = data_mem[d_word_addr];
+          end else begin
+            vif.data_rd.u_data = 0;
+          end
         end
-      end else if (vif.dr_cb.data_wr_en_ma) begin
-        // Escrita também tem 1 ciclo de latência
-        if (data_ready_delay == 0) begin
-            vif.dr_cb.data_ready <= 0;
-            data_ready_delay = 1;
-            d_word_addr = vif.dr_cb.data_addr.u_data >> 2;
-            `uvm_info(get_full_name(), $sformatf("Accepting Data Write %0h to addr %0d", vif.dr_cb.data_wr.u_data, vif.dr_cb.data_addr.u_data), UVM_LOW);
-            data_mem[d_word_addr] = vif.dr_cb.data_wr.u_data;
-        end else begin
-            vif.dr_cb.data_ready <= 1;
-            data_ready_delay = 0;
+        
+        if (vif.data_wr_en_ma) begin
+          int d_word_addr = vif.data_addr.u_data >> 2;
+          data_mem[d_word_addr] = vif.data_wr.u_data;
         end
-      end else begin
-        vif.dr_cb.data_ready <= 1;
-        data_ready_delay = 0;
       end
-      
-    end
+
+      // --- Processo de Sinais de Controle (Síncrono via dr_cb) ---
+      forever begin
+        @(vif.dr_cb);
+        vif.dr_cb.inst_ready <= 1;
+        vif.dr_cb.data_ready <= 1;
+      end
+    join
   endtask
 
   task reset();
-    vif.dr_cb.inst_ready <= 1;
-    vif.dr_cb.inst_data.memory_w <= 0;
-    vif.dr_cb.data_ready <= 1;
-    vif.dr_cb.data_rd.u_data <= 0;
+    vif.inst_ready = 1;
+    vif.inst_data.memory_w = 0;
+    vif.data_ready = 1;
+    vif.data_rd.u_data = 0;
   endtask
 
 endclass : riscv_small_driver

@@ -97,7 +97,8 @@ import riscv_definitions_pkg::*;
             regs <= '{default:'X};
         end: rd0_write_rst
         else if (clk_en) begin
-            if (rd0_wr_en) begin
+            if (rd0_wr_en && rd0_addr != '0) begin
+                $display("RTL REG_WRITE: x%0d = 0x%0h", rd0_addr, rd0_data.u_data);
                 regs[rd0_addr] <= rd0_data;
             end
         end        

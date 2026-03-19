@@ -1,101 +1,129 @@
 `ifndef RISCV_SMALL_SCOREBOARD
 `define RISCV_SMALL_SCOREBOARD
 
+// ============================================================================
+// riscv_small_scoreboard
+//
+// Scoreboard UVM: compara as transações previstas pelo Reference Model (ISS)
+// com as transações reais observadas pelo Monitor na DUT.
+//
+//   rm_fifo   → transações de previsão de STORE (vindas do Ref Model)
+//   mon_fifo  → transações de observação  de STORE (vindas do Monitor/DUT)
+//
+// Para cada STORE observado pelo Monitor, o Scoreboard retira a próxima
+// previsão da fila do RM e compara endereço + dado.
+//
+// Author: Nelson Alves nelsonafn@gmail.com
+// ============================================================================
 class riscv_small_scoreboard extends uvm_scoreboard;
   
   `uvm_component_utils(riscv_small_scoreboard)
-  uvm_analysis_export #(riscv_small_transaction) sb_export_mon;
-  uvm_analysis_export #(riscv_small_transaction) sb_export_rm; // Required by top env connection
-  
-  uvm_tlm_analysis_fifo #(riscv_small_transaction) mon_fifo;
-  uvm_tlm_analysis_fifo #(riscv_small_transaction) rm_fifo; // Dummy
 
+  // ---- Portos de entrada ---------------------------------------------------
+  uvm_analysis_export #(riscv_small_transaction) sb_export_mon; // do Monitor
+  uvm_analysis_export #(riscv_small_transaction) sb_export_rm;  // do Ref Model
+
+  // ---- FIFOs internas ------------------------------------------------------
+  uvm_tlm_analysis_fifo #(riscv_small_transaction) mon_fifo;
+  uvm_tlm_analysis_fifo #(riscv_small_transaction) rm_fifo;
+
+  // ---- Counters de resultado -----------------------------------------------
+  int unsigned pass_count = 0;
+  int unsigned fail_count = 0;
+
+  // ---- Construtor ----------------------------------------------------------
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
 
+  // ---- Build phase ---------------------------------------------------------
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    mon_fifo = new("mon_fifo", this);
-    rm_fifo = new("rm_fifo", this);
+    mon_fifo    = new("mon_fifo", this);
+    rm_fifo     = new("rm_fifo",  this);
     sb_export_mon = new("sb_export_mon", this);
-    sb_export_rm = new("sb_export_rm", this);
+    sb_export_rm  = new("sb_export_rm",  this);
   endfunction
 
+  // ---- Connect phase -------------------------------------------------------
   function void connect_phase(uvm_phase phase);
     sb_export_mon.connect(mon_fifo.analysis_export);
-    sb_export_rm.connect(rm_fifo.analysis_export); // Dummy connection
+    sb_export_rm.connect(rm_fifo.analysis_export);
   endfunction
 
+  // Mapa de previsões: byte_addr → dado esperado (preenchido pelo Ref Model)
+  int expected_stores[int];
+
+  // ---- Run phase: comparação -----------------------------------------------
   task run_phase(uvm_phase phase);
-    riscv_small_transaction mon_trans;
-    riscv_small_transaction rm_trans;
-    
-    int expected_mem[int];
-    int reg_file[32];
-    
-    // 1. Pegar o subprograma enviado pelo Driver
-    rm_fifo.get(rm_trans);
-    `uvm_info(get_full_name(), "Recebido Subprograma! Contruindo Reference Model interno...", UVM_LOW);
-    
-    // Iniciar Registradores com zero
-    for (int i=0; i<32; i++) reg_file[i] = 0;
-    
-    // Popular memória Mapeada
-    foreach (rm_trans.data_addr[i]) begin
-        expected_mem[rm_trans.data_addr[i]] = rm_trans.data_list[i];
-    end
-    
-    // Parsing das instruções para simular o comportamento da CPU RISC-V 
-    foreach (rm_trans.instruction_list[i]) begin
-        bit [31:0] inst = rm_trans.instruction_list[i];
-        bit [6:0] opcode = inst[6:0];
-        
-        if (opcode == 7'b0000011) begin // LOAD (LW)
-            bit [4:0] rd = inst[11:7];
-            bit [4:0] rs1 = inst[19:15];
-            bit [11:0] imm = inst[31:20];
-            int addr = (reg_file[rs1] + signed'(imm)) >> 2; // word address
-            
-            if (rd != 0) begin
-                if (expected_mem.exists(addr)) begin
-                    reg_file[rd] = expected_mem[addr];
-                end else begin
-                    reg_file[rd] = 0;
-                end
-                `uvm_info(get_full_name(), $sformatf("ISS LW: x%0d ← mem_word[%0d] = %0h", rd, addr, reg_file[rd]), UVM_LOW);
-            end
-        end else if (opcode == 7'b0100011) begin // STORE (SW)
-            bit [4:0] rs2 = inst[24:20];
-            bit [4:0] rs1 = inst[19:15];
-            bit [11:0] imm = {inst[31:25], inst[11:7]};
-            int addr = (reg_file[rs1] + signed'(imm)) >> 2; // word address
-            
-            expected_mem[addr] = reg_file[rs2];
-            `uvm_info(get_full_name(), $sformatf("ISS SW: x%0d=%0h → mem_word[%0d] (byte=%0d)", rs2, reg_file[rs2], addr, addr*4), UVM_LOW);
-        end
-    end
-    
-    // 2. Verificar continuamente os Monitores de Escrita contra o Reference Model
+    riscv_small_transaction mon_trans; // observação da DUT (Monitor)
+    riscv_small_transaction exp_trans; // previsão do ISS   (Ref Model)
+    int exp_count = 0;
+    int mon_count = 0;
+
     forever begin
+      // 1. Aguardar próxima observação de escrita de dados na DUT
       mon_fifo.get(mon_trans);
-      
-      if (mon_trans.op_is_data_write) begin
-        int d_word_addr = mon_trans.captured_data_addr >> 2;
-        
-        if (expected_mem.exists(d_word_addr)) begin
-          if (mon_trans.captured_data_wr == expected_mem[d_word_addr]) begin
-            `uvm_info(get_full_name(), $sformatf("SUCCESS: Store para a memória %0d executou com perfeição de acordo com o Subprograma! (Dado: %0h)", mon_trans.captured_data_addr, mon_trans.captured_data_wr), UVM_LOW);
-          end else begin
-            `uvm_error(get_full_name(), $sformatf("FAILURE: Corrupção! O Store para o endereço %0d teve erro de dados. Esperado %0h, Encontrado %0h", mon_trans.captured_data_addr, expected_mem[d_word_addr], mon_trans.captured_data_wr));
-          end
-        end else begin
-            `uvm_error(get_full_name(), $sformatf("FAILURE: Unexpected Store para endereço não previsto no programa: %0d", mon_trans.captured_data_addr));
-        end
+      if (!mon_trans.op_is_data_write) continue;
+      mon_count++;
+
+      // 2. Obter a próxima previsão do Ref Model (bloqueia até chegar)
+      rm_fifo.get(exp_trans);
+      exp_count++;
+
+      // ---- Imprimir o subprograma para o primeiro item de cada sequência ----
+      if (mon_count == 1) print_subprogram(exp_trans);
+
+      // ---- Comparar endereço e dado ----------------------------------------
+      if (mon_trans.captured_data_addr == exp_trans.captured_data_addr &&
+          mon_trans.captured_data_wr   == exp_trans.captured_data_wr) begin
+
+        pass_count++;
+        `uvm_info(get_full_name(),
+          $sformatf("[PASS #%0d] SW %0d correto: addr=0x%0h dado=0x%0h",
+            pass_count, mon_count,
+            mon_trans.captured_data_addr,
+            mon_trans.captured_data_wr),
+          UVM_LOW)
+
+      end else begin
+
+        fail_count++;
+        `uvm_error(get_full_name(),
+          $sformatf("[FAIL #%0d] SW %0d errado:\n  DUT: addr=0x%0h dado=0x%0h\n  EXP: addr=0x%0h dado=0x%0h",
+            fail_count, mon_count,
+            mon_trans.captured_data_addr, mon_trans.captured_data_wr,
+            exp_trans.captured_data_addr, exp_trans.captured_data_wr))
+
       end
     end
-  endtask
+  endtask : run_phase
 
-endclass
+  // ---- Report phase: resumo final ------------------------------------------
+  function void report_phase(uvm_phase phase);
+    `uvm_info(get_full_name(),
+      $sformatf("\n========================================\n  SCOREBOARD FINAL REPORT\n  PASS : %0d\n  FAIL : %0d\n========================================",
+        pass_count, fail_count),
+      UVM_NONE)
+    if (fail_count > 0)
+      `uvm_error(get_full_name(), "SIMULAÇÃO ENCERROU COM FALHAS!")
+    else
+      `uvm_info(get_full_name(), "SIMULAÇÃO PASSOU EM TODOS OS CHECKS!", UVM_NONE)
+  endfunction
+
+  // ---- Função auxiliar: print do subprograma ------------------------------
+  function void print_subprogram(riscv_small_transaction t);
+    string msg;
+    msg = "\n  --- Subprograma associado à previsão ---";
+    msg = {msg, $sformatf("\n  Instruções (%0d):", t.instruction_list.size())};
+    foreach (t.instruction_list[i])
+      msg = {msg, $sformatf("\n    [%0d] 0x%08h", i, t.instruction_list[i])};
+    msg = {msg, $sformatf("\n  Dados iniciais (%0d):", t.data_addr.size())};
+    foreach (t.data_addr[i])
+      msg = {msg, $sformatf("\n    mem_word[%0d] = 0x%0h", t.data_addr[i], t.data_list[i])};
+    `uvm_info(get_full_name(), msg, UVM_HIGH)
+  endfunction
+
+endclass : riscv_small_scoreboard
 
 `endif
