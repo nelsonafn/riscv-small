@@ -28,6 +28,7 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
 
     // 1. Get initial test sequence transaction
     seq_item_port.get_next_item(req);
+    req.print();
     foreach (req.instruction_addr[i]) begin
       inst_mem[req.instruction_addr[i]] = req.instruction_list[i];
     end
