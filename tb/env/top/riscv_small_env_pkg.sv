@@ -25,6 +25,7 @@ package riscv_small_env_pkg;
   /*
    * Include top env files 
    */
+  `include "colored_report_server.sv"
   `include "riscv_small_coverage.sv"
   `include "riscv_small_scoreboard.sv"
   `include "riscv_small_env.sv"

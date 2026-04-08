@@ -27,7 +27,7 @@ class riscv_small_monitor extends uvm_monitor;
         trans.op_is_inst = 1;
         trans.captured_inst_addr = vif.rc_cb.inst_addr;
         trans.captured_inst_data = vif.rc_cb.inst_data.memory_w;
-        `uvm_info(get_full_name(), $sformatf("FETCH MONITOR: PC=0x%0h INST=0x%0h", trans.captured_inst_addr, trans.captured_inst_data), UVM_HIGH);
+        `uvm_info("FETCH_MONITOR", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", trans.captured_inst_addr, trans.captured_inst_data), UVM_HIGH);
         // mon2sb_port.write(trans); // Opcional: enviar para SB se necessário
       end
 
@@ -40,7 +40,7 @@ class riscv_small_monitor extends uvm_monitor;
         trans.captured_data_rd = vif.rc_cb.data_rd.u_data;
         trans.captured_data_wr = vif.rc_cb.data_wr.u_data;
 
-        `uvm_info(get_full_name(), $sformatf("DATA MONITOR: %s addr=0x%0h data=0x%0h", 
+        `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h", 
           trans.op_is_data_write ? "WRITE" : "READ", 
           trans.captured_data_addr, 
           trans.op_is_data_write ? trans.captured_data_wr : trans.captured_data_rd), UVM_LOW);

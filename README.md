@@ -85,6 +85,41 @@ $ make clean
 | `--vivado` | `--R` | Passes arbitrary flags natively to the simulation engine. (Setting `--g` turns on GUI mode) |
 
 
+## Logging and Debugging
+
+The project features a **Colored UVM Report Server** that enhances the readability of simulation logs by using ANSI colors and a structured column format.
+
+### Log Format
+Messages are formatted for maximum density and clarity:
+`SEVERITY @ TIME [| FILE(LINE)] | [ID] MESSAGE`
+
+*   **SEVERITY**: ANSI-colored (Green for INFO, Yellow for WARNING, Red for ERROR/FATAL).
+*   **TIME**: Raw simulation time (e.g., `@ 1000000`).
+*   **FILE(LINE)**: Only appears during **ERROR/FATAL** or when using high verbosity (`+UVM_VERBOSITY=UVM_FULL`).
+*   **ID**: The UVM component hierarchy or message tag.
+
+### Clean Logs (CI/CD and Post-processing)
+If you need to redirect the output to a file without ANSI escape codes, use the `SIM_ARGS` environment variable to pass extra arguments to `xsim` at runtime:
+```bash
+$ SIM_ARGS="--testplusarg NO_COLOR" make sim
+```
+
+### Runtime Simulation Arguments
+The `SIM_ARGS` environment variable lets you inject any extra `xsim` arguments without reconfiguring:
+```bash
+# Disable colored output
+$ SIM_ARGS="--testplusarg NO_COLOR" make sim
+
+# Show FILE(LINE) on every message (high verbosity)
+$ SIM_ARGS="--testplusarg UVM_VERBOSITY=UVM_FULL" make sim
+
+# Combine multiple plusargs
+$ SIM_ARGS="--testplusarg UVM_VERBOSITY=UVM_FULL --testplusarg NO_COLOR" make sim
+
+# Works with individual test targets too
+$ SIM_ARGS="--testplusarg NO_COLOR" make sim_riscv_small_corner_test
+```
+
 ## Important Information
 
 1. **Tool Versions**:
@@ -95,7 +130,9 @@ $ make clean
 
 3. **Debugging Tips**:
    - Use the `--vivado "--g"` option to open the GUI for debugging.
-   - Check the `build/` directory for logs and intermediate files if issues arise during simulation.
+   - **Clickable Links**: When a message is ERROR/FATAL, the `file(line)` column is shown. `Ctrl+Click` on it to jump to the code.
+   - **Verbosity**: To see exactly where *every* message comes from, use `SIM_ARGS="--testplusarg UVM_VERBOSITY=UVM_FULL" make sim`.
+   - **Filtering**: Use `grep` to isolate specific components: `make sim 2>&1 | grep "SCOREBOARD"`.
 
 4. **Extending the Template**:
    - To add new tests, create sequences in `tb/tests/sequence_lib/` and include them in `tb/tests/<name>_seq_list_pkg.sv` and `tb/tests/<name>_test_list_pkg.sv`.

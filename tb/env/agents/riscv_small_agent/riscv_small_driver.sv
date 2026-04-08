@@ -56,8 +56,10 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
           int pc_word_addr = vif.inst_addr >> 2;
           if (inst_mem.exists(pc_word_addr)) begin
             vif.inst_data.memory_w = inst_mem[pc_word_addr];
+            `uvm_info("FETCH_DRIVER", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", vif.inst_addr, vif.inst_data.memory_w), UVM_HIGH);
           end else begin
             vif.inst_data.memory_w = 32'h00000033;
+            `uvm_warning("FETCH_DRIVER", $sformatf("READ_NOP: PC=0x%0h is out of range", vif.inst_addr));
           end
         end
       end
@@ -69,14 +71,21 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
           int d_word_addr = vif.data_addr.u_data >> 2;
           if (data_mem.exists(d_word_addr)) begin
             vif.data_rd.u_data = data_mem[d_word_addr];
+            `uvm_info("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h DATA=0x%0h", vif.data_addr.u_data, vif.data_rd.u_data), UVM_HIGH);
           end else begin
             vif.data_rd.u_data = 0;
+            `uvm_warning("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h is out of range", vif.data_addr.u_data));
           end
         end
         
         if (vif.data_wr_en_ma) begin
           int d_word_addr = vif.data_addr.u_data >> 2;
-          data_mem[d_word_addr] = vif.data_wr.u_data;
+          if (data_mem.exists(d_word_addr)) begin
+            data_mem[d_word_addr] = vif.data_wr.u_data;
+            `uvm_info("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h DATA=0x%0h", vif.data_addr.u_data, vif.data_wr.u_data), UVM_HIGH);
+          end else begin
+            `uvm_warning("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h is out of range", vif.data_addr.u_data));
+          end
         end
       end
 
