@@ -23,6 +23,7 @@ interface riscv_small_interface(input logic clk, reset);
   // clocking block and modport declaration for driver 
   ////////////////////////////////////////////////////////////////////////////
   clocking dr_cb@(posedge clk) ;
+    default input #1ns output #0ns;
     output inst_ready; 
     output inst_data;
     input  inst_addr;
@@ -43,6 +44,7 @@ interface riscv_small_interface(input logic clk, reset);
   // clocking block and modport declaration for monitor 
   ////////////////////////////////////////////////////////////////////////////
   clocking rc_cb@(negedge clk) ;
+    default input #1ns output #2ns;
     input inst_ready; 
     input inst_data;
     input inst_addr;

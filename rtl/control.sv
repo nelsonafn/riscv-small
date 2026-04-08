@@ -241,7 +241,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
         end
 
         //Pause pipeline id there is not data available
-        if (!data_ready) begin
+        if (!data_ready && data_rd_en_ma) begin
             if_id_clk_en = '0;// Run IF_ID
             id_ex_clk_en = '0;// Run ID_EX
             ex_ma_clk_en = '0;// Run EX_MA

@@ -3,7 +3,7 @@
 
 class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
 
-  virtual riscv_small_interface vif;
+  virtual riscv_small_interface.drv vif;
   `uvm_component_utils(riscv_small_driver)
   uvm_analysis_port#(riscv_small_transaction) drv2rm_port;
 
@@ -42,67 +42,78 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     // Sente PC=0 imediatamente antes de começar o loop principal
     // para que a primeira borda do clock capture LW0 corretamente.
     if (inst_mem.exists(0)) begin
-      vif.inst_data.memory_w = inst_mem[0];
+      vif.dr_cb.inst_data.memory_w <= inst_mem[0];
     end
 
     seq_item_port.item_done();
+    `uvm_info("DRIVER", "Sequence item sent to the ref model", UVM_LOW)
 
     // 2. Play memory behavior
     fork
       // --- Processo de Busca de Instrução (Combinatorial) ---
       forever begin
-        @(vif.inst_addr or vif.inst_rd_en);
-        if (vif.inst_rd_en) begin
-          int pc_word_addr = vif.inst_addr >> 2;
+        @(vif.dr_cb);
+        vif.dr_cb.inst_ready <= 0;
+        if (vif.dr_cb.inst_rd_en) begin
+          int pc_word_addr = vif.dr_cb.inst_addr >> 2;
+          //`uvm_info("DRIVER", $sformatf("Driver read instruction: PC=0x%0h INST=0x%0h", vif.dr_cb.inst_addr, inst_mem[pc_word_addr]), UVM_LOW)
           if (inst_mem.exists(pc_word_addr)) begin
-            vif.inst_data.memory_w = inst_mem[pc_word_addr];
-            `uvm_info("FETCH_DRIVER", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", vif.inst_addr, vif.inst_data.memory_w), UVM_HIGH);
+            vif.dr_cb.inst_data.memory_w <= inst_mem[pc_word_addr];
+            vif.dr_cb.inst_ready <= 1;
+            `uvm_info("FETCH_DRIVER", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", vif.dr_cb.inst_addr, inst_mem[pc_word_addr]), UVM_HIGH);
           end else begin
-            vif.inst_data.memory_w = 32'h00000033;
-            `uvm_warning("FETCH_DRIVER", $sformatf("READ_NOP: PC=0x%0h is out of range", vif.inst_addr));
+            vif.dr_cb.inst_data.memory_w <= 32'h00000033;
+            vif.dr_cb.inst_ready <= 0;
+            `uvm_warning("FETCH_DRIVER", $sformatf("READ_NOP: PC=0x%0h is out of range", vif.dr_cb.inst_addr));
           end
         end
       end
 
       // --- Processo de Acesso a Dados (Combinatorial) ---
       forever begin
-        @(vif.data_addr or vif.data_rd_en_ma or vif.data_wr_en_ma or vif.data_wr);
-        if (vif.data_rd_en_ma) begin
-          int d_word_addr = vif.data_addr.u_data >> 2;
+        @(vif.dr_cb);
+        vif.dr_cb.data_ready <= 0;
+        //@(vif.dr_cb.data_addr or vif.dr_cb.data_rd_en_ma or vif.dr_cb.data_wr_en_ma or vif.dr_cb.data_wr);
+        if (vif.dr_cb.data_rd_en_ma) begin
+          int d_word_addr = vif.dr_cb.data_addr.u_data >> 2;
           if (data_mem.exists(d_word_addr)) begin
-            vif.data_rd.u_data = data_mem[d_word_addr];
-            `uvm_info("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h DATA=0x%0h", vif.data_addr.u_data, vif.data_rd.u_data), UVM_HIGH);
+            vif.dr_cb.data_rd.u_data <= data_mem[d_word_addr];
+            vif.dr_cb.data_ready <= 1;
+            `uvm_info("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h DATA=0x%0h", vif.dr_cb.data_addr.u_data, data_mem[d_word_addr]), UVM_HIGH);
           end else begin
-            vif.data_rd.u_data = 0;
-            `uvm_warning("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h is out of range", vif.data_addr.u_data));
+            vif.dr_cb.data_rd.u_data <= 0;
+            vif.dr_cb.data_ready <= 0;
+            `uvm_warning("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h is out of range", vif.dr_cb.data_addr.u_data));
           end
         end
         
-        if (vif.data_wr_en_ma) begin
-          int d_word_addr = vif.data_addr.u_data >> 2;
+        if (vif.dr_cb.data_wr_en_ma) begin
+          int d_word_addr = vif.dr_cb.data_addr.u_data >> 2;
           if (data_mem.exists(d_word_addr)) begin
-            data_mem[d_word_addr] = vif.data_wr.u_data;
-            `uvm_info("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h DATA=0x%0h", vif.data_addr.u_data, vif.data_wr.u_data), UVM_HIGH);
+            data_mem[d_word_addr] = vif.dr_cb.data_wr.u_data;
+            vif.dr_cb.data_ready <= 1;
+            `uvm_info("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h DATA=0x%0h", vif.dr_cb.data_addr.u_data, vif.dr_cb.data_wr.u_data), UVM_HIGH);
           end else begin
-            `uvm_warning("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h is out of range", vif.data_addr.u_data));
+            vif.dr_cb.data_ready <= 0;
+            `uvm_warning("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h is out of range", vif.dr_cb.data_addr.u_data));
           end
         end
       end
 
       // --- Processo de Sinais de Controle (Síncrono via dr_cb) ---
-      forever begin
-        @(vif.dr_cb);
-        vif.dr_cb.inst_ready <= 1;
-        vif.dr_cb.data_ready <= 1;
-      end
+      //forever begin
+      //  @(vif.dr_cb);
+      //  vif.dr_cb.inst_ready <= 1;
+      //  vif.dr_cb.data_ready <= 1;
+      //end
     join
   endtask
 
   task reset();
-    vif.inst_ready = 1;
-    vif.inst_data.memory_w = 0;
-    vif.data_ready = 1;
-    vif.data_rd.u_data = 0;
+    vif.dr_cb.inst_ready <= 0;
+    vif.dr_cb.inst_data.memory_w <= 0;
+    vif.dr_cb.data_ready <= 0;
+    vif.dr_cb.data_rd.u_data <= 0;
   endtask
 
 endclass : riscv_small_driver
