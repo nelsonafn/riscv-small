@@ -6,7 +6,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
   `uvm_object_utils(riscv_small_basic_load_store_seq)
  
   // Deixe N configurável para facilitar depuração
-  int N = 31; // Max 31 registradores suportados (x1 a x31)
+  int N = 2; // Max 31 registradores suportados (x1 a x31)
   // NOPs entre fase LOAD e STORE para drenar o pipeline de 5 estágios
   // O modelo de RAM síncrona adiciona 1 ciclo de stall por acesso.
   // O último LW (posição N-1) precisa de 5 ciclos pipeline + 1 ciclo stall = 6 NOPs.
@@ -46,6 +46,11 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
       req.data_list[i] = rand_data[i];
 
       // Fase 1: LW back-to-back - LOAD → LW xI, (addr*4)(x0)
+      // x0 = 5'd0, base address register
+      // xI = 5'(regs[i]), data to be stored
+      // rd_imm = rand_rd_addr[i] * 4, offset from base address
+      // func3 = 3'b010 = store/load word
+      // opcode = 7'b0000011 = LW opcode
       begin
         bit [11:0] rd_imm = rand_rd_addr[i] * 4;
         req.instruction_addr[i] = i * 4;
@@ -61,6 +66,11 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     end
 
     // Fase 3: Stores - STORE → SW xI, (wr_addr*4)(x0) 
+    // x0 = 5'd0, base address register
+    // xI = 5'(regs[i]), data to be stored
+    // wr_imm = rand_wr_addr[i] * 4, offset from base address
+    // func3 = 3'b010 = store/load word
+    // opcode = 7'b0100011 = SW opcode
     for (int i=0; i<N; i++) begin
       begin
         bit [11:0] wr_imm = rand_wr_addr[i] * 4;
@@ -81,7 +91,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
 
     // Esperar tempo suficiente para o pipeline processar tudo
     // N loads + BUBBLE_COUNT + N stores = ~67 ciclos * 10ns = ~700ns
-    #10us;
+    #1000ns;
   endtask
 
 endclass

@@ -11,7 +11,7 @@ module riscv_small_tb;
 
   parameter cycle = 10;
   bit clk;
-  bit reset;
+  bit rst_n;
   
   initial begin
     clk = 0;
@@ -19,36 +19,36 @@ module riscv_small_tb;
   end
 
   initial begin
-    reset = 1;
-    #(cycle*5) reset = 0;
+    rst_n = 0;
+    #(cycle*5) rst_n = 1;
   end
   
-  riscv_small_interface intf(clk, reset);
+  riscv_small_interface intf(clk, rst_n);
   
   // Add clock enables manually required by DUT
   logic clk_en = 1;
   logic exception = 0;
 
-  riscv_small dut_inst(
+  riscv_small duv(
     .clk(clk),
     .clk_en(clk_en),
-    .rst_n(~reset),
+    .rst_n(rst_n),
     .exception(exception),
 
     // Instruction Memory controls
-    .inst_ready(intf.inst_ready),
-    .inst_data(intf.inst_data),
-    .inst_addr(intf.inst_addr),
-    .inst_rd_en(intf.inst_rd_en),
+    .inst_ready(intf.duv_mp.inst_ready),
+    .inst_data(intf.duv_mp.inst_data),
+    .inst_addr(intf.duv_mp.inst_addr),
+    .inst_rd_en(intf.duv_mp.inst_rd_en),
 
     // Data Memory controls
-    .data_ready(intf.data_ready),
-    .data_rd(intf.data_rd),
-    .data_rd_en_ma(intf.data_rd_en_ma),
-    .data_wr_en_ma(intf.data_wr_en_ma),
-    .data_wr(intf.data_wr),
-    .data_addr(intf.data_addr),
-    .data_rd_wr_ctrl(intf.data_rd_wr_ctrl)
+    .data_ready(intf.duv_mp.data_ready),
+    .data_rd(intf.duv_mp.data_rd),
+    .data_rd_en_ma(intf.duv_mp.data_rd_en),
+    .data_wr_en_ma(intf.duv_mp.data_wr_en),
+    .data_wr(intf.duv_mp.data_wr),
+    .data_addr(intf.duv_mp.data_addr),
+    .data_rd_wr_ctrl(intf.duv_mp.data_rd_wr_ctrl)
   );
   
   initial begin

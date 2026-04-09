@@ -18,15 +18,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="0.000 ns"></ZoomStartTime>
-      <ZoomEndTime time="137.401 ns"></ZoomEndTime>
-      <Cursor1Time time="55.300 ns"></Cursor1Time>
+      <ZoomStartTime time="31.834 ns"></ZoomStartTime>
+      <ZoomEndTime time="170.835 ns"></ZoomEndTime>
+      <Cursor1Time time="55.000 ns"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="329"></NameColumnWidth>
-      <ValueColumnWidth column_width="213"></ValueColumnWidth>
+      <ValueColumnWidth column_width="197"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="57" />
+   <WVObjectSize size="105" />
    <wave_markers>
       <marker label="" time="148000" />
       <marker label="" time="330340" />
@@ -35,224 +35,143 @@
       <obj_property name="label">IF</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/clk">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_fetch/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/clk_en">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_fetch/clk_en">
       <obj_property name="ElementShortName">clk_en</obj_property>
       <obj_property name="ObjectShortName">clk_en</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/rst_n">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_fetch/rst_n">
       <obj_property name="ElementShortName">rst_n</obj_property>
       <obj_property name="ObjectShortName">rst_n</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data">
       <obj_property name="ElementShortName">inst_data</obj_property>
       <obj_property name="ObjectShortName">inst_data</obj_property>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.r_type">
-         <obj_property name="ElementShortName">.r_type</obj_property>
-         <obj_property name="ObjectShortName">.r_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.i_type">
-         <obj_property name="ElementShortName">.i_type</obj_property>
-         <obj_property name="ObjectShortName">.i_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.i_type_load">
-         <obj_property name="ElementShortName">.i_type_load</obj_property>
-         <obj_property name="ObjectShortName">.i_type_load</obj_property>
-         <obj_property name="isExpanded"></obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.i_type_alu">
-         <obj_property name="ElementShortName">.i_type_alu</obj_property>
-         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.s_type">
-         <obj_property name="ElementShortName">.s_type</obj_property>
-         <obj_property name="ObjectShortName">.s_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.b_type">
-         <obj_property name="ElementShortName">.b_type</obj_property>
-         <obj_property name="ObjectShortName">.b_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.u_type">
-         <obj_property name="ElementShortName">.u_type</obj_property>
-         <obj_property name="ObjectShortName">.u_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.j_type">
-         <obj_property name="ElementShortName">.j_type</obj_property>
-         <obj_property name="ObjectShortName">.j_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.memory_b">
-         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.memory_w">
-         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.r_type">
-         <obj_property name="ElementShortName">.r_type</obj_property>
-         <obj_property name="ObjectShortName">.r_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.i_type">
-         <obj_property name="ElementShortName">.i_type</obj_property>
-         <obj_property name="ObjectShortName">.i_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.i_type_load">
-         <obj_property name="ElementShortName">.i_type_load</obj_property>
-         <obj_property name="ObjectShortName">.i_type_load</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.i_type_alu">
-         <obj_property name="ElementShortName">.i_type_alu</obj_property>
-         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.s_type">
-         <obj_property name="ElementShortName">.s_type</obj_property>
-         <obj_property name="ObjectShortName">.s_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.b_type">
-         <obj_property name="ElementShortName">.b_type</obj_property>
-         <obj_property name="ObjectShortName">.b_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.u_type">
-         <obj_property name="ElementShortName">.u_type</obj_property>
-         <obj_property name="ObjectShortName">.u_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.j_type">
-         <obj_property name="ElementShortName">.j_type</obj_property>
-         <obj_property name="ObjectShortName">.j_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.memory_b">
-         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_data.memory_w">
-         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
-      </wvobject>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/flush">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_fetch/flush">
       <obj_property name="ElementShortName">flush</obj_property>
       <obj_property name="ObjectShortName">flush</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/jump_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/jump_addr">
       <obj_property name="ElementShortName">jump_addr[31:0]</obj_property>
       <obj_property name="ObjectShortName">jump_addr[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/trap_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/trap_addr">
       <obj_property name="ElementShortName">trap_addr[31:0]</obj_property>
       <obj_property name="ObjectShortName">trap_addr[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/pc_sel">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/pc_sel">
       <obj_property name="ElementShortName">pc_sel[1:0]</obj_property>
       <obj_property name="ObjectShortName">pc_sel[1:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/pc">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/pc">
       <obj_property name="ElementShortName">pc[31:0]</obj_property>
       <obj_property name="ObjectShortName">pc[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_addr">
       <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
       <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/pc_id">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/pc_id">
       <obj_property name="ElementShortName">pc_id[31:0]</obj_property>
       <obj_property name="ObjectShortName">pc_id[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_fetch/inst_id">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id">
       <obj_property name="ElementShortName">inst_id</obj_property>
       <obj_property name="ObjectShortName">inst_id</obj_property>
    </wvobject>
    <wvobject type="group" fp_name="group34">
       <obj_property name="label">IF/ID</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/clk">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/clk">
          <obj_property name="ElementShortName">clk</obj_property>
          <obj_property name="ObjectShortName">clk</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/clk_en">
          <obj_property name="ElementShortName">clk_en</obj_property>
          <obj_property name="ObjectShortName">clk_en</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/inst">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst">
          <obj_property name="ElementShortName">inst</obj_property>
          <obj_property name="ObjectShortName">inst</obj_property>
          <obj_property name="isExpanded"></obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/flush">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/flush">
          <obj_property name="ElementShortName">flush</obj_property>
          <obj_property name="ObjectShortName">flush</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/pc">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/pc">
          <obj_property name="ElementShortName">pc[31:0]</obj_property>
          <obj_property name="ObjectShortName">pc[31:0]</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rd0_wr_en_ex">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/rd0_wr_en_ex">
          <obj_property name="ElementShortName">rd0_wr_en_ex</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en_ex</obj_property>
       </wvobject>
-      <wvobject type="other" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/alu_src1_ex">
+      <wvobject type="other" fp_name="/riscv_small_tb/duv/u_instruction_decode/alu_src1_ex">
          <obj_property name="ElementShortName">alu_src1_ex</obj_property>
          <obj_property name="ObjectShortName">alu_src1_ex</obj_property>
       </wvobject>
-      <wvobject type="other" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/alu_src2_ex">
+      <wvobject type="other" fp_name="/riscv_small_tb/duv/u_instruction_decode/alu_src2_ex">
          <obj_property name="ElementShortName">alu_src2_ex</obj_property>
          <obj_property name="ObjectShortName">alu_src2_ex</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/pc_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/pc_ex">
          <obj_property name="ElementShortName">pc_ex[31:0]</obj_property>
          <obj_property name="ObjectShortName">pc_ex[31:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rs1_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/rs1_ex">
          <obj_property name="ElementShortName">rs1_ex[31:0]</obj_property>
          <obj_property name="ObjectShortName">rs1_ex[31:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rs2_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/rs2_ex">
          <obj_property name="ElementShortName">rs2_ex[31:0]</obj_property>
          <obj_property name="ObjectShortName">rs2_ex[31:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/imm_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/imm_ex">
          <obj_property name="ElementShortName">imm_ex[31:0]</obj_property>
          <obj_property name="ObjectShortName">imm_ex[31:0]</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/data_rd_en_ex">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/data_rd_en_ex">
          <obj_property name="ElementShortName">data_rd_en_ex</obj_property>
          <obj_property name="ObjectShortName">data_rd_en_ex</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/data_wr_en_ex">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/data_wr_en_ex">
          <obj_property name="ElementShortName">data_wr_en_ex</obj_property>
          <obj_property name="ObjectShortName">data_wr_en_ex</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/alu_op_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/alu_op_ex">
          <obj_property name="ElementShortName">alu_op_ex[3:0]</obj_property>
          <obj_property name="ObjectShortName">alu_op_ex[3:0]</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/branch_taken">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/branch_taken">
          <obj_property name="ElementShortName">branch_taken</obj_property>
          <obj_property name="ObjectShortName">branch_taken</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/jump_addr">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/jump_addr">
          <obj_property name="ElementShortName">jump_addr[31:0]</obj_property>
          <obj_property name="ObjectShortName">jump_addr[31:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/funct3_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/funct3_ex">
          <obj_property name="ElementShortName">funct3_ex[2:0]</obj_property>
          <obj_property name="ObjectShortName">funct3_ex[2:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rd0_addr_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/rd0_addr_ex">
          <obj_property name="ElementShortName">rd0_addr_ex[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_ex[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rs1_addr_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/rs1_addr_ex">
          <obj_property name="ElementShortName">rs1_addr_ex[4:0]</obj_property>
          <obj_property name="ObjectShortName">rs1_addr_ex[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rs2_addr_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/rs2_addr_ex">
          <obj_property name="ElementShortName">rs2_addr_ex[4:0]</obj_property>
          <obj_property name="ObjectShortName">rs2_addr_ex[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/regs">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/regs">
          <obj_property name="ElementShortName">regs[1:31]</obj_property>
          <obj_property name="ObjectShortName">regs[1:31]</obj_property>
          <obj_property name="isExpanded"></obj_property>
@@ -261,119 +180,119 @@
    <wvobject type="group" fp_name="group71">
       <obj_property name="label">ID/EX</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/clk">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/clk">
          <obj_property name="ElementShortName">clk</obj_property>
          <obj_property name="ObjectShortName">clk</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/clk_en">
          <obj_property name="ElementShortName">clk_en</obj_property>
          <obj_property name="ObjectShortName">clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/rst_n">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/rst_n">
          <obj_property name="ElementShortName">rst_n</obj_property>
          <obj_property name="ObjectShortName">rst_n</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/alu_op">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/alu_op">
          <obj_property name="ElementShortName">alu_op[3:0]</obj_property>
          <obj_property name="ObjectShortName">alu_op[3:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/alu_src1">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/alu_src1">
          <obj_property name="ElementShortName">alu_src1[1:0]</obj_property>
          <obj_property name="ObjectShortName">alu_src1[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/alu_src2">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/alu_src2">
          <obj_property name="ElementShortName">alu_src2[1:0]</obj_property>
          <obj_property name="ObjectShortName">alu_src2[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/storage_src">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/storage_src">
          <obj_property name="ElementShortName">storage_src[1:0]</obj_property>
          <obj_property name="ObjectShortName">storage_src[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/pc">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/pc">
          <obj_property name="ElementShortName">pc</obj_property>
          <obj_property name="ObjectShortName">pc</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/rs1">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/rs1">
          <obj_property name="ElementShortName">rs1</obj_property>
          <obj_property name="ObjectShortName">rs1</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/rs2">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/rs2">
          <obj_property name="ElementShortName">rs2</obj_property>
          <obj_property name="ObjectShortName">rs2</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/imm">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/imm">
          <obj_property name="ElementShortName">imm</obj_property>
          <obj_property name="ObjectShortName">imm</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/rd0_data">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/rd0_data">
          <obj_property name="ElementShortName">rd0_data</obj_property>
          <obj_property name="ObjectShortName">rd0_data</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/rd0_wr_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/rd0_wr_en">
          <obj_property name="ElementShortName">rd0_wr_en</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/data_rd_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/data_rd_en">
          <obj_property name="ElementShortName">data_rd_en</obj_property>
          <obj_property name="ObjectShortName">data_rd_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/data_wr_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/data_wr_en">
          <obj_property name="ElementShortName">data_wr_en</obj_property>
          <obj_property name="ObjectShortName">data_wr_en</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/funct3">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/funct3">
          <obj_property name="ElementShortName">funct3[2:0]</obj_property>
          <obj_property name="ObjectShortName">funct3[2:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/rd0_addr">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/rd0_addr">
          <obj_property name="ElementShortName">rd0_addr[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr[4:0]</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/flush">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/flush">
          <obj_property name="ElementShortName">flush</obj_property>
          <obj_property name="ObjectShortName">flush</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/u_alu/alu_op">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/u_alu/alu_op">
          <obj_property name="ElementShortName">alu_op[3:0]</obj_property>
          <obj_property name="ObjectShortName">alu_op[3:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/u_alu/alu_data1">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/u_alu/alu_data1">
          <obj_property name="ElementShortName">alu_data1</obj_property>
          <obj_property name="ObjectShortName">alu_data1</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/u_alu/alu_data2">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/u_alu/alu_data2">
          <obj_property name="ElementShortName">alu_data2</obj_property>
          <obj_property name="ObjectShortName">alu_data2</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/u_alu/alu_result">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/u_alu/alu_result">
          <obj_property name="ElementShortName">alu_result</obj_property>
          <obj_property name="ObjectShortName">alu_result</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/alu_ma">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/alu_ma">
          <obj_property name="ElementShortName">alu_ma</obj_property>
          <obj_property name="ObjectShortName">alu_ma</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/rs2_ma">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/rs2_ma">
          <obj_property name="ElementShortName">rs2_ma</obj_property>
          <obj_property name="ObjectShortName">rs2_ma</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/rd0_wr_en_ma">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/rd0_wr_en_ma">
          <obj_property name="ElementShortName">rd0_wr_en_ma</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en_ma</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/data_rd_en_ma">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/data_rd_en_ma">
          <obj_property name="ElementShortName">data_rd_en_ma</obj_property>
          <obj_property name="ObjectShortName">data_rd_en_ma</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_exection/data_wr_en_ma">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/data_wr_en_ma">
          <obj_property name="ElementShortName">data_wr_en_ma</obj_property>
          <obj_property name="ObjectShortName">data_wr_en_ma</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/funct3_ma">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/funct3_ma">
          <obj_property name="ElementShortName">funct3_ma[2:0]</obj_property>
          <obj_property name="ObjectShortName">funct3_ma[2:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_exection/rd0_addr_ma">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_exection/rd0_addr_ma">
          <obj_property name="ElementShortName">rd0_addr_ma[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_ma[4:0]</obj_property>
       </wvobject>
@@ -381,59 +300,59 @@
    <wvobject type="group" fp_name="group101">
       <obj_property name="label">EX/MA</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/clk">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/clk">
          <obj_property name="ElementShortName">clk</obj_property>
          <obj_property name="ObjectShortName">clk</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/clk_en">
          <obj_property name="ElementShortName">clk_en</obj_property>
          <obj_property name="ObjectShortName">clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/rst_n">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/rst_n">
          <obj_property name="ElementShortName">rst_n</obj_property>
          <obj_property name="ObjectShortName">rst_n</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/alu_result">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/alu_result">
          <obj_property name="ElementShortName">alu_result</obj_property>
          <obj_property name="ObjectShortName">alu_result</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/data">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/data">
          <obj_property name="ElementShortName">data</obj_property>
          <obj_property name="ObjectShortName">data</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/rd0_wr_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/rd0_wr_en">
          <obj_property name="ElementShortName">rd0_wr_en</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/data_rd_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/data_rd_en">
          <obj_property name="ElementShortName">data_rd_en</obj_property>
          <obj_property name="ObjectShortName">data_rd_en</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/rd_wr_ctrl">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/rd_wr_ctrl">
          <obj_property name="ElementShortName">rd_wr_ctrl[2:0]</obj_property>
          <obj_property name="ObjectShortName">rd_wr_ctrl[2:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/rd0_addr">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/rd0_addr">
          <obj_property name="ElementShortName">rd0_addr[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/alu_wb">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/alu_wb">
          <obj_property name="ElementShortName">alu_wb</obj_property>
          <obj_property name="ObjectShortName">alu_wb</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/rd0_wr_en_wb">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/rd0_wr_en_wb">
          <obj_property name="ElementShortName">rd0_wr_en_wb</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en_wb</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_memory_access/wb_mux_sel_wb">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/wb_mux_sel_wb">
          <obj_property name="ElementShortName">wb_mux_sel_wb</obj_property>
          <obj_property name="ObjectShortName">wb_mux_sel_wb</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/ld_data_wb">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/ld_data_wb">
          <obj_property name="ElementShortName">ld_data_wb</obj_property>
          <obj_property name="ObjectShortName">ld_data_wb</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_memory_access/rd0_addr_wb">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_memory_access/rd0_addr_wb">
          <obj_property name="ElementShortName">rd0_addr_wb[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_wb[4:0]</obj_property>
       </wvobject>
@@ -441,15 +360,15 @@
    <wvobject type="group" fp_name="group117">
       <obj_property name="label">MA/WB</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rd0_addr_wb">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/rd0_addr_wb">
          <obj_property name="ElementShortName">rd0_addr_wb[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_wb[4:0]</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/rd0_wr_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/rd0_wr_en">
          <obj_property name="ElementShortName">rd0_wr_en</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/regs">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/regs">
          <obj_property name="ElementShortName">regs[1:31]</obj_property>
          <obj_property name="ObjectShortName">regs[1:31]</obj_property>
          <obj_property name="isExpanded"></obj_property>
@@ -458,167 +377,167 @@
    <wvobject type="group" fp_name="group151">
       <obj_property name="label">CTRL</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/clk">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/clk">
          <obj_property name="ElementShortName">clk</obj_property>
          <obj_property name="ObjectShortName">clk</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/clk_en">
          <obj_property name="ElementShortName">clk_en</obj_property>
          <obj_property name="ObjectShortName">clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/rst_n">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/rst_n">
          <obj_property name="ElementShortName">rst_n</obj_property>
          <obj_property name="ObjectShortName">rst_n</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rs1_addr_id">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rs1_addr_id">
          <obj_property name="ElementShortName">rs1_addr_id[4:0]</obj_property>
          <obj_property name="ObjectShortName">rs1_addr_id[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rs2_addr_id">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rs2_addr_id">
          <obj_property name="ElementShortName">rs2_addr_id[4:0]</obj_property>
          <obj_property name="ObjectShortName">rs2_addr_id[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rs1_addr_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rs1_addr_ex">
          <obj_property name="ElementShortName">rs1_addr_ex[4:0]</obj_property>
          <obj_property name="ObjectShortName">rs1_addr_ex[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rs2_addr_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rs2_addr_ex">
          <obj_property name="ElementShortName">rs2_addr_ex[4:0]</obj_property>
          <obj_property name="ObjectShortName">rs2_addr_ex[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rd0_addr_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rd0_addr_ex">
          <obj_property name="ElementShortName">rd0_addr_ex[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_ex[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rd0_addr_ma">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rd0_addr_ma">
          <obj_property name="ElementShortName">rd0_addr_ma[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_ma[4:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/rd0_addr_wb">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/rd0_addr_wb">
          <obj_property name="ElementShortName">rd0_addr_wb[4:0]</obj_property>
          <obj_property name="ObjectShortName">rd0_addr_wb[4:0]</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/rd0_wr_en_ex">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/rd0_wr_en_ex">
          <obj_property name="ElementShortName">rd0_wr_en_ex</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en_ex</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/rd0_wr_en_ma">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/rd0_wr_en_ma">
          <obj_property name="ElementShortName">rd0_wr_en_ma</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en_ma</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/rd0_wr_en_wb">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/rd0_wr_en_wb">
          <obj_property name="ElementShortName">rd0_wr_en_wb</obj_property>
          <obj_property name="ObjectShortName">rd0_wr_en_wb</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/data_rd_en_ex">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/data_rd_en_ex">
          <obj_property name="ElementShortName">data_rd_en_ex</obj_property>
          <obj_property name="ObjectShortName">data_rd_en_ex</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/data_rd_en_ma">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/data_rd_en_ma">
          <obj_property name="ElementShortName">data_rd_en_ma</obj_property>
          <obj_property name="ObjectShortName">data_rd_en_ma</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/data_wr_en_ex">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/data_wr_en_ex">
          <obj_property name="ElementShortName">data_wr_en_ex</obj_property>
          <obj_property name="ObjectShortName">data_wr_en_ex</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/cond_jump">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/cond_jump">
          <obj_property name="ElementShortName">cond_jump</obj_property>
          <obj_property name="ObjectShortName">cond_jump</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/branch_taken">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/branch_taken">
          <obj_property name="ElementShortName">branch_taken</obj_property>
          <obj_property name="ObjectShortName">branch_taken</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/exception">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/exception">
          <obj_property name="ElementShortName">exception</obj_property>
          <obj_property name="ObjectShortName">exception</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/pc_ex">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/pc_ex">
          <obj_property name="ElementShortName">pc_ex</obj_property>
          <obj_property name="ObjectShortName">pc_ex</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/inst_ready">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/inst_ready">
          <obj_property name="ElementShortName">inst_ready</obj_property>
          <obj_property name="ObjectShortName">inst_ready</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/data_ready">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/data_ready">
          <obj_property name="ElementShortName">data_ready</obj_property>
          <obj_property name="ObjectShortName">data_ready</obj_property>
       </wvobject>
-      <wvobject type="other" fp_name="/riscv_small_tb/dut_inst/u_control/alu_src1_ex">
+      <wvobject type="other" fp_name="/riscv_small_tb/duv/u_control/alu_src1_ex">
          <obj_property name="ElementShortName">alu_src1_ex</obj_property>
          <obj_property name="ObjectShortName">alu_src1_ex</obj_property>
       </wvobject>
-      <wvobject type="other" fp_name="/riscv_small_tb/dut_inst/u_control/alu_src2_ex">
+      <wvobject type="other" fp_name="/riscv_small_tb/duv/u_control/alu_src2_ex">
          <obj_property name="ElementShortName">alu_src2_ex</obj_property>
          <obj_property name="ObjectShortName">alu_src2_ex</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/alu_src1">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/alu_src1">
          <obj_property name="ElementShortName">alu_src1[1:0]</obj_property>
          <obj_property name="ObjectShortName">alu_src1[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/alu_src2">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/alu_src2">
          <obj_property name="ElementShortName">alu_src2[1:0]</obj_property>
          <obj_property name="ObjectShortName">alu_src2[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/storage_src">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/storage_src">
          <obj_property name="ElementShortName">storage_src[1:0]</obj_property>
          <obj_property name="ObjectShortName">storage_src[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/jmp_src1">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/jmp_src1">
          <obj_property name="ElementShortName">jmp_src1[1:0]</obj_property>
          <obj_property name="ObjectShortName">jmp_src1[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/jmp_src2">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/jmp_src2">
          <obj_property name="ElementShortName">jmp_src2[1:0]</obj_property>
          <obj_property name="ObjectShortName">jmp_src2[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/pc_sel">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/pc_sel">
          <obj_property name="ElementShortName">pc_sel[1:0]</obj_property>
          <obj_property name="ObjectShortName">pc_sel[1:0]</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/trap_addr">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/trap_addr">
          <obj_property name="ElementShortName">trap_addr</obj_property>
          <obj_property name="ObjectShortName">trap_addr</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/inst_rd_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/inst_rd_en">
          <obj_property name="ElementShortName">inst_rd_en</obj_property>
          <obj_property name="ObjectShortName">inst_rd_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/if_id_clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/if_id_clk_en">
          <obj_property name="ElementShortName">if_id_clk_en</obj_property>
          <obj_property name="ObjectShortName">if_id_clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/id_ex_clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/id_ex_clk_en">
          <obj_property name="ElementShortName">id_ex_clk_en</obj_property>
          <obj_property name="ObjectShortName">id_ex_clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/ex_ma_clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/ex_ma_clk_en">
          <obj_property name="ElementShortName">ex_ma_clk_en</obj_property>
          <obj_property name="ObjectShortName">ex_ma_clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/ma_wb_clk_en">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/ma_wb_clk_en">
          <obj_property name="ElementShortName">ma_wb_clk_en</obj_property>
          <obj_property name="ObjectShortName">ma_wb_clk_en</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/if_id_flush">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/if_id_flush">
          <obj_property name="ElementShortName">if_id_flush</obj_property>
          <obj_property name="ObjectShortName">if_id_flush</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/id_ex_flush">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/id_ex_flush">
          <obj_property name="ElementShortName">id_ex_flush</obj_property>
          <obj_property name="ObjectShortName">id_ex_flush</obj_property>
       </wvobject>
-      <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_control/ex_ma_flush">
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/ex_ma_flush">
          <obj_property name="ElementShortName">ex_ma_flush</obj_property>
          <obj_property name="ObjectShortName">ex_ma_flush</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/sepc">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/sepc">
          <obj_property name="ElementShortName">sepc</obj_property>
          <obj_property name="ObjectShortName">sepc</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_control/scause">
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_control/scause">
          <obj_property name="ElementShortName">scause</obj_property>
          <obj_property name="ObjectShortName">scause</obj_property>
       </wvobject>
@@ -631,64 +550,64 @@
       <obj_property name="label">IF</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/rst_n">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/rst_n">
       <obj_property name="ElementShortName">rst_n</obj_property>
       <obj_property name="ObjectShortName">rst_n</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/clk_en">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/clk_en">
       <obj_property name="ElementShortName">clk_en</obj_property>
       <obj_property name="ObjectShortName">clk_en</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/clk">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_addr">
       <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
       <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
       <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.memory_w">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.memory_w">
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
       <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
       <obj_property name="label">instruction[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.r_type.opcode">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.r_type.opcode">
       <obj_property name="ElementShortName">.opcode[6:0]</obj_property>
       <obj_property name="ObjectShortName">.opcode[6:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.r_type.funct3">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.r_type.funct3">
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
       <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
       <obj_property name="label">ALU_C</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.i_type_alu.funct3">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.i_type_alu.funct3">
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
       <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
       <obj_property name="label">ALUI_C</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.i_type_load.funct3">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.i_type_load.funct3">
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
       <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
       <obj_property name="label">LOAD_C</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.s_type.funct3">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.s_type.funct3">
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
       <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
       <obj_property name="label">STORE_C</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data.b_type.funct3">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data.b_type.funct3">
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
       <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
       <obj_property name="label">BRCH_C</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/inst_data">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data">
       <obj_property name="ElementShortName">inst_data</obj_property>
       <obj_property name="ObjectShortName">inst_data</obj_property>
    </wvobject>
@@ -696,101 +615,297 @@
       <obj_property name="label">WB</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/clk">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/clk_en">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/clk_en">
       <obj_property name="ElementShortName">clk_en</obj_property>
       <obj_property name="ObjectShortName">clk_en</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rst_n">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rst_n">
       <obj_property name="ElementShortName">rst_n</obj_property>
       <obj_property name="ObjectShortName">rst_n</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rs1_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rs1_addr">
       <obj_property name="ElementShortName">rs1_addr[4:0]</obj_property>
       <obj_property name="ObjectShortName">rs1_addr[4:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rs2_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rs2_addr">
       <obj_property name="ElementShortName">rs2_addr[4:0]</obj_property>
       <obj_property name="ObjectShortName">rs2_addr[4:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rd0_addr">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rd0_addr">
       <obj_property name="ElementShortName">rd0_addr[4:0]</obj_property>
       <obj_property name="ObjectShortName">rd0_addr[4:0]</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rd0_wr_en">
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rd0_wr_en">
       <obj_property name="ElementShortName">rd0_wr_en</obj_property>
       <obj_property name="ObjectShortName">rd0_wr_en</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rd0_data">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rd0_data">
       <obj_property name="ElementShortName">rd0_data</obj_property>
       <obj_property name="ObjectShortName">rd0_data</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rs1">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rs1">
       <obj_property name="ElementShortName">rs1</obj_property>
       <obj_property name="ObjectShortName">rs1</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/rs2">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/rs2">
       <obj_property name="ElementShortName">rs2</obj_property>
       <obj_property name="ObjectShortName">rs2</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/dut_inst/u_instruction_decode/u_reg_file/regs">
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/u_reg_file/regs">
       <obj_property name="ElementShortName">regs[1:31]</obj_property>
       <obj_property name="ObjectShortName">regs[1:31]</obj_property>
       <obj_property name="isExpanded"></obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv/clk">
+   <wvobject fp_name="divider223" type="divider">
+      <obj_property name="label">drv_cb</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_mp/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv/reset">
-      <obj_property name="ElementShortName">reset</obj_property>
-      <obj_property name="ObjectShortName">reset</obj_property>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_mp/rst_n">
+      <obj_property name="ElementShortName">rst_n</obj_property>
+      <obj_property name="ObjectShortName">rst_n</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/intf/dr_cb/inst_addr">
-      <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
-      <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/dr_cb/inst_rd_en">
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/inst_rd_en">
       <obj_property name="ElementShortName">inst_rd_en</obj_property>
       <obj_property name="ObjectShortName">inst_rd_en</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/dr_cb/inst_ready">
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_cb/inst_addr">
+      <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
+      <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/inst_ready">
       <obj_property name="ElementShortName">inst_ready</obj_property>
       <obj_property name="ObjectShortName">inst_ready</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/intf/dr_cb/inst_data">
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_cb/inst_data">
       <obj_property name="ElementShortName">inst_data</obj_property>
       <obj_property name="ObjectShortName">inst_data</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/intf/dr_cb/data_rd_wr_ctrl">
-      <obj_property name="ElementShortName">data_rd_wr_ctrl[1:0]</obj_property>
-      <obj_property name="ObjectShortName">data_rd_wr_ctrl[1:0]</obj_property>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/data_rd_en">
+      <obj_property name="ElementShortName">data_rd_en</obj_property>
+      <obj_property name="ObjectShortName">data_rd_en</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/intf/dr_cb/data_addr">
-      <obj_property name="ElementShortName">data_addr</obj_property>
-      <obj_property name="ObjectShortName">data_addr</obj_property>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/data_wr_en">
+      <obj_property name="ElementShortName">data_wr_en</obj_property>
+      <obj_property name="ObjectShortName">data_wr_en</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/dr_cb/data_wr_en_ma">
-      <obj_property name="ElementShortName">data_wr_en_ma</obj_property>
-      <obj_property name="ObjectShortName">data_wr_en_ma</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/intf/dr_cb/data_wr">
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_cb/data_wr">
       <obj_property name="ElementShortName">data_wr</obj_property>
       <obj_property name="ObjectShortName">data_wr</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/dr_cb/data_rd_en_ma">
-      <obj_property name="ElementShortName">data_rd_en_ma</obj_property>
-      <obj_property name="ObjectShortName">data_rd_en_ma</obj_property>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_cb/data_addr">
+      <obj_property name="ElementShortName">data_addr</obj_property>
+      <obj_property name="ObjectShortName">data_addr</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/riscv_small_tb/intf/dr_cb/data_rd">
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_cb/data_rd_wr_ctrl">
+      <obj_property name="ElementShortName">data_rd_wr_ctrl[1:0]</obj_property>
+      <obj_property name="ObjectShortName">data_rd_wr_ctrl[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_cb/data_rd">
       <obj_property name="ElementShortName">data_rd</obj_property>
       <obj_property name="ObjectShortName">data_rd</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/riscv_small_tb/intf/dr_cb/data_ready">
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/data_ready">
       <obj_property name="ElementShortName">data_ready</obj_property>
       <obj_property name="ObjectShortName">data_ready</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/exception">
+      <obj_property name="ElementShortName">exception</obj_property>
+      <obj_property name="ObjectShortName">exception</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/drv_cb/clk_en">
+      <obj_property name="ElementShortName">clk_en</obj_property>
+      <obj_property name="ObjectShortName">clk_en</obj_property>
+   </wvobject>
+   <wvobject fp_name="divider222" type="divider">
+      <obj_property name="label">mon_cb</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_mp/clk">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_mp/rst_n">
+      <obj_property name="ElementShortName">rst_n</obj_property>
+      <obj_property name="ObjectShortName">rst_n</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/clk_en">
+      <obj_property name="ElementShortName">clk_en</obj_property>
+      <obj_property name="ObjectShortName">clk_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/exception">
+      <obj_property name="ElementShortName">exception</obj_property>
+      <obj_property name="ObjectShortName">exception</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/inst_ready">
+      <obj_property name="ElementShortName">inst_ready</obj_property>
+      <obj_property name="ObjectShortName">inst_ready</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_cb/inst_data">
+      <obj_property name="ElementShortName">inst_data</obj_property>
+      <obj_property name="ObjectShortName">inst_data</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_cb/inst_addr">
+      <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
+      <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/inst_rd_en">
+      <obj_property name="ElementShortName">inst_rd_en</obj_property>
+      <obj_property name="ObjectShortName">inst_rd_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/data_ready">
+      <obj_property name="ElementShortName">data_ready</obj_property>
+      <obj_property name="ObjectShortName">data_ready</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_cb/data_rd">
+      <obj_property name="ElementShortName">data_rd</obj_property>
+      <obj_property name="ObjectShortName">data_rd</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/data_rd_en">
+      <obj_property name="ElementShortName">data_rd_en</obj_property>
+      <obj_property name="ObjectShortName">data_rd_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/mon_cb/data_wr_en">
+      <obj_property name="ElementShortName">data_wr_en</obj_property>
+      <obj_property name="ObjectShortName">data_wr_en</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_cb/data_wr">
+      <obj_property name="ElementShortName">data_wr</obj_property>
+      <obj_property name="ObjectShortName">data_wr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_cb/data_addr">
+      <obj_property name="ElementShortName">data_addr</obj_property>
+      <obj_property name="ObjectShortName">data_addr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_cb/data_rd_wr_ctrl">
+      <obj_property name="ElementShortName">data_rd_wr_ctrl[1:0]</obj_property>
+      <obj_property name="ObjectShortName">data_rd_wr_ctrl[1:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="divider235" type="divider">
+      <obj_property name="label">signals duv</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/clk">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/clk_en">
+      <obj_property name="ElementShortName">clk_en</obj_property>
+      <obj_property name="ObjectShortName">clk_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/rst_n">
+      <obj_property name="ElementShortName">rst_n</obj_property>
+      <obj_property name="ObjectShortName">rst_n</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/exception">
+      <obj_property name="ElementShortName">exception</obj_property>
+      <obj_property name="ObjectShortName">exception</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/inst_ready">
+      <obj_property name="ElementShortName">inst_ready</obj_property>
+      <obj_property name="ObjectShortName">inst_ready</obj_property>
+      <obj_property name="CustomSignalColor">#00FFFF</obj_property>
+      <obj_property name="UseCustomSignalColor">true</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_data">
+      <obj_property name="ElementShortName">inst_data</obj_property>
+      <obj_property name="ObjectShortName">inst_data</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/inst_addr">
+      <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
+      <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
+      <obj_property name="CustomSignalColor">#FFA500</obj_property>
+      <obj_property name="UseCustomSignalColor">true</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/inst_rd_en">
+      <obj_property name="ElementShortName">inst_rd_en</obj_property>
+      <obj_property name="ObjectShortName">inst_rd_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/duv/data_ready">
+      <obj_property name="ElementShortName">data_ready</obj_property>
+      <obj_property name="ObjectShortName">data_ready</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/data_rd">
+      <obj_property name="ElementShortName">data_rd</obj_property>
+      <obj_property name="ObjectShortName">data_rd</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/data_wr">
+      <obj_property name="ElementShortName">data_wr</obj_property>
+      <obj_property name="ObjectShortName">data_wr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/data_addr">
+      <obj_property name="ElementShortName">data_addr</obj_property>
+      <obj_property name="ObjectShortName">data_addr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/duv/data_rd_wr_ctrl">
+      <obj_property name="ElementShortName">data_rd_wr_ctrl[1:0]</obj_property>
+      <obj_property name="ObjectShortName">data_rd_wr_ctrl[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/clk">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/rst_n">
+      <obj_property name="ElementShortName">rst_n</obj_property>
+      <obj_property name="ObjectShortName">rst_n</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/clk_en">
+      <obj_property name="ElementShortName">clk_en</obj_property>
+      <obj_property name="ObjectShortName">clk_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/exception">
+      <obj_property name="ElementShortName">exception</obj_property>
+      <obj_property name="ObjectShortName">exception</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/inst_ready">
+      <obj_property name="ElementShortName">inst_ready</obj_property>
+      <obj_property name="ObjectShortName">inst_ready</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/duv_mp/inst_data">
+      <obj_property name="ElementShortName">inst_data</obj_property>
+      <obj_property name="ObjectShortName">inst_data</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/duv_mp/inst_addr">
+      <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>
+      <obj_property name="ObjectShortName">inst_addr[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/inst_rd_en">
+      <obj_property name="ElementShortName">inst_rd_en</obj_property>
+      <obj_property name="ObjectShortName">inst_rd_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/data_ready">
+      <obj_property name="ElementShortName">data_ready</obj_property>
+      <obj_property name="ObjectShortName">data_ready</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/duv_mp/data_rd">
+      <obj_property name="ElementShortName">data_rd</obj_property>
+      <obj_property name="ObjectShortName">data_rd</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/data_rd_en">
+      <obj_property name="ElementShortName">data_rd_en</obj_property>
+      <obj_property name="ObjectShortName">data_rd_en</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/riscv_small_tb/intf/duv_mp/data_wr_en">
+      <obj_property name="ElementShortName">data_wr_en</obj_property>
+      <obj_property name="ObjectShortName">data_wr_en</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/duv_mp/data_wr">
+      <obj_property name="ElementShortName">data_wr</obj_property>
+      <obj_property name="ObjectShortName">data_wr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/duv_mp/data_addr">
+      <obj_property name="ElementShortName">data_addr</obj_property>
+      <obj_property name="ObjectShortName">data_addr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/riscv_small_tb/intf/duv_mp/data_rd_wr_ctrl">
+      <obj_property name="ElementShortName">data_rd_wr_ctrl[1:0]</obj_property>
+      <obj_property name="ObjectShortName">data_rd_wr_ctrl[1:0]</obj_property>
    </wvobject>
 </wave_config>

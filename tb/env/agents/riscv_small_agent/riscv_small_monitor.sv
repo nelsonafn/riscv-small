@@ -2,7 +2,7 @@
 `define RISCV_SMALL_MONITOR
 
 class riscv_small_monitor extends uvm_monitor;
-  virtual riscv_small_interface vif;
+  virtual riscv_small_interface.mon_mp vif;
   uvm_analysis_port#(riscv_small_transaction) mon2sb_port;
   `uvm_component_utils(riscv_small_monitor)
 
@@ -19,26 +19,26 @@ class riscv_small_monitor extends uvm_monitor;
 
   virtual task run_phase(uvm_phase phase);
     forever begin
-      @(vif.rc_cb);
+      @(vif.mon_cb);
       
       // Capturar transação de busca de instrução
-      if(vif.rc_cb.inst_rd_en && vif.rc_cb.inst_ready) begin
+      if(vif.mon_cb.inst_rd_en && vif.mon_cb.inst_ready) begin
         riscv_small_transaction trans = riscv_small_transaction::type_id::create("inst_trans");
         trans.op_is_inst = 1;
-        trans.captured_inst_addr = vif.rc_cb.inst_addr;
-        trans.captured_inst_data = vif.rc_cb.inst_data.memory_w;
+        trans.captured_inst_addr = vif.mon_cb.inst_addr;
+        trans.captured_inst_data = vif.mon_cb.inst_data.memory_w;
         `uvm_info("FETCH_MONITOR", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", trans.captured_inst_addr, trans.captured_inst_data), UVM_HIGH);
         // mon2sb_port.write(trans); // Opcional: enviar para SB se necessário
       end
 
       // Capturar toda transação de dado (zero-latência: cada ciclo com en=1 é válido)
-      if(vif.rc_cb.data_rd_en_ma || vif.rc_cb.data_wr_en_ma) begin
+      if(vif.mon_cb.data_rd_en || vif.mon_cb.data_wr_en) begin
         riscv_small_transaction trans = riscv_small_transaction::type_id::create("trans");
-        trans.op_is_data_read = vif.rc_cb.data_rd_en_ma;
-        trans.op_is_data_write = vif.rc_cb.data_wr_en_ma;
-        trans.captured_data_addr = vif.rc_cb.data_addr.u_data;
-        trans.captured_data_rd = vif.rc_cb.data_rd.u_data;
-        trans.captured_data_wr = vif.rc_cb.data_wr.u_data;
+        trans.op_is_data_read = vif.mon_cb.data_rd_en;
+        trans.op_is_data_write = vif.mon_cb.data_wr_en;
+        trans.captured_data_addr = vif.mon_cb.data_addr.u_data;
+        trans.captured_data_rd = vif.mon_cb.data_rd.u_data;
+        trans.captured_data_wr = vif.mon_cb.data_wr.u_data;
 
         `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h", 
           trans.op_is_data_write ? "WRITE" : "READ", 
