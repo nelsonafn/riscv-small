@@ -9,6 +9,11 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
 
   logic [31:0] inst_mem [int];
   logic [31:0] data_mem [int];
+  localparam OUTPUT_DELAY = 2;
+  localparam INPUT_DELAY = 1;
+  localparam NOP = 32'h00000033;
+  
+
 
   function new (string name, uvm_component parent);
     super.new(name, parent);
@@ -21,98 +26,110 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     drv2rm_port = new("drv2rm_port", this);
   endfunction
 
+  // TODO: Move to fv_utils_pkg package
+  // Function to convert an array of integers to a hex-formatted string
+  function automatic string to_hex_list(ref int vec[]);
+    string s = "'h{";
+    foreach (vec[i]) 
+        s = {s, $sformatf("%0h%s", vec[i], (i == vec.size()-1) ? "" : ",")};
+    return {s,"}"};
+  endfunction
+
   virtual task run_phase(uvm_phase phase);
-    int d_word_addr;
     reset();
 
     // 1. Get initial test sequence transaction
     seq_item_port.get_next_item(req);
     req.print();
-    foreach (req.instruction_addr[i]) begin
-      inst_mem[req.instruction_addr[i]] = req.instruction_list[i];
-    end
-    foreach (req.data_addr[i]) begin
-      data_mem[req.data_addr[i]] = req.data_list[i];
-    end
+    // foreach (req.instruction_addr[i]) begin
+    //   inst_mem[req.instruction_addr[i]] = req.instruction_list[i];
+    // end
+    // foreach (req.data_addr[i]) begin
+    //   data_mem[req.data_addr[i]] = req.data_list[i];
+    // end
     
     // Broadcast the full sequence item containing the subprogram
     drv2rm_port.write(req);
-    
-    // Sente PC=0 imediatamente antes de começar o loop principal
-    // para que a primeira borda do clock capture LW0 corretamente.
-    if (inst_mem.exists(0)) begin
-      vif.drv_cb.inst_data.memory_w <= inst_mem[0];
-    end
+    `uvm_info("DRIVER", "Sequence item sent to the ref model", UVM_LOW)
+
+    // Set PC=0 immediately before starting the main loop 
+    // so that the first clock edge captures LW0 correctly.
+    // if (inst_mem.exists(0)) begin
+    //   vif.inst_data.memory_w <= inst_mem[0];
+    // end
 
     seq_item_port.item_done();
-    `uvm_info("DRIVER", "Sequence item sent to the ref model", UVM_LOW)
 
     // 2. Play memory behavior
     fork
-      // --- Processo de Busca de Instrução (Combinatorial) ---
-      forever begin
-        @(vif.drv_cb);
-        vif.drv_cb.inst_ready <= 0;
-        if (vif.drv_cb.inst_rd_en) begin
-          int pc_word_addr = vif.drv_cb.inst_addr >> 2;
-          //`uvm_info("DRIVER", $sformatf("Driver read instruction: PC=0x%0h INST=0x%0h", vif.drv_cb.inst_addr, inst_mem[pc_word_addr]), UVM_LOW)
-          if (inst_mem.exists(pc_word_addr)) begin
-            vif.drv_cb.inst_data.memory_w <= inst_mem[pc_word_addr];
-            vif.drv_cb.inst_ready <= 1;
-            `uvm_info("FETCH_DRIVER", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", vif.drv_cb.inst_addr, inst_mem[pc_word_addr]), UVM_HIGH);
-          end else begin
-            vif.drv_cb.inst_data.memory_w <= 32'h00000033;
-            vif.drv_cb.inst_ready <= 0;
-            `uvm_warning("FETCH_DRIVER", $sformatf("READ_NOP: PC=0x%0h is out of range", vif.drv_cb.inst_addr));
+      // Thread 1: Instruction
+      forever begin : inst_mem_thread
+        @(posedge vif.clk);
+        vif.inst_ready <= #OUTPUT_DELAY 0; // Default
+        if (vif.inst_rd_en) begin
+          bit found = 0;
+          foreach (req.instruction_addr[i]) begin
+            if (req.instruction_addr[i] == vif.inst_addr) begin
+              vif.inst_data.memory_w <= #OUTPUT_DELAY req.instruction_list[i];
+              vif.inst_ready <= #OUTPUT_DELAY 1;
+              `uvm_info("IFETCH_DRV", $sformatf("READ_INST: PC='h%0h INST='h%0h", vif.inst_addr, req.instruction_list[i]), UVM_LOW);
+              found = 1;
+              break;
+            end
+          end
+          if (!found) begin
+            vif.inst_data.memory_w <= #OUTPUT_DELAY NOP;
+            `uvm_warning("IADDR_OOR_DRV", $sformatf("INST_OUT_OF_RANGE: PC='h%0h, INST_ADDREs=%s, INST_VECTOR=%s", vif.inst_addr, to_hex_list(req.instruction_addr), to_hex_list(req.instruction_list)));
+          end
+        end
+      end
+      // Thread 2: Data
+      forever begin : data_mem_thread
+        @(posedge vif.clk);
+        vif.data_ready <= #INPUT_DELAY 0; // Default
+        if (vif.data_rd_en || vif.data_wr_en) begin
+          bit found = 0;
+          foreach (req.data_addr[i]) begin
+            if (req.data_addr[i] == vif.data_addr.u_data) begin
+              if (vif.data_rd_en) begin
+                vif.data_rd.u_data <= #INPUT_DELAY req.data_list[i];
+                `uvm_info("DFETCH_DRV", $sformatf("ADDR='h%0h DATA='h%0h", vif.data_addr.u_data, req.data_list[i]), UVM_LOW);
+              end else begin
+                req.data_list[i] = vif.data_wr.u_data;
+                `uvm_info("DSTORE_DRV", $sformatf("ADDR='h%0h DATA='h%0h", vif.data_addr.u_data, vif.data_wr.u_data), UVM_LOW);
+              end
+              vif.data_ready <= #INPUT_DELAY 1;
+              found = 1;
+              break;
+            end
+          end
+          if (!found) begin
+            `uvm_warning("DATA_OOR_DRV", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h, DATA_ADDRs=%s, DATA_VECTOR=%s, R/W=%s", vif.data_addr.u_data, to_hex_list(req.data_addr), to_hex_list(req.data_list), vif.data_rd_en ? "READ" : "WRITE"));
           end
         end
       end
 
-      // --- Processo de Acesso a Dados (Combinatorial) ---
-      forever begin
-        @(vif.drv_cb);
-        vif.drv_cb.data_ready <= 0;
-        //@(vif.drv_cb.data_addr or vif.drv_cb.data_rd_en_ma or vif.drv_cb.data_wr_en_ma or vif.drv_cb.data_wr);
-        if (vif.drv_cb.data_rd_en) begin
-          int d_word_addr = vif.drv_cb.data_addr.u_data >> 2;
-          if (data_mem.exists(d_word_addr)) begin
-            vif.drv_cb.data_rd.u_data <= data_mem[d_word_addr];
-            vif.drv_cb.data_ready <= 1;
-            `uvm_info("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h DATA=0x%0h", vif.drv_cb.data_addr.u_data, data_mem[d_word_addr]), UVM_HIGH);
-          end else begin
-            vif.drv_cb.data_rd.u_data <= 0;
-            vif.drv_cb.data_ready <= 0;
-            `uvm_warning("DATA_DRIVER", $sformatf("READ_DATA: ADDR=0x%0h is out of range", vif.drv_cb.data_addr.u_data));
-          end
-        end
-        
-        if (vif.drv_cb.data_wr_en) begin
-          int d_word_addr = vif.drv_cb.data_addr.u_data >> 2;
-          if (data_mem.exists(d_word_addr)) begin
-            data_mem[d_word_addr] = vif.drv_cb.data_wr.u_data;
-            vif.drv_cb.data_ready <= 1;
-            `uvm_info("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h DATA=0x%0h", vif.drv_cb.data_addr.u_data, vif.drv_cb.data_wr.u_data), UVM_HIGH);
-          end else begin
-            vif.drv_cb.data_ready <= 0;
-            `uvm_warning("DATA_DRIVER", $sformatf("WRITE_DATA: ADDR=0x%0h is out of range", vif.drv_cb.data_addr.u_data));
-          end
-        end
+      // Thread 3: Termination Detector (Example: Wait for PC to reach its limit)
+      begin : end_detector
+        // Define what "finishing" means for your testbench
+        // Example: Wait for a HALT signal or for the PC to reach a final value
+        wait(vif.inst_addr == req.instruction_addr[req.instruction_addr.size()-1]);
+        `uvm_info("DRIVER", "Subprogram completion detected!", UVM_LOW)
       end
+    join_any // Exits as soon as the Termination Detector (Thread 3) finishes
 
-      // --- Processo de Sinais de Controle (Síncrono via drv_cb) ---
-      //forever begin
-      //  @(vif.drv_cb);
-      //  vif.drv_cb.inst_ready <= 1;
-      //  vif.drv_cb.data_ready <= 1;
-      //end
-    join
+    // 3. Cleanup and item completion
+    disable fork; // Kills the 'forever' memory threads
+    seq_item_port.item_done();
+    `uvm_info("DRIVER", "Sequence item finished and released", UVM_LOW)
+    //reset();
   endtask
 
   task reset();
-    vif.drv_cb.inst_ready <= 0;
-    vif.drv_cb.inst_data.memory_w <= 0;
-    vif.drv_cb.data_ready <= 0;
-    vif.drv_cb.data_rd.u_data <= 0;
+    vif.inst_ready <= #OUTPUT_DELAY 0;
+    vif.inst_data.memory_w <= #OUTPUT_DELAY 'bx;
+    vif.data_ready <= #INPUT_DELAY 0;
+    vif.data_rd.u_data <= #INPUT_DELAY 'bx;
   endtask
 
 endclass : riscv_small_driver

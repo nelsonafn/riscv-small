@@ -4,12 +4,12 @@
 // ============================================================================
 // riscv_small_ref_model
 //
-// Modelo de Referência UVM (ISS - Instruction Set Simulator).
-// Recebe o subprograma completo (instruções + estado inicial da memória) do
-// Driver via rm_export, executa um ISS interno e publica uma transação de
-// "previsão" para cada instrução SW encontrada, via rm2sb_port para o
-// Scoreboard. O Scoreboard compara essas previsões com as observações reais
-// do Monitor vindo da DUT.
+// UVM Reference Model (ISS - Instruction Set Simulator).
+// Receives the complete subprogram (instructions + initial memory state) from 
+// the Driver via rm_export, executes an internal ISS, and publishes a 
+// "prediction" transaction for each found SW instruction, via rm2sb_port to 
+// the Scoreboard. The Scoreboard compares these predictions with the actual 
+// observations from the Monitor coming from the DUT.
 //
 // Author: Nelson Alves nelsonafn@gmail.com
 // ============================================================================
@@ -17,14 +17,14 @@ class riscv_small_ref_model extends uvm_component;
   
   `uvm_component_utils(riscv_small_ref_model)
 
-  // ---- Portos TLM ----------------------------------------------------------
-  // Entrada: subprograma enviado pelo Driver
+  // ---- TLM Ports -----------------------------------------------------------
+  // Input: subprogram sent by the Driver
   uvm_analysis_export #(riscv_small_transaction) rm_export;
   uvm_tlm_analysis_fifo #(riscv_small_transaction) rm_fifo;
-  // Saída: previsões de store para o Scoreboard
+  // Output: store predictions for the Scoreboard
   uvm_analysis_port #(riscv_small_transaction) rm2sb_port;
 
-  // ---- Construtor ----------------------------------------------------------
+  // ---- Constructor ---------------------------------------------------------
   function new(string name = "riscv_small_ref_model", uvm_component parent);
     super.new(name, parent);
   endfunction
@@ -42,30 +42,30 @@ class riscv_small_ref_model extends uvm_component;
     rm_export.connect(rm_fifo.analysis_export);
   endfunction
 
-  // ---- Run phase: ISS principal --------------------------------------------
+  // ---- Run phase: Main ISS -------------------------------------------------
   virtual task run_phase(uvm_phase phase);
-    riscv_small_transaction subprog; // subprograma recebido do Driver
+    riscv_small_transaction subprog; // subprogram received from the Driver
 
     forever begin
-      // 1. Aguardar subprograma do Driver
+      // 1. Wait for subprogram from the Driver
       rm_fifo.get(subprog);
       `uvm_info(get_full_name(),
-        $sformatf("ISS: Subprograma recebido — %0d instruções, %0d posições de dados",
+        $sformatf("ISS: Subprogram received — %0d instructions, %0d data positions",
           subprog.instruction_list.size(), subprog.data_addr.size()),
         UVM_LOW)
 
-      // 2. Inicializar estado interno do ISS
+      // 2. Initialize internal ISS state
       begin
-        int reg_file[32];   // Banco de registradores (x0..x31)
-        int iss_mem[int];   // Memória de dados (word address)
+        int reg_file[32];   // Register file (x0..x31)
+        int iss_mem[int];   // Data memory (word address)
 
-        for (int i = 0; i < 32; i++) reg_file[i] = 0; // x0 sempre zero
+        for (int i = 0; i < 32; i++) reg_file[i] = 0; // x0 is always zero
 
-        // Popular memória com os dados iniciais (word address == data_addr[i])
+        // Populate memory with initial data (word address == data_addr[i])
         foreach (subprog.data_addr[i])
           iss_mem[subprog.data_addr[i]] = subprog.data_list[i];
 
-        // 3. Simular cada instrução do subprograma
+        // 3. Simulate each instruction in the subprogram
         foreach (subprog.instruction_list[i]) begin
           bit [31:0] inst   = subprog.instruction_list[i];
           bit [6:0]  opcode = inst[6:0];
@@ -99,7 +99,7 @@ class riscv_small_ref_model extends uvm_component;
                 rs2, reg_file[rs2], byte_addr, word_addr),
               UVM_MEDIUM)
 
-            // Publicar previsão para o Scoreboard
+            // Publish prediction to the Scoreboard
             begin
               riscv_small_transaction pred;
               pred = riscv_small_transaction::type_id::create("pred");
@@ -107,17 +107,17 @@ class riscv_small_ref_model extends uvm_component;
               pred.op_is_data_read     = 0;
               pred.captured_data_addr  = byte_addr;
               pred.captured_data_wr    = reg_file[rs2];
-              // Também carregar o subprograma para impressão no Scoreboard
+              // Also load the subprogram for printing in the Scoreboard
               pred.instruction_list    = subprog.instruction_list;
               pred.data_addr           = subprog.data_addr;
               pred.data_list           = subprog.data_list;
               rm2sb_port.write(pred);
             end
           end
-          // Demais opcodes (NOP, etc.) são ignorados pelo ISS
+          // Other opcodes (NOP, etc.) are ignored by the ISS
         end // foreach instruction
 
-        `uvm_info(get_full_name(), "ISS: Subprograma concluído.", UVM_LOW)
+        `uvm_info(get_full_name(), "ISS: Subprogram completed.", UVM_LOW)
       end
     end // forever
   endtask : run_phase

@@ -56,18 +56,20 @@ import riscv_definitions_pkg::*;
 	output regAddr_t rd0_addr_wb  //[out] Reg destination (rd) addr to memory access (ma)
 );
 
-    dataBus_u ld_data;
+    //dataBus_u ld_data;
+    funct3ITypeLOAD_e rd_wr_ctrl_wb;
 
     always_ff @(posedge clk or negedge rst_n) begin: proc_ma_wb
         if (!rst_n) begin: proc_ma_wb_rst
-            ld_data_wb <= '0;
+            //ld_data_wb <= '0;
             rd0_addr_wb <= '0;
             wb_mux_sel_wb <= '0;
             rd0_wr_en_wb <= '0;
             alu_wb <= '0;
         end: proc_ma_wb_rst
         else if (clk_en) begin
-            ld_data_wb <= ld_data;
+            //ld_data_wb <= ld_data;
+            rd_wr_ctrl_wb <= rd_wr_ctrl;
             rd0_addr_wb <= rd0_addr;
             wb_mux_sel_wb <= data_rd_en;
             rd0_wr_en_wb <= rd0_wr_en;
@@ -76,24 +78,24 @@ import riscv_definitions_pkg::*;
     end: proc_ma_wb
     
     always_comb begin: load_extension
-        case (rd_wr_ctrl)
+        case (rd_wr_ctrl_wb)
             LB: begin
-                ld_data.s_data = data.s_bytes[0];
+                ld_data_wb.s_data = data.s_bytes[0];
             end
             LH: begin
-                ld_data.s_data = data.s_half[0];
+                ld_data_wb.s_data = data.s_half[0];
             end
             LW: begin
-                ld_data.s_data = data.s_data;
+                ld_data_wb.s_data = data.s_data;
             end
             LBU: begin
-                ld_data.u_data = data.u_bytes[0];
+                ld_data_wb.u_data = data.u_bytes[0];
             end
             LHU: begin
-                ld_data.u_data = data.u_half[0];
+                ld_data_wb.u_data = data.u_half[0];
             end
             default: begin
-                ld_data.s_data = data.s_data;
+                ld_data_wb.s_data = data.s_data;
             end
         endcase
         

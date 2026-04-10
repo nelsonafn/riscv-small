@@ -19,26 +19,26 @@ class riscv_small_monitor extends uvm_monitor;
 
   virtual task run_phase(uvm_phase phase);
     forever begin
-      @(vif.mon_cb);
+      @(posedge vif.clk);
       
-      // Capturar transação de busca de instrução
-      if(vif.mon_cb.inst_rd_en && vif.mon_cb.inst_ready) begin
+      // Capture instruction fetch transaction
+      if(vif.inst_rd_en && vif.inst_ready) begin
         riscv_small_transaction trans = riscv_small_transaction::type_id::create("inst_trans");
         trans.op_is_inst = 1;
-        trans.captured_inst_addr = vif.mon_cb.inst_addr;
-        trans.captured_inst_data = vif.mon_cb.inst_data.memory_w;
+        trans.captured_inst_addr = vif.inst_addr;
+        trans.captured_inst_data = vif.inst_data.memory_w;
         `uvm_info("FETCH_MONITOR", $sformatf("READ_INST: PC=0x%0h INST=0x%0h", trans.captured_inst_addr, trans.captured_inst_data), UVM_HIGH);
-        // mon2sb_port.write(trans); // Opcional: enviar para SB se necessário
+        // mon2sb_port.write(trans); // Optional: send to SB if necessary
       end
 
-      // Capturar toda transação de dado (zero-latência: cada ciclo com en=1 é válido)
-      if(vif.mon_cb.data_rd_en || vif.mon_cb.data_wr_en) begin
+      // Capture every data transaction (zero-latency: every cycle with en=1 is valid)
+      if(vif.data_rd_en || vif.data_wr_en) begin
         riscv_small_transaction trans = riscv_small_transaction::type_id::create("trans");
-        trans.op_is_data_read = vif.mon_cb.data_rd_en;
-        trans.op_is_data_write = vif.mon_cb.data_wr_en;
-        trans.captured_data_addr = vif.mon_cb.data_addr.u_data;
-        trans.captured_data_rd = vif.mon_cb.data_rd.u_data;
-        trans.captured_data_wr = vif.mon_cb.data_wr.u_data;
+        trans.op_is_data_read = vif.data_rd_en;
+        trans.op_is_data_write = vif.data_wr_en;
+        trans.captured_data_addr = vif.data_addr.u_data;
+        trans.captured_data_rd = vif.data_rd.u_data;
+        trans.captured_data_wr = vif.data_wr.u_data;
 
         `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h", 
           trans.op_is_data_write ? "WRITE" : "READ", 

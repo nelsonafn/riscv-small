@@ -36,19 +36,19 @@ module riscv_small_tb;
     .exception(exception),
 
     // Instruction Memory controls
-    .inst_ready(intf.duv_mp.inst_ready),
-    .inst_data(intf.duv_mp.inst_data),
-    .inst_addr(intf.duv_mp.inst_addr),
-    .inst_rd_en(intf.duv_mp.inst_rd_en),
+    .inst_ready(intf.inst_ready),
+    .inst_data(intf.inst_data),
+    .inst_addr(intf.inst_addr),
+    .inst_rd_en(intf.inst_rd_en),
 
     // Data Memory controls
-    .data_ready(intf.duv_mp.data_ready),
-    .data_rd(intf.duv_mp.data_rd),
-    .data_rd_en_ma(intf.duv_mp.data_rd_en),
-    .data_wr_en_ma(intf.duv_mp.data_wr_en),
-    .data_wr(intf.duv_mp.data_wr),
-    .data_addr(intf.duv_mp.data_addr),
-    .data_rd_wr_ctrl(intf.duv_mp.data_rd_wr_ctrl)
+    .data_ready(intf.data_ready),
+    .data_rd(intf.data_rd),
+    .data_rd_en_ma(intf.data_rd_en),
+    .data_wr_en_ma(intf.data_wr_en),
+    .data_wr(intf.data_wr),
+    .data_addr(intf.data_addr),
+    .data_rd_wr_ctrl(intf.data_rd_wr_ctrl)
   );
   
   initial begin

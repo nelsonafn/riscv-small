@@ -25,48 +25,57 @@ interface riscv_small_interface(input logic clk, rst_n);
   ////////////////////////////////////////////////////////////////////////////
   // clocking block and modport declaration for driver 
   ////////////////////////////////////////////////////////////////////////////
-  clocking drv_cb@(posedge clk) ;
-    default input #1step output #1step;
-    output clk_en;
-    output exception;
-    output inst_ready; 
-    output inst_data;
-    input  inst_addr;
-    input  inst_rd_en;
+  //clocking drv_cb@(posedge clk) ;
+  //  default input #1step output #1step;
+  modport drv_mp (
+    input clk, 
+    input rst_n,
+    output clk_en,
+    output exception,
+    output inst_ready, 
+    output inst_data,
+    input  inst_addr,
+    input  inst_rd_en,
     
-    output data_ready;
-    output data_rd;
-    input  data_rd_en;
-    input  data_wr_en;
-    input  data_wr;
-    input  data_addr;
-    input  data_rd_wr_ctrl;
-  endclocking
+    output data_ready,
+    output data_rd,
+    input  data_rd_en,
+    input  data_wr_en,
+    input  data_wr,
+    input  data_addr,
+    input  data_rd_wr_ctrl
+  );
+  //endclocking
   
-  modport drv_mp (clocking drv_cb, input clk, rst_n);
+  //modport drv_mp (clocking drv_cb, input clk, rst_n);
 
   ////////////////////////////////////////////////////////////////////////////
   // clocking block and modport declaration for monitor 
   ////////////////////////////////////////////////////////////////////////////
-  clocking mon_cb@(negedge clk) ;
-    default input #1step output #1step;
-    input clk_en;
-    input exception;
-    input inst_ready; 
-    input inst_data;
-    input inst_addr;
-    input inst_rd_en;
+  //clocking mon_cb@(negedge clk) ;
+  //  default input #1step output #1step;
+  modport mon_mp (
+    input clk, 
+    input rst_n,
+    input clk_en,
+    input exception,
+    input inst_ready, 
+    input inst_data,
+    input inst_addr,
+    input inst_rd_en,
     
-    input data_ready;
-    input data_rd;
-    input data_rd_en;
-    input data_wr_en;
-    input data_wr;
-    input data_addr;
-    input data_rd_wr_ctrl;
-  endclocking
+    input data_ready,
+    input data_rd,
+    input data_rd_en,
+    input data_wr_en,
+    input data_wr,
+    input data_addr,
+    input data_rd_wr_ctrl
+  );
+
+  //endclocking
   
-  modport mon_mp (clocking mon_cb, input clk, rst_n);
+  //modport mon_mp (clocking mon_cb, input clk, rst_n);
 
   ////////////////////////////////////////////////////////////////////////////
   // modport declaration for duv 
