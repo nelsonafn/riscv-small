@@ -58,8 +58,6 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     //   vif.inst_data.memory_w <= inst_mem[0];
     // end
 
-    seq_item_port.item_done();
-
     // 2. Play memory behavior
     fork
       // Thread 1: Instruction
@@ -109,11 +107,18 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
         end
       end
 
-      // Thread 3: Termination Detector (Example: Wait for PC to reach its limit)
+      // Thread 3: Termination Detector
       begin : end_detector
-        // Define what "finishing" means for your testbench
-        // Example: Wait for a HALT signal or for the PC to reach a final value
-        wait(vif.inst_addr == req.instruction_addr[req.instruction_addr.size()-1]);
+        int last_addr = req.instruction_addr[req.instruction_addr.size()-1];
+        `uvm_info("DRIVER", $sformatf("Waiting for last instruction address: 'h%0h, size: %d", last_addr, req.instruction_addr.size()), UVM_LOW)
+        
+        // Synchronously poll on the clock edge instead of wait() to avoid simulator evaluation issues
+        forever begin
+          @(posedge vif.clk);
+          if (vif.inst_rd_en && (vif.inst_addr == last_addr)) break;
+        end
+        
+        `uvm_info("DRIVER", "Last instruction fetch detected, waiting for pipeline to drain...", UVM_LOW)
         `uvm_info("DRIVER", "Subprogram completion detected!", UVM_LOW)
       end
     join_any // Exits as soon as the Termination Detector (Thread 3) finishes

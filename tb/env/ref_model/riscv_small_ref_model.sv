@@ -61,9 +61,9 @@ class riscv_small_ref_model extends uvm_component;
 
         for (int i = 0; i < 32; i++) reg_file[i] = 0; // x0 is always zero
 
-        // Populate memory with initial data (word address == data_addr[i])
+        // Populate memory with initial data (converted to word address)
         foreach (subprog.data_addr[i])
-          iss_mem[subprog.data_addr[i]] = subprog.data_list[i];
+          iss_mem[subprog.data_addr[i] >> 2] = subprog.data_list[i];
 
         // 3. Simulate each instruction in the subprogram
         foreach (subprog.instruction_list[i]) begin
