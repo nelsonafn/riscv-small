@@ -18,22 +18,22 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="132.420 ns"></ZoomStartTime>
-      <ZoomEndTime time="160.541 ns"></ZoomEndTime>
-      <Cursor1Time time="190.150 ns"></Cursor1Time>
+      <ZoomStartTime time="0.000 ns"></ZoomStartTime>
+      <ZoomEndTime time="282.801 ns"></ZoomEndTime>
+      <Cursor1Time time="84.000 ns"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="329"></NameColumnWidth>
-      <ValueColumnWidth column_width="181"></ValueColumnWidth>
+      <ValueColumnWidth column_width="173"></ValueColumnWidth>
    </column_width_setting>
    <WVObjectSize size="107" />
    <wave_markers>
       <marker label="" time="330340" />
       <marker label="" time="85000" />
       <marker label="" time="95000" />
-      <marker label="" time="75000" />
       <marker label="" time="65000" />
       <marker label="" time="124934" />
+      <marker label="" time="75580" />
    </wave_markers>
    <wvobject fp_name="divider33" type="divider">
       <obj_property name="label">IF</obj_property>
@@ -55,6 +55,71 @@
       <obj_property name="ElementShortName">inst_data</obj_property>
       <obj_property name="ObjectShortName">inst_data</obj_property>
       <obj_property name="isExpanded"></obj_property>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.r_type">
+         <obj_property name="ElementShortName">.r_type</obj_property>
+         <obj_property name="ObjectShortName">.r_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type">
+         <obj_property name="ElementShortName">.i_type</obj_property>
+         <obj_property name="ObjectShortName">.i_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_load">
+         <obj_property name="ElementShortName">.i_type_load</obj_property>
+         <obj_property name="ObjectShortName">.i_type_load</obj_property>
+         <obj_property name="isExpanded"></obj_property>
+         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_load.imm0">
+            <obj_property name="ElementShortName">.imm0[11:0]</obj_property>
+            <obj_property name="ObjectShortName">.imm0[11:0]</obj_property>
+            <obj_property name="CustomSignalColor">#00FFFF</obj_property>
+            <obj_property name="UseCustomSignalColor">true</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_load.rs1">
+            <obj_property name="ElementShortName">.rs1[4:0]</obj_property>
+            <obj_property name="ObjectShortName">.rs1[4:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_load.funct3">
+            <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
+            <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_load.rd">
+            <obj_property name="ElementShortName">.rd[4:0]</obj_property>
+            <obj_property name="ObjectShortName">.rd[4:0]</obj_property>
+            <obj_property name="CustomSignalColor">#00FFFF</obj_property>
+            <obj_property name="UseCustomSignalColor">true</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_load.opcode">
+            <obj_property name="ElementShortName">.opcode[6:0]</obj_property>
+            <obj_property name="ObjectShortName">.opcode[6:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.i_type_alu">
+         <obj_property name="ElementShortName">.i_type_alu</obj_property>
+         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.s_type">
+         <obj_property name="ElementShortName">.s_type</obj_property>
+         <obj_property name="ObjectShortName">.s_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.b_type">
+         <obj_property name="ElementShortName">.b_type</obj_property>
+         <obj_property name="ObjectShortName">.b_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.u_type">
+         <obj_property name="ElementShortName">.u_type</obj_property>
+         <obj_property name="ObjectShortName">.u_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.j_type">
+         <obj_property name="ElementShortName">.j_type</obj_property>
+         <obj_property name="ObjectShortName">.j_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.memory_b">
+         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
+         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_data.memory_w">
+         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
+         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
+      </wvobject>
    </wvobject>
    <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_instruction_fetch/flush">
       <obj_property name="ElementShortName">flush</obj_property>
@@ -88,6 +153,47 @@
       <obj_property name="ElementShortName">inst_id</obj_property>
       <obj_property name="ObjectShortName">inst_id</obj_property>
       <obj_property name="isExpanded"></obj_property>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.r_type">
+         <obj_property name="ElementShortName">.r_type</obj_property>
+         <obj_property name="ObjectShortName">.r_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.i_type">
+         <obj_property name="ElementShortName">.i_type</obj_property>
+         <obj_property name="ObjectShortName">.i_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.i_type_load">
+         <obj_property name="ElementShortName">.i_type_load</obj_property>
+         <obj_property name="ObjectShortName">.i_type_load</obj_property>
+         <obj_property name="isExpanded"></obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.i_type_alu">
+         <obj_property name="ElementShortName">.i_type_alu</obj_property>
+         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.s_type">
+         <obj_property name="ElementShortName">.s_type</obj_property>
+         <obj_property name="ObjectShortName">.s_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.b_type">
+         <obj_property name="ElementShortName">.b_type</obj_property>
+         <obj_property name="ObjectShortName">.b_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.u_type">
+         <obj_property name="ElementShortName">.u_type</obj_property>
+         <obj_property name="ObjectShortName">.u_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.j_type">
+         <obj_property name="ElementShortName">.j_type</obj_property>
+         <obj_property name="ObjectShortName">.j_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.memory_b">
+         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
+         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_fetch/inst_id.memory_w">
+         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
+         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
+      </wvobject>
    </wvobject>
    <wvobject type="group" fp_name="group34">
       <obj_property name="label">IF/ID</obj_property>
@@ -117,46 +223,6 @@
             <obj_property name="ElementShortName">.i_type_load</obj_property>
             <obj_property name="ObjectShortName">.i_type_load</obj_property>
             <obj_property name="isExpanded"></obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.i_type_alu">
-            <obj_property name="ElementShortName">.i_type_alu</obj_property>
-            <obj_property name="ObjectShortName">.i_type_alu</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.s_type">
-            <obj_property name="ElementShortName">.s_type</obj_property>
-            <obj_property name="ObjectShortName">.s_type</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.b_type">
-            <obj_property name="ElementShortName">.b_type</obj_property>
-            <obj_property name="ObjectShortName">.b_type</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.u_type">
-            <obj_property name="ElementShortName">.u_type</obj_property>
-            <obj_property name="ObjectShortName">.u_type</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.j_type">
-            <obj_property name="ElementShortName">.j_type</obj_property>
-            <obj_property name="ObjectShortName">.j_type</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.memory_b">
-            <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
-            <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.memory_w">
-            <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
-            <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.r_type">
-            <obj_property name="ElementShortName">.r_type</obj_property>
-            <obj_property name="ObjectShortName">.r_type</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.i_type">
-            <obj_property name="ElementShortName">.i_type</obj_property>
-            <obj_property name="ObjectShortName">.i_type</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.i_type_load">
-            <obj_property name="ElementShortName">.i_type_load</obj_property>
-            <obj_property name="ObjectShortName">.i_type_load</obj_property>
          </wvobject>
          <wvobject type="array" fp_name="/riscv_small_tb/duv/u_instruction_decode/inst.i_type_alu">
             <obj_property name="ElementShortName">.i_type_alu</obj_property>
@@ -450,6 +516,10 @@
          <obj_property name="ElementShortName">funct3_ma[2:0]</obj_property>
          <obj_property name="ObjectShortName">funct3_ma[2:0]</obj_property>
       </wvobject>
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_exection/data_rd_en_ma">
+         <obj_property name="ElementShortName">data_rd_en_ma</obj_property>
+         <obj_property name="ObjectShortName">data_rd_en_ma</obj_property>
+      </wvobject>
    </wvobject>
    <wvobject type="group" fp_name="group117">
       <obj_property name="label">MA/WB</obj_property>
@@ -467,10 +537,19 @@
          <obj_property name="ElementShortName">regs[1:31]</obj_property>
          <obj_property name="ObjectShortName">regs[1:31]</obj_property>
       </wvobject>
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/data_rd_en">
+         <obj_property name="ElementShortName">data_rd_en</obj_property>
+         <obj_property name="ObjectShortName">data_rd_en</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_memory_access/wb_mux_sel_wb">
+         <obj_property name="ElementShortName">wb_mux_sel_wb</obj_property>
+         <obj_property name="ObjectShortName">wb_mux_sel_wb</obj_property>
+      </wvobject>
    </wvobject>
    <wvobject type="group" fp_name="group151">
       <obj_property name="label">CTRL</obj_property>
       <obj_property name="DisplayName">label</obj_property>
+      <obj_property name="isExpanded"></obj_property>
       <wvobject type="logic" fp_name="/riscv_small_tb/duv/u_control/clk">
          <obj_property name="ElementShortName">clk</obj_property>
          <obj_property name="ObjectShortName">clk</obj_property>
@@ -793,6 +872,7 @@
       <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.i_type_load">
          <obj_property name="ElementShortName">.i_type_load</obj_property>
          <obj_property name="ObjectShortName">.i_type_load</obj_property>
+         <obj_property name="isExpanded"></obj_property>
       </wvobject>
       <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.i_type_alu">
          <obj_property name="ElementShortName">.i_type_alu</obj_property>
@@ -801,33 +881,6 @@
       <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type">
          <obj_property name="ElementShortName">.s_type</obj_property>
          <obj_property name="ObjectShortName">.s_type</obj_property>
-         <obj_property name="isExpanded"></obj_property>
-         <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.imm1">
-            <obj_property name="ElementShortName">.imm1[6:0]</obj_property>
-            <obj_property name="ObjectShortName">.imm1[6:0]</obj_property>
-            <obj_property name="Radix">BINARYRADIX</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.rs2">
-            <obj_property name="ElementShortName">.rs2[4:0]</obj_property>
-            <obj_property name="ObjectShortName">.rs2[4:0]</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.rs1">
-            <obj_property name="ElementShortName">.rs1[4:0]</obj_property>
-            <obj_property name="ObjectShortName">.rs1[4:0]</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.funct3">
-            <obj_property name="ElementShortName">.funct3[2:0]</obj_property>
-            <obj_property name="ObjectShortName">.funct3[2:0]</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.imm0">
-            <obj_property name="ElementShortName">.imm0[4:0]</obj_property>
-            <obj_property name="ObjectShortName">.imm0[4:0]</obj_property>
-            <obj_property name="Radix">BINARYRADIX</obj_property>
-         </wvobject>
-         <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.opcode">
-            <obj_property name="ElementShortName">.opcode[6:0]</obj_property>
-            <obj_property name="ObjectShortName">.opcode[6:0]</obj_property>
-         </wvobject>
       </wvobject>
       <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.b_type">
          <obj_property name="ElementShortName">.b_type</obj_property>
@@ -848,13 +901,51 @@
       <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.memory_w">
          <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
          <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
-         <obj_property name="Radix">BINARYRADIX</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.r_type">
+         <obj_property name="ElementShortName">.r_type</obj_property>
+         <obj_property name="ObjectShortName">.r_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.i_type">
+         <obj_property name="ElementShortName">.i_type</obj_property>
+         <obj_property name="ObjectShortName">.i_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.i_type_load">
+         <obj_property name="ElementShortName">.i_type_load</obj_property>
+         <obj_property name="ObjectShortName">.i_type_load</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.i_type_alu">
+         <obj_property name="ElementShortName">.i_type_alu</obj_property>
+         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type">
+         <obj_property name="ElementShortName">.s_type</obj_property>
+         <obj_property name="ObjectShortName">.s_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.b_type">
+         <obj_property name="ElementShortName">.b_type</obj_property>
+         <obj_property name="ObjectShortName">.b_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.u_type">
+         <obj_property name="ElementShortName">.u_type</obj_property>
+         <obj_property name="ObjectShortName">.u_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.j_type">
+         <obj_property name="ElementShortName">.j_type</obj_property>
+         <obj_property name="ObjectShortName">.j_type</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.memory_b">
+         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
+         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.memory_w">
+         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
+         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
       </wvobject>
    </wvobject>
    <wvobject type="vbus" fp_name="vbus393">
-      <obj_property name="label">comb_imm</obj_property>
+      <obj_property name="label">sw_comb_imm</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <obj_property name="isExpanded"></obj_property>
       <wvobject type="array" fp_name="/riscv_small_tb/intf/drv_mp/inst_data.s_type.imm1">
          <obj_property name="ElementShortName">.imm1[6:0]</obj_property>
          <obj_property name="ObjectShortName">.imm1[6:0]</obj_property>
@@ -930,87 +1021,6 @@
       <obj_property name="ElementShortName">inst_data</obj_property>
       <obj_property name="ObjectShortName">inst_data</obj_property>
       <obj_property name="isExpanded"></obj_property>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.r_type">
-         <obj_property name="ElementShortName">.r_type</obj_property>
-         <obj_property name="ObjectShortName">.r_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.i_type">
-         <obj_property name="ElementShortName">.i_type</obj_property>
-         <obj_property name="ObjectShortName">.i_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.i_type_load">
-         <obj_property name="ElementShortName">.i_type_load</obj_property>
-         <obj_property name="ObjectShortName">.i_type_load</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.i_type_alu">
-         <obj_property name="ElementShortName">.i_type_alu</obj_property>
-         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.s_type">
-         <obj_property name="ElementShortName">.s_type</obj_property>
-         <obj_property name="ObjectShortName">.s_type</obj_property>
-         <obj_property name="isExpanded"></obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.b_type">
-         <obj_property name="ElementShortName">.b_type</obj_property>
-         <obj_property name="ObjectShortName">.b_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.u_type">
-         <obj_property name="ElementShortName">.u_type</obj_property>
-         <obj_property name="ObjectShortName">.u_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.j_type">
-         <obj_property name="ElementShortName">.j_type</obj_property>
-         <obj_property name="ObjectShortName">.j_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.memory_b">
-         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.memory_w">
-         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.r_type">
-         <obj_property name="ElementShortName">.r_type</obj_property>
-         <obj_property name="ObjectShortName">.r_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.i_type">
-         <obj_property name="ElementShortName">.i_type</obj_property>
-         <obj_property name="ObjectShortName">.i_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.i_type_load">
-         <obj_property name="ElementShortName">.i_type_load</obj_property>
-         <obj_property name="ObjectShortName">.i_type_load</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.i_type_alu">
-         <obj_property name="ElementShortName">.i_type_alu</obj_property>
-         <obj_property name="ObjectShortName">.i_type_alu</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.s_type">
-         <obj_property name="ElementShortName">.s_type</obj_property>
-         <obj_property name="ObjectShortName">.s_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.b_type">
-         <obj_property name="ElementShortName">.b_type</obj_property>
-         <obj_property name="ObjectShortName">.b_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.u_type">
-         <obj_property name="ElementShortName">.u_type</obj_property>
-         <obj_property name="ObjectShortName">.u_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.j_type">
-         <obj_property name="ElementShortName">.j_type</obj_property>
-         <obj_property name="ObjectShortName">.j_type</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.memory_b">
-         <obj_property name="ElementShortName">.memory_b[0:3][7:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_b[0:3][7:0]</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_data.memory_w">
-         <obj_property name="ElementShortName">.memory_w[31:0]</obj_property>
-         <obj_property name="ObjectShortName">.memory_w[31:0]</obj_property>
-      </wvobject>
    </wvobject>
    <wvobject type="array" fp_name="/riscv_small_tb/intf/mon_mp/inst_addr">
       <obj_property name="ElementShortName">inst_addr[31:0]</obj_property>

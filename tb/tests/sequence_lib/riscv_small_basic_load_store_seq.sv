@@ -6,7 +6,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
   `uvm_object_utils(riscv_small_basic_load_store_seq)
  
   // Make N configurable to facilitate debugging
-  int N = 3; // Max 31 registers supported (x1 to x31)
+  int N = 30; // Max 31 registers supported (x1 to x31)
   // NOPs between LOAD and STORE phases to drain the 5-stage pipeline.
   // The synchronous RAM model adds 1 stall cycle per access.
   // The last LW (position N-1) needs 5 pipeline cycles + 1 stall cycle = 6 NOPs.
@@ -37,28 +37,39 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     rand_data = new[N];
     regs = new[N];
 
-    for (int i=0; i<N; i++) begin
-      rand_rd_addr[i] = $urandom_range(100, 200 + N) * 4;
-      rand_data[i] = $urandom();
-      regs[i] = i + 1;
-
-      req.data_addr[i] = rand_rd_addr[i];
-      req.data_list[i] = rand_data[i];
-
-      // Phase 1: Back-to-back LW - LOAD → LW xI, (addr)(x0) - Type I
-      // x0 = 5'd0, base address register
-      // xI = 5'(regs[i]), destination register
-      // rd_imm = rand_rd_addr[i], offset from base address
-      // func3 = 3'b010 = load word
-      // opcode = 7'b0000011 = LW opcode
-      begin
-        bit [11:0] rd_imm = rand_rd_addr[i];
-        req.instruction_addr[i] = i * 4;
-        req.instruction_list[i] = { rd_imm, 5'd0, 3'b010, 5'(regs[i]), 7'b0000011 };
-        `uvm_info("LOAD", $sformatf("LOAD: x%0d, (x0, %0d) → 'h%h,  rd_imm[11:5]=%h, rd_imm[4:0]=%h, rd_imm=%h", regs[i], rand_data[i], req.instruction_list[i], rd_imm[11:5], rd_imm[4:0], rd_imm), UVM_LOW);
+    begin
+      int used_rd_addr[int];
+      for (int i=0; i<N; i++) begin
+        int temp_addr;
+        // Generate values until an unused one is found
+        do begin
+          temp_addr = $urandom_range(100, 200 + N) * 4;
+        end while (used_rd_addr.exists(temp_addr));
+        
+        used_rd_addr[temp_addr] = 1; // Mark as used
+        rand_rd_addr[i] = temp_addr;
+        
+        rand_data[i] = $urandom();
+        regs[i] = i + 1;
+  
+        req.data_addr[i] = rand_rd_addr[i];
+        req.data_list[i] = rand_data[i];
       end
     end
 
+    // Phase 1: Back-to-back LW - LOAD → LW xI, (addr)(x0) - Type I
+    // x0 = 5'd0, base address register
+    // xI = 5'(regs[i]), destination register
+    // rd_imm = rand_rd_addr[i], offset from base address
+    // func3 = 3'b010 = load word
+    // opcode = 7'b0000011 = LW opcode
+    for (int i=0; i<N; i++) begin
+      bit [11:0] rd_imm = rand_rd_addr[i];
+      req.instruction_addr[i] = i * 4;
+      req.instruction_list[i] = { rd_imm, 5'd0, 3'b010, 5'(regs[i]), 7'b0000011 };
+      `uvm_info("LOAD", $sformatf("LOAD: x%0d, 'h%0h(x0) == 'h%0h → x%0d <= DMEM[x0 + 'h%0h] → x%0d <= 'h%h", regs[i], rd_imm, req.instruction_list[i], regs[i], rd_imm, regs[i], rand_data[i]), UVM_LOW);
+    end
+    
     // Phase 2: Drainage - NOPs to drain the pipeline — ensures WB of all LWs before SWs
     for (int b = 0; b < BUBBLE_COUNT; b++) begin
       int idx = N + b;
@@ -72,16 +83,26 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     // wr_imm = rand_wr_addr[i], offset from base address
     // func3 = 3'b010 = store word
     // opcode = 7'b0100011 = SW opcode
-    for (int i=0; i<N; i++) begin
-      rand_wr_addr[i] = $urandom_range(300, 400 + N) * 4;
-      req.data_addr[i+N] = rand_wr_addr[i];
-      req.data_list[i+N] = '{default: 'x};
-      begin
-        bit [11:0] wr_imm = rand_wr_addr[i];
-        int idx = N + BUBBLE_COUNT + i;
-        req.instruction_addr[idx] = idx * 4;
-        req.instruction_list[idx] = { wr_imm[11:5], 5'(regs[i]), 5'd0, 3'b010, wr_imm[4:0], 7'b0100011 };
-        `uvm_info("STORE", $sformatf("STORE: x%0d, (x0, %0d) → 'h%h,  wr_imm[11:5]=%h, wr_imm[4:0]=%h, wr_imm=%h", regs[i], rand_data[i], req.instruction_list[idx], wr_imm[11:5], wr_imm[4:0], wr_imm), UVM_LOW);
+    begin
+      int used_wr_addr[int];
+      for (int i=0; i<N; i++) begin
+        int temp_addr;
+        do begin
+          temp_addr = $urandom_range(300, 400 + N) * 4;
+        end while (used_wr_addr.exists(temp_addr));
+        
+        used_wr_addr[temp_addr] = 1;
+        rand_wr_addr[i] = temp_addr;
+        
+        req.data_addr[i+N] = rand_wr_addr[i];
+        req.data_list[i+N] = '{default: 'x};
+        begin
+          bit [11:0] wr_imm = rand_wr_addr[i];
+          int idx = N + BUBBLE_COUNT + i;
+          req.instruction_addr[idx] = idx * 4;
+          req.instruction_list[idx] = { wr_imm[11:5], 5'(regs[i]), 5'd0, 3'b010, wr_imm[4:0], 7'b0100011 };
+          `uvm_info("STORE", $sformatf("STORE: x%0d, x0('h%0h) == 'h%0h → DMEM[x0 + 'h%0h] <= 0x%0h → DMEM[x0 + 'h%0h] <= 'h%0h", regs[i], wr_imm, req.instruction_list[idx], wr_imm, regs[i], wr_imm, rand_data[i]), UVM_LOW);
+        end
       end
     end
 

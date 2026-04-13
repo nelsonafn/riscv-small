@@ -54,6 +54,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
     input logic data_rd_en_ex, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
 	input logic data_rd_en_ma, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
     input logic data_wr_en_ex,  //[in] Data memory write enable to be used with funct3
+    input logic mux_sel_rd_wb, //[in] Data memory read enable (wb_mux_sel) 
     input logic cond_jump, // Used to indicate a conditional branch have been decoded
     input logic branch_taken,  //[in] Indicates that a branch should be taken to the control  
     input exception, //[in] Exception trigger
@@ -240,8 +241,8 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if_id_flush =  '1;
         end
 
-        //Pause pipeline id there is not data available
-        if (!data_ready && data_rd_en_ma) begin
+        //Pause pipeline if there is not data available from Memory Access stage
+        if (!data_ready && mux_sel_rd_wb) begin
             if_id_clk_en = '0;// Run IF_ID
             id_ex_clk_en = '0;// Run ID_EX
             ex_ma_clk_en = '0;// Run EX_MA

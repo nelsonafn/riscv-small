@@ -235,6 +235,7 @@ import riscv_definitions_pkg::*;
         .data_rd_en_ex    (data_rd_en_ex),//[in] Data memory read enable (wb_mux_sel) to be used with funct3
         .data_rd_en_ma    (data_rd_en_ma),//[in] Data memory read enable (wb_mux_sel) to be used with funct3
         .data_wr_en_ex    (data_wr_en_ex),//[in] Data memory write enable to be used with funct3
+        .mux_sel_rd_wb    (wb_mux_sel_wb),//[in] Data memory read enable (wb_mux_sel) 
         .cond_jump        (cond_jump),//Used to indicate a conditional branch have been decoded
         .branch_taken     (branch_taken),//[in] Indicates that a branch should be taken to the control  
         .exception        (exception),//[in] Exception trigger
