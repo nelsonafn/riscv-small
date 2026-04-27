@@ -68,7 +68,7 @@ import riscv_definitions_pkg::*;
             rs1 = '0;
         end
         // Forward rd0 to rs1 if same address being write and read
-        else if (rd0_addr == rs1_addr) begin
+        else if (rd0_wr_en && rd0_addr == rs1_addr) begin
             rs1 = rd0_data;
         end 
         else begin
@@ -80,7 +80,7 @@ import riscv_definitions_pkg::*;
             rs2 = '0;
         end
         // Forward rd0 to rs2 if same address being write and read
-        else if (rd0_addr == rs2_addr) begin
+        else if (rd0_wr_en && rd0_addr == rs2_addr) begin
             rs2 = rd0_data;
         end 
         else begin

@@ -89,6 +89,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
         jmp_src2 = RD_ID;
         alu_src1 = ctrlAluSrc1_e'({1'b0, alu_src1_ex});
         alu_src2 = ctrlAluSrc2_e'({1'b0, alu_src2_ex});
+        storage_src = RS2_S2;
         if_id_clk_en = '1;// Run IF_ID
         id_ex_clk_en = '1;// Run ID_EX
         ex_ma_clk_en = '1;// Run EX_MA

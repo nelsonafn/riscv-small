@@ -6,7 +6,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
   `uvm_object_utils(riscv_small_basic_load_store_seq)
  
   // Make N configurable to facilitate debugging
-  int N = 30; // Max 31 registers supported (x1 to x31)
+  int N = 31; // Max 31 registers supported (x1 to x31)
   // NOPs between LOAD and STORE phases to drain the 5-stage pipeline.
   // The synchronous RAM model adds 1 stall cycle per access.
   // The last LW (position N-1) needs 5 pipeline cycles + 1 stall cycle = 6 NOPs.

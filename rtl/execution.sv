@@ -155,7 +155,7 @@ import riscv_definitions_pkg::*;
      * rs2 mux
      */
     always_comb begin: proc_rs2_mux
-        case (alu_src2)
+        case (storage_src)
             RS2_S2: begin
                 rs2_pipeline = rs2;
             end 
