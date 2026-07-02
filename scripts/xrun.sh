@@ -86,9 +86,6 @@ main() {
         check_clean
     fi
 
-    # Compile tests
-    ${ROOT_DIR}/scripts/compile_tests.sh || error_exit "Error detected on compiling test!"
-
     # Go to root directory natively so configure works from wherever script is run
     cd "$ROOT_DIR" || exit 1
 
@@ -102,6 +99,9 @@ main() {
 
     # Forward arguments to our CMake configure wrapper
     ./configure --top "${TOP_NAME}" --test "${TEST_NAME}" --seed "${SEED}" --vivado "${VIVADO_PARMS}" || error_exit "CMake Configuration Failed"
+
+    # Compile tests
+    make -C build compile_sanity_tests || error_exit "Error detected on compiling test!"
 
     echo -e "${green}Executing natively via GNU Make...${clear}"
     # The build script defaults the TEST_NAME inside CMake, so `make sim` runs that specific test correctly natively.

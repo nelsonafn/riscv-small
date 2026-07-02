@@ -1,4 +1,4 @@
-rtl/riscv_definitions_pkg.svh
+rtl/riscv_definitions_pkg.sv
 rtl/jump_decision.sv
 rtl/reg_file.sv
 rtl/instruction_decode.sv

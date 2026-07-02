@@ -1,2 +1,2 @@
-rtl/riscv_definitions_pkg.svh
+rtl/riscv_definitions_pkg.sv
 rtl/memory_access.sv

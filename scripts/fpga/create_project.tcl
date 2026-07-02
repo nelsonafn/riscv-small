@@ -11,8 +11,8 @@ set root_dir [file normalize [file join $script_dir ".." ".."]]
 
 # 2. Project configuration variables
 set project_name  "cvqkd_topsoc"
-set target_board  "realdigital.org:rfsoc4x2:1.0"      ;# RFSoC 4x2 Board Part
-set fallback_part "xczu48dr-ffvg1517-2-e"             ;# FPGA chip model on RFSoC 4x2
+set target_board  ""                                  ;# Generic part configuration
+set fallback_part "xczu3eg-sbva484-1-i"               ;# Standard Zynq UltraScale+ MPSoC (Free License)
 set build_dir     [file join $root_dir "build" "fpga"]
 
 # Create build directory if it doesn't exist
