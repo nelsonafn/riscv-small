@@ -17,3 +17,4 @@
 
 # Source the Xilinx Vivado environment setup script
 source /opt/Xilinx/Vivado/2024.1/.settings64-Vivado.sh
+source /opt/Xilinx/2025.2/Vivado/.settings64-Vivado.sh
