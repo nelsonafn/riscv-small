@@ -366,3 +366,29 @@ include(${CMAKE_SOURCE_DIR}/scripts/compile_sanity_tests.cmake)
 # ==============================================================================
 # Targets to automate Vivado project creation and opening the graphical UI.
 include(${CMAKE_SOURCE_DIR}/scripts/fpga/fpga_targets.cmake)
+
+# ==============================================================================
+# 11. Documentation Targets
+# ==============================================================================
+# Render and validate documentation figures. See doc/figs/README.md.
+
+add_custom_target(docs-figs
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/docs/figs.sh --all
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Rendering documentation figures..."
+    USES_TERMINAL
+)
+
+add_custom_target(docs-figs-check
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/docs/figs.sh --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Checking documentation figures are up to date..."
+    USES_TERMINAL
+)
+
+add_custom_target(docs-check
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/docs/check_md.sh
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Checking documentation consistency..."
+    USES_TERMINAL
+)
