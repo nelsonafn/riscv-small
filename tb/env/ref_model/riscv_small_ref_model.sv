@@ -70,18 +70,33 @@ class riscv_small_ref_model extends uvm_component;
           bit [31:0] inst   = subprog.instruction_list[i];
           bit [6:0]  opcode = inst[6:0];
 
-          // --- LW (I-Type, opcode=0000011) ----------------------------------
+          // --- Loads (I-Type, opcode=0000011) -------------------------------
+          // LW, LB, LH, LBU, LHU. The lane comes from the low address bits,
+          // which is exactly what FR-12 requires of the DUT.
           if (opcode == 7'b0000011) begin
-            bit [4:0]  rd  = inst[11:7];
-            bit [4:0]  rs1 = inst[19:15];
-            bit [11:0] imm = inst[31:20];
-            int word_addr  = (reg_file[rs1] + $signed(imm)) >> 2;
+            bit [4:0]  rd     = inst[11:7];
+            bit [4:0]  rs1    = inst[19:15];
+            bit [2:0]  funct3 = inst[14:12];
+            bit [11:0] imm    = inst[31:20];
+            int        byte_addr = reg_file[rs1] + $signed(imm);
+            int        word_addr = byte_addr >> 2;
+            bit [1:0]  lane   = byte_addr[1:0];
+            bit [31:0] word   = iss_mem.exists(word_addr) ? iss_mem[word_addr] : 0;
+            bit [7:0]  b      = word[8 * lane +: 8];
+            bit [15:0] h      = word[16 * lane[1] +: 16];
 
             if (rd != 0) begin
-              reg_file[rd] = iss_mem.exists(word_addr) ? iss_mem[word_addr] : 0;
+              case (funct3)
+                3'b000:  reg_file[rd] = int'({{24{b[7]}}, b});   // LB
+                3'b001:  reg_file[rd] = int'({{16{h[15]}}, h});  // LH
+                3'b010:  reg_file[rd] = int'(word);              // LW
+                3'b100:  reg_file[rd] = int'({24'b0, b});        // LBU
+                3'b101:  reg_file[rd] = int'({16'b0, h});        // LHU
+                default: reg_file[rd] = int'(word);              // reserved form
+              endcase
               `uvm_info(get_full_name(),
-                $sformatf("ISS LW: x%0d ← mem_word[%0d] = 0x%0h",
-                  rd, word_addr, reg_file[rd]),
+                $sformatf("ISS LD f3=%0b: x%0d <- mem_byte[%0d] (word=0x%0h lane=%0d) = 0x%0h",
+                  funct3, rd, byte_addr, word, lane, reg_file[rd]),
                 UVM_MEDIUM)
             end
 

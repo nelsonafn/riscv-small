@@ -101,10 +101,15 @@ itself make a row `deferred`: `deferred` is about the capability, not about the 
 
 ## Signoff gate
 
-`A-09` and `Q-11` fix the bar; `scripts/verify/signoff_check.sh` turns it into an exit code. `make signoff-check`
-writes `build/signoff/report.md`; `make signoff-check SIGNOFF_ARGS="--wave <n>"` runs the wave subset (checks 1-5,
+`A-09` and `Q-11` fix the bar; `cmake -P scripts/verify/signoff_check.cmake` turns it into an exit code. The target is declared
+in `CMakeLists.txt` §12, so `make signoff-check` and `make -C build signoff-check` are the same command. It writes
+`build/signoff/report.md`; `make signoff-check SIGNOFF_ARGS="--wave <n>"` runs the wave subset (checks 1-5,
 7 and 11). Check 11 is what makes the wave gate test-first rather than pass-only: a test written after its RTL has
 no recorded failing run, so it has no red evidence at an older `rtl_digest`.
+
+The tests run under CTest: `CMakeLists.txt` §12 declares one CTest test per line of `scripts/verify/tests.tsv`, with
+the timeout and the `wave`/requirement labels. The verdict comes from the `UVM_RESULT: PASS` line the testbench
+prints, because `xsim` exits `0` even when the run ends with `UVM_ERROR`s.
 
 | # | Check | Fails when | 2026-10-28 |
 |---|---|---|---|

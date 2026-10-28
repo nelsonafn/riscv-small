@@ -75,6 +75,28 @@ class colored_report_server extends uvm_default_report_server;
                      file_line_str);
   endfunction : compose_report_message
 
+  /*
+   * Make the simulator exit code meaningful.
+   *
+   * xsim returns 0 even when the run ends with UVM_ERRORs, and it ignores
+   * $fatal for the process status, so no runner can trust the exit code. UVM
+   * calls report_summarize() from uvm_root::die() right before $finish, which
+   * makes this the one place that sees the final counts: print them as a single
+   * stable line and let the runner (CTest, a script, CI) decide on it.
+   *
+   *   UVM_RESULT: PASS
+   *   UVM_RESULT: FAIL errors=<n> fatals=<n>
+   */
+  virtual function void report_summarize(UVM_FILE file = 0);
+    int unsigned errors = get_severity_count(UVM_ERROR);
+    int unsigned fatals = get_severity_count(UVM_FATAL);
+    super.report_summarize(file);
+    if (errors > 0 || fatals > 0)
+      $display("UVM_RESULT: FAIL errors=%0d fatals=%0d", errors, fatals);
+    else
+      $display("UVM_RESULT: PASS");
+  endfunction : report_summarize
+
 endclass : colored_report_server
 
 `endif

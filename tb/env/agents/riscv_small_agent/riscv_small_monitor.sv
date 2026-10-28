@@ -39,11 +39,13 @@ class riscv_small_monitor extends uvm_monitor;
         trans.captured_data_addr = vif.data_addr.u_data;
         trans.captured_data_rd = vif.data_rd.u_data;
         trans.captured_data_wr = vif.data_wr.u_data;
+        trans.captured_data_wr_ctrl = vif.data_rd_wr_ctrl;
 
-        `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h", 
-          trans.op_is_data_write ? "WRITE" : "READ", 
-          trans.captured_data_addr, 
-          trans.op_is_data_write ? trans.captured_data_wr : trans.captured_data_rd), UVM_LOW);
+        `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h WIDTH=%0d",
+          trans.op_is_data_write ? "WRITE" : "READ",
+          trans.captured_data_addr,
+          trans.op_is_data_write ? trans.captured_data_wr : trans.captured_data_rd,
+          trans.captured_data_wr_ctrl), UVM_LOW);
         mon2sb_port.write(trans);
       end
     end

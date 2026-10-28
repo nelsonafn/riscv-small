@@ -59,6 +59,15 @@ import riscv_definitions_pkg::*;
     //dataBus_u ld_data;
     funct3ITypeLOAD_e rd_wr_ctrl_wb;
 
+    /* Byte lane of the word the data memory returned for this load.
+     * alu_wb is the effective address registered in the same cycle as
+     * rd_wr_ctrl_wb, so it stays aligned with `data` while the load is in WB.
+     * dataBus_u declares its byte array as [0:3] (index 0 = bits [31:24]), so
+     * the lane is taken from an indexed part-select of u_data instead of a
+     * byte-array index: offset 0 is bits [7:0], offset 3 is bits [31:24]. */
+    logic [1:0] ld_lane;
+    assign ld_lane = alu_wb.u_data[1:0];
+
     always_ff @(posedge clk or negedge rst_n) begin: proc_ma_wb
         if (!rst_n) begin: proc_ma_wb_rst
             //ld_data_wb <= '0;
@@ -80,19 +89,19 @@ import riscv_definitions_pkg::*;
     always_comb begin: load_extension
         case (rd_wr_ctrl_wb)
             LB: begin
-                ld_data_wb.s_data = data.s_bytes[0];
+                ld_data_wb.s_data = $signed(data.u_data[8 * ld_lane +: 8]);
             end
             LH: begin
-                ld_data_wb.s_data = data.s_half[0];
+                ld_data_wb.s_data = $signed(data.u_data[16 * ld_lane[1] +: 16]);
             end
             LW: begin
                 ld_data_wb.s_data = data.s_data;
             end
             LBU: begin
-                ld_data_wb.u_data = data.u_bytes[0];
+                ld_data_wb.u_data = data.u_data[8 * ld_lane +: 8];
             end
             LHU: begin
-                ld_data_wb.u_data = data.u_half[0];
+                ld_data_wb.u_data = data.u_data[16 * ld_lane[1] +: 16];
             end
             default: begin
                 ld_data_wb.s_data = data.s_data;

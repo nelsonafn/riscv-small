@@ -50,7 +50,8 @@ class riscv_small_environment extends uvm_env;
     super.connect_phase(phase);
     riscv_small_agnt.driver.drv2rm_port.connect(ref_model.rm_export);
     riscv_small_agnt.monitor.mon2sb_port.connect(sb.sb_export_mon);
-    ref_model.rm2sb_port.connect(coverage.analysis_export);
+    // Coverage is sampled from what the DUT did, never from what the model predicted.
+    riscv_small_agnt.monitor.mon2sb_port.connect(coverage.analysis_export);
     ref_model.rm2sb_port.connect(sb.sb_export_rm);
   endfunction : connect_phase
 

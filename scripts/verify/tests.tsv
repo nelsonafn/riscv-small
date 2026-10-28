@@ -1,0 +1,23 @@
+# scripts/verify/tests.tsv - regression manifest
+#
+# The bridge between doc/verification.md and tb/tests/. One line per runnable
+# test; tab-separated; '#' starts a comment line.
+#
+#   T-id <TAB> uvm_test <TAB> wave <TAB> requirements <TAB> timeout_s <TAB> red
+#
+# T-id          must match the ID used in doc/verification.md (T-01, T-06, ...)
+# uvm_test      the UVM test class name, i.e. tb/tests/<uvm_test>.sv
+# wave          the wave that owns the test (0 = baseline / pilot)
+# requirements  comma-separated FR-NN ids the test is evidence for, '-' if none
+# timeout_s     hard wall-clock limit for one xsim run, in seconds
+# red           yes: the wave gate requires a recorded red run (`--record red`)
+#               at a different rtl_digest before the test can count as evidence
+#               no:  the test predates the flow and has no red record
+#
+# A test listed here must exist in tb/tests/<uvm_test>.sv. After adding a line,
+# re-run ./configure so CMake picks up the new sim_<uvm_test> target.
+#
+# wave 0 - baseline: the tests that existed before the wave flow
+T-01	riscv_small_basic_load_store_test	0	FR-09,FR-10	300	no
+T-02	riscv_small_corner_test	0	FR-09,FR-10	300	no
+T-06	riscv_small_subword_access_test	0	FR-12	300	yes
