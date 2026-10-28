@@ -1,0 +1,29 @@
+// T3 - the instruction grant withheld, as built (G-09).
+//
+// rtl/control.sv:241-243: !inst_ready raises if_id_flush and nothing else. Every stage
+// enable stays 1, pc_sel stays PC_PLUS4, and inst_rd_en is 1 everywhere
+// (rtl/control.sv:101).
+// rtl/instruction_fetch.sv:73-76 / :88-101: every enabled edge loads IF/ID from
+// inst_data and advances the PC, whether or not the memory granted the fetch.
+//
+// Result: with inst_ready low in cycles 2 and 3 the words at 0x104 and 0x108 are
+// dropped and never execute; the PC runs on to 0x10C. This is not a wait state and it
+// is not FR-28: no fetch is held (doc/verification.md G-09).
+{
+  signal: [
+    { name: 'clk',          wave: 'p......' },
+    { name: 'pc',           wave: '=======', data: ['0x100', '0x104', '0x108', '0x10C', '0x110', '0x114', '0x118'] },
+    { name: 'inst_rd_en',   wave: '1......' },
+    { name: 'inst_ready',   wave: '10.1...' },
+    { name: 'if_id_flush',  wave: '01.0...' },
+    { name: 'if_id_clk_en', wave: '1......' },
+    { name: 'pc_id',        wave: '=======', data: ['0x0FC', '0x100', '0', '0', '0x10C', '0x110', '0x114'] },
+  ],
+  head: {
+    text: 'T3 inst_ready low: only IF/ID is flushed, the PC keeps advancing, the fetch is dropped',
+    tick: 1,
+    every: 1,
+  },
+  foot: { text: 'doc/figs/wave/t3-fetch-stall.json5' },
+  config: { hscale: 2 },
+}

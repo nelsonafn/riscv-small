@@ -1,0 +1,32 @@
+// T2 - a conditional branch resolved in ID, as built.
+//
+// Scenario: the taken branch BNE sits at 0x100 and targets 0x200.
+//
+// rtl/control.sv:229-232: branch_taken sets if_id_flush = 1 and pc_sel = JUMP.
+// rtl/instruction_fetch.sv:70-76: the flush clears IF/ID at the edge; the PC takes
+// jump_addr at the same edge (rtl/instruction_fetch.sv:92-94).
+// Nothing else is flushed: id_ex_flush stays 0 and no stage enable is cleared.
+//
+// Cost: exactly one fetch slot. The word being fetched at 0x104 during cycle 3 never
+// enters IF/ID (the register is cleared instead), ID sees the zero word in cycle 4,
+// and the target is in ID in cycle 5. Matches doc/uarch.md section 9, "taken branch or
+// jump: 1 cycle".
+{
+  signal: [
+    { name: 'clk',          wave: 'p......' },
+    { name: 'pc',           wave: '=======', data: ['0x0FC', '0x100', '0x104', '0x200', '0x204', '0x208', '0x20C'] },
+    { name: 'pc_id',        wave: '=======', data: ['0x0F8', '0x0FC', '0x100', '0', '0x200', '0x204', '0x208'] },
+    { name: 'if_id_flush',  wave: '0.1....' },
+    { name: 'if_id_clk_en', wave: '1......' },
+    { name: 'branch_taken', wave: '0.1....' },
+    { name: 'pc_sel',       wave: '2.32...', data: ['PC_PLUS4', 'JUMP', 'PC_PLUS4'] },
+    { name: 'id_ex_flush',  wave: '0......' },
+  ],
+  head: {
+    text: 'T2 taken branch: IF/ID flushed and the PC redirected in ID, one fetch slot lost',
+    tick: 1,
+    every: 1,
+  },
+  foot: { text: 'doc/figs/wave/t2-branch-flush.json5' },
+  config: { hscale: 2 },
+}

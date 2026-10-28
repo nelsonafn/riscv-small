@@ -255,19 +255,29 @@ fi
 note "requirement IDs"
 DEFS="$(mktemp)"; REFS="$(mktemp)"; trap 'rm -f "$DEFS" "$REFS"' EXIT
 
-# Definitions: first cell of a table row, or a BLK heading.
-awk '
-    /^\|[[:space:]]*(F|FR|NFR|C|A|Q|T|G|D)-[0-9][0-9]/ {
-        match($0, /\|[[:space:]]*(F|FR|NFR|C|A|Q|T|G|D)-[0-9][0-9]/)
-        s = substr($0, RSTART + 1)
-        sub(/\|.*$/, "", s)
-        gsub(/[[:space:]]/, "", s)
-        print s
-    }
-    /^#{1,6}.*BLK-[A-Z]+/ {
-        match($0, /BLK-[A-Z]+/); print substr($0, RSTART, RLENGTH)
-    }
-' "${DOCS[@]}" | sort > "$DEFS"
+# Definitions are scoped to the file that owns each ID family, otherwise a traceability row that happens to
+# start with an ID is mistaken for a second definition.
+while IFS= read -r f; do
+    case "$(basename "$f")" in
+        spec.md)           pat='F|FR|NFR|C|A|D' ;;
+        spec-questions.md) pat='Q' ;;
+        verification.md)   pat='T|G' ;;
+        uarch.md)          pat='BLK' ;;
+        *)                 continue ;;
+    esac
+    awk -v pat="$pat" '
+        BEGIN { re = "^\\|[[:space:]]*(" pat ")-[0-9][0-9]*" }
+        $0 ~ re {
+            match($0, re)
+            s = substr($0, RSTART, RLENGTH)
+            sub(/^\|[[:space:]]*/, "", s)
+            print s
+        }
+        /^#{1,6}.*BLK-[A-Z]+/ {
+            match($0, /BLK-[A-Z]+/); print substr($0, RSTART, RLENGTH)
+        }
+    ' "$f"
+done < <(printf '%s\n' "${DOCS[@]}") | sort > "$DEFS"
 
 dups="$(sort "$DEFS" | uniq -d)"
 [ -n "$dups" ] && err "duplicate requirement IDs: $(echo "$dups" | tr '\n' ' ')"

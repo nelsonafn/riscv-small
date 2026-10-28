@@ -17,6 +17,15 @@ figure by ID, and this file records how each **non-Mermaid** figure is produced 
 | Source | Artefact | Tool | Status | Used by |
 |---|---|---|---|---|
 | `architecture-legacy.drawio` | `architecture-legacy.png` | drawio | frozen | none — historical reference |
+| `wave/t1-load-use-stall.json5` | `wave/t1-load-use-stall.svg` | wavedrom-cli 3, default skin, `hscale: 3` | as-built | `uarch.md` section 7.5 |
+| `wave/t2-branch-flush.json5` | `wave/t2-branch-flush.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.5 |
+| `wave/t3-fetch-stall.json5` | `wave/t3-fetch-stall.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.1 |
+
+The three timing figures are **as-built**: each draws the behaviour of `rtl/`, and where the RTL
+diverges from `spec.md` the caption names the gap (`G-09` for T3, `G-19` for T1). They are
+hand-derived from the enable and flush expressions in `rtl/control.sv`, not captured from a
+simulation trace. The `wavedrom-timing` skill fixes no colour configuration, so they use the
+documented WaveDrom default skin and differ only in `hscale`.
 
 ## Frozen figures
 
@@ -29,6 +38,7 @@ A PNG is used instead of an SVG because the vector export is ~843 kB for a file 
 | Figure | Why it is not Mermaid |
 |---|---|
 | `architecture-legacy` | pre-existing drawio file kept for history; not a live document figure |
+| `wave/t1-load-use-stall`, `wave/t2-branch-flush`, `wave/t3-fetch-stall` | cycle-level timing: the figure contract reserves WaveDrom for time and Mermaid for structure, so these are not an exception to the rule |
 
 ## Checks
 

@@ -34,3 +34,6 @@ info
 |---|---|---|---|---|
 | H0 | The core owns no memory; every boundary is one interface | inline Mermaid | `uarch.md` §1 | `uarch.md` |
 | H1 | Five modules and one control block; one interface per stage boundary | inline Mermaid | `uarch.md` §6 | `uarch.md` |
+| T1 | A load-use insertion is one cycle of `ex_ma_flush` with IF/ID and ID/EX held, and it suppresses the write of the instruction in WB | WaveDrom | `figs/wave/t1-load-use-stall.json5` | `uarch.md` §7.5 |
+| T2 | A taken branch clears IF/ID and redirects the PC in ID, at a cost of one fetch slot | WaveDrom | `figs/wave/t2-branch-flush.json5` | `uarch.md` §7.5 |
+| T3 | A withheld fetch grant deletes the fetch and the PC runs on; nothing is held | WaveDrom | `figs/wave/t3-fetch-stall.json5` | `uarch.md` §7.1 |
