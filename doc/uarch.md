@@ -3,13 +3,20 @@
 | Field | Value |
 |---|---|
 | Status | draft |
-| Implements | [spec.md](spec.md) v0.5 |
+| Implements | [spec.md](spec.md) v0.7.3 |
 | Baseline | commit `bb789bb` (same baseline as the specification; the RTL was read at this commit) |
-| Scope | as built: this document describes `rtl/*.sv`, not the target rows of `spec.md` §4 and §7.1 |
+| Scope | as built: this document describes `rtl/*.sv`, not the target rows of `spec.md` §4 and §7.1; a v0.7 obligation that the RTL does not meet is written down as **target** and never as built |
 
 Everything below is read from the RTL. Where a `file:line` citation is missing, the sentence is a
 pointer to another section, not a behavioural claim. Where the target of `spec.md` differs from the
-code, the difference is named with its existing gap ID and the code is described as it is.
+code, the difference is named with its existing gap ID and the code is described as it is. The
+requirement table of `spec.md` v0.7.3 has 59 rows. The ten rows v0.7 added are target only: `FR-50`
+(the CSR file and its address map), `FR-51` (`mscratch`), `FR-52` (`mtval`), `FR-53` (debug mode with
+`dcsr`/`dpc`/`dscratch`), `FR-54` (run control), `FR-55` (abstract commands), `FR-56` (the program
+buffer), `FR-57` (`Sdtrig` triggers), `FR-58` (single step) and `FR-59` (`dbg_auth` strap). No module,
+port or register of the RTL implements any of them, and no sentence of this document claims
+otherwise; the widened cause bus, the three interrupt inputs, `mtime` and the reset vector are target
+in the same way.
 
 ## 1. Overview
 
@@ -34,7 +41,20 @@ request is the level-sensitive `exception` input (`G-14`, `rtl/riscv_small.sv:44
 second hart (`G-16`), no illegal-instruction trap (`G-06`), and no misaligned-access checking
 (`G-08`). The trap vector is the constant 1000 (`G-01`, `rtl/control.sv:255`) and the trap cause
 register is tied to zero (`G-02`, `rtl/control.sv:265`). The target for each of these is in
-`spec.md` §4; none of it exists here.
+`spec.md` §4; none of it exists here. v0.7 adds ten further target obligations whose target statement
+is recorded in §7.10–§7.12: the machine-mode CSR file and its address map (`FR-50`), `mscratch`
+(`FR-51`) and `mtval` (`FR-52`), then debug mode with `dcsr`/`dpc`/`dscratch` (`FR-53`), the
+run-control handshake (`FR-54`), abstract commands (`FR-55`), the program buffer (`FR-56`), `Sdtrig`
+triggers (`FR-57`), single step (`FR-58`) and the `dbg_auth` strap (`FR-59`). v0.7 also records
+four target changes to boundaries this core does not have: the trap request widens from one level to
+the cause bus `exception[3:0]` (`FR-22`), the three level-sensitive interrupt inputs
+`mtip`/`meip`/`msip` join the boundary (`FR-39`, `FR-40`), a 64-bit `mtime` input feeds
+`time`/`timeh` (`FR-49`), and the target reset vector becomes the `RESET_VECTOR` parameter (`FR-41`).
+The seven rows of the previous revision are target too — `M` (`FR-43`), `C` with `IALIGN=16`
+(`FR-44`), `MRET` (`FR-45`), `WFI` (`FR-46`), the six `Zicsr` instructions (`FR-47`), machine
+interrupt entry with the `mstatus` stack and the MEI > MSI > MTI priority (`FR-48`), and `Zicntr`
+(`FR-49`) — and the core implements none of them, so every one of them is marked target where this
+document touches it.
 
 The context is small: one core, two external memories, four control inputs (H0).
 
@@ -62,18 +82,62 @@ flowchart TD
 *H0 — one core, two external memories, one interface per boundary. `trap_req_if` (`C10`) reaches
 `control` directly and is not drawn here. Source: inline, section 1.*
 
+The context is wider than H0 shows once the product is considered: Debug, the timer and the interrupt controller are platform blocks; the core reaches each through one named interface.
+
+```mermaid
+flowchart TD
+    accTitle: Target platform blocks and the interfaces the core will expose
+    accDescr: The core sits between two external memories and three platform blocks, a Debug Module, a timer and an interrupt controller. Every edge is one named interface of the catalogue, and the JTAG DTM reaches the Debug Module over the DMI, which is outside the core boundary and therefore outside the catalogue.
+
+    classDef stage fill:#c6dcff,stroke:#305bab,color:#0f172a
+    classDef control fill:#fff6b6,stroke:#af7e02,color:#0f172a
+    classDef memory fill:#dbfaad,stroke:#608520,color:#0f172a
+    classDef csr fill:#dedaff,stroke:#6631d7,color:#0f172a
+    classDef external fill:#ffd8f4,stroke:#af3fb9,color:#0f172a
+
+    subgraph PLATFORM["platform"]
+        DM["🎛️ debug_module"]:::control
+        DTM(["👤 jtag_dtm"]):::external
+        TIMER["📋 mtime"]:::csr
+        IRQCTL["🎛️ irq_controller"]:::control
+    end
+
+    subgraph MEM["memory"]
+        IMEM[("🗄️ inst_memory")]:::memory
+        DMEM[("🗄️ data_memory")]:::memory
+    end
+
+    CORE["⚙️ riscv_small"]:::stage
+
+    DM -.->|"dbg_if"| CORE
+    IRQCTL -.->|"irq_if"| CORE
+    TIMER -.->|"mtime_if"| CORE
+    CORE ==>|"imem_if"| IMEM
+    CORE ==>|"dmem_if"| DMEM
+```
+
+*H2 — target: Debug, the timer and the interrupt controller are platform blocks; the core reaches each
+through one named interface. The three target interfaces drawn here are `dbg_if` (`C13`), `irq_if` (`C11`) and
+`mtime_if` (`C12`); `imem_if` (`C5`) and `dmem_if` (`C6`) are the as-built memory boundaries. In the
+target the JTAG DTM reaches the Debug Module over the DMI, which `C-13` keeps outside the core
+boundary and therefore out of this figure. Source: inline, section 1.*
+
 ## 2. Diagram index
 
 | ID | Claim | Level | Embedded in |
 |---|---|---|---|
 | H0 | The core owns no memory; instruction fetch and data access are two independent external ports | context | section 1 |
 | H1 | Five pipeline modules are wired by one control block; the instruction and data memories stay outside | top | section 6 |
+| H2 | Debug, the timer and the interrupt controller are platform blocks; the core reaches each through one named interface | block | section 1 |
+| S1 | Debug mode is entered from running by run control, a breakpoint, a trigger or a step, and left only by resume or DRET | state | section 7.12 |
 | T1 | A load-use insertion is one cycle of `ex_ma_flush` with IF/ID and ID/EX held, and it suppresses the write of the instruction in WB | cycle | section 7.5 |
 | T2 | A taken branch clears IF/ID and redirects the PC in ID, at a cost of one fetch slot | cycle | section 7.5 |
 | T3 | A withheld fetch grant deletes the fetch and the PC runs on; nothing is held | cycle | section 7.1 |
 
-Five figures exist. No H2 is drawn: every block in this core is either a table (decode, forwarding,
-stalls) or a single registered stage. The three timing figures T1–T3 are hand-derived from the same
+Seven figures exist. H0 and H1 are the as-built structure. H2 is target structure — the three
+platform blocks the product adds and the interfaces the core will expose to them — and S1 is the
+target debug state machine; both H2 and S1 are target, and neither describes a register of the RTL.
+The three timing figures T1–T3 are hand-derived from the same
 enable and flush expressions as section 9 — they are not captured from a simulation — and each draws
 the as-built behaviour, including the two places where it diverges from the target (`G-09`, `G-19`).
 
@@ -112,8 +176,10 @@ Instruction-format overlays used by the decoder (`rs1` is always `[19:15]`, `rs2
 Two views of the same boundary. The **catalogue** (§4.1–§4.3) groups the connections into named
 interfaces with modports, so a figure can draw one line per connection; the **port table** (§4.4) is the
 1:1 transcription of the module header and is the proof that the grouping loses nothing. No `interface`
-construct exists in the RTL: the names below are a documentation grouping of existing nets, and every
-modport row lists the as-built signals.
+construct exists in the RTL: the as-built names below are a documentation grouping of existing nets, and
+every as-built modport row lists the as-built signals. Rows marked **target** are the v0.7 contract that
+the RTL does not implement; the target rows are listed so that a figure or a block section can name the
+connection, and they carry a requirement cite instead of an RTL cite.
 
 ### 4.1 Interface catalogue
 
@@ -130,18 +196,34 @@ modport row lists the as-built signals.
 | `wb_if` | `writeback` | `decode` | `rd0_addr_wb`, `rd0_data_wb`, `rd0_wr_en_wb` | none (combinational) | `clk`, `rst_n` | C4 |
 | `ctrl_if` | `control` | `stage` | 4 enables, 3 flushes, `pc_sel`, `inst_rd_en`, `alu_src1`, `alu_src2`, `storage_src`, `jmp_src1`, `jmp_src2`, `trap_addr` | none (level) | `clk`, `rst_n` | C7 |
 | `jump_if` | `decode` | `fetch`, `control` | `jump_addr`, `branch_taken`, `cond_jump` | redirect | `clk`, `rst_n` | C8 |
+| `irq_if` — target | `irqctrl` | `core` | `mtip`, `meip`, `msip` | level-sensitive, one input per cause (`FR-39`, `FR-40`, `FR-48`) | `clk`, `rst_n` | C11 |
+| `mtime_if` — target | `platform` | `core` | `mtime[63:0]` | none; a free-running platform counter (`FR-49`, `Q-42`) | `clk`, `rst_n` | C12 |
+| `dbg_if` — target | `debug_module` | `hart` | 17 signals in three channels: 4 run-control inputs and 4 status outputs, 5 abstract-command signals, 4 program-buffer signals (§4.2; `FR-53`..`FR-58`, `C-13`) | request/status levels plus a command handshake | `clk`, `rst_n`, `dbg_dmactive` | C13 |
+| `auth_if` — target | `integrator` | `core` | `dbg_auth` | none; a static platform strap, low means the hart ignores halt and reset-halt, never enters debug mode and reports `dbg_halted` = 0 (`FR-59`, `C-14`, `D-11`) | — | C16 |
+| `csr_if` — target | `pipeline`, `control` | `csrfile` | a CSR address, an access qualifier and write data from the pipeline; the read value back (`FR-50`) | read-modify-write request and response | `clk`, `rst_n` | C14, C15 |
+
+> **`trap_req_if` — target, not as built.** The row above is the as-built contract: one level-sensitive
+> `exception` bit (`rtl/riscv_small.sv:44`) and a cause register tied to zero (`rtl/control.sv:265`,
+> `G-02`). The target widens the same input to `exception[3:0]`, a cause bus that carries the reason of
+> a synchronous request; the core captures that value at entry and does not re-read the bus afterwards
+> (`FR-22`, `Q-35`). The as-built row is left unchanged because the one-bit input is what the RTL has.
 
 > **`dmem_if` — target, not as built.** The row is the interface the RTL declares: no byte write strobe
 > and no second beat (`G-22`). The target adds `data_wr_strb[3:0]`, so the core places the store value in
 > the addressed lane and the memory never shifts or justifies, and it splits an access that crosses a word
-> boundary into two word-aligned transactions (`FR-42`, `Q-28`, `Q-29`).
+> boundary into two word-aligned transactions (`FR-42`, `Q-28`, `Q-29`). Two further parts of the row are
+> target: `SC` needs a success-or-failure indication on the response side, which the present `data_rd` /
+> `data_ready` pair does not carry (`FR-35`), and misaligned atomics are excluded from the split, because
+> `LR`, `SC` and `AMO` must be naturally aligned and otherwise take a misaligned or access-fault exception
+> rather than a second beat (`FR-42`, `FR-35`).
 
 `writeback` is not a module: it is the top-level mux at `rtl/riscv_small.sv:219`, which is why §4.3 has
 one row for the pair `ma_wb_if`/`wb_if` and the H1 figure collapses both into a single `wb_if` edge.
 
 ### 4.2 Modport map
 
-One row per side. Direction is from the modport's point of view; the signal names are the as-built nets.
+One row per side. Direction is from the modport's point of view; the signal names are the as-built nets,
+except in the rows marked **target**, which name signals the target adds and the RTL does not have.
 
 | Interface | Modport | Dir | Signals | Sampling / timing | Cite |
 |---|---|---|---|---|---|
@@ -168,6 +250,19 @@ One row per side. Direction is from the modport's point of view; the signal name
 | `jump_if` | `decode` | out | `jump_addr`, `branch_taken`, `cond_jump` | combinational from `jump_decision` | `rtl/instruction_decode.sv:177-188` |
 | `jump_if` | `fetch` | in | `jump_addr` | selected as the next PC | `rtl/instruction_fetch.sv:88-101` |
 | `jump_if` | `control` | in | `branch_taken`, `cond_jump` | selects `JUMP`, flushes IF/ID | `rtl/control.sv:229-232` |
+| `irq_if` — target | `irqctrl` | out | `mtip`, `meip`, `msip` | level; target samples every enabled edge | `spec.md` §6 (`FR-39`, `FR-40`) |
+| `irq_if` — target | `core` | in | `mtip`, `meip`, `msip` | level; target feeds `mip` and the entry priority, never latched as an edge | `spec.md` §6 (`FR-48`) |
+| `mtime_if` — target | `platform` | out | `mtime[63:0]` | free-running; target reads it as `time`/`timeh` with no memory access | `spec.md` §6 (`FR-49`, `Q-42`) |
+| `mtime_if` — target | `core` | in | `mtime[63:0]` | target samples the counter in the CSR read path | `spec.md` §6 (`FR-49`) |
+| `dbg_if` — target | `debug_module` | out | `dbg_dmactive`, `dbg_haltreq`, `dbg_resumereq`, `dbg_resethaltreq`, `dbg_command[31:0]`, `dbg_data0_wdata[31:0]`, `dbg_progbuf_inst[31:0]`, `dbg_progbuf_wr_en` | target: requests, command and program-buffer words | `spec.md` §6 (`FR-54`..`FR-56`) |
+| `dbg_if` — target | `debug_module` | in | `dbg_halted`, `dbg_running`, `dbg_havereset`, `dbg_resumeack`, `dbg_data0_rdata[31:0]`, `dbg_busy`, `dbg_cmderr[2:0]`, `dbg_progbuf_ready`, `dbg_progbuf_done` | target: status and completion read back | `spec.md` §6 (`FR-54`..`FR-56`) |
+| `dbg_if` — target | `hart` | in | the eight inputs listed above | target: sampled in debug mode or at an instruction boundary | `spec.md` §6 (`FR-54`) |
+| `dbg_if` — target | `hart` | out | the nine outputs listed above | target: driven from debug state | `spec.md` §6 (`FR-53`, `FR-55`) |
+| `auth_if` — target | `integrator` | out | `dbg_auth` | target: a static platform strap, sampled when the hart considers a halt or reset-halt request | `spec.md` §6 (`FR-59`, `C-14`, `D-11`) |
+| `auth_if` — target | `core` | in | `dbg_auth` | target: low holds the hart out of debug mode and forces `dbg_halted` = 0 | `spec.md` §6 (`FR-59`, `D-11`) |
+| `csr_if` — target | `pipeline` | out | CSR address, access qualifier and write data; target: ID decodes the `CSR*` word, EX supplies the write value, WB receives the read value | target: one request per `CSR*` instruction | `spec.md` §6 (`FR-47`, `FR-50`) |
+| `csr_if` — target | `csrfile` | out | the CSR read value | target: the file answers the request | `spec.md` §6 (`FR-50`) |
+| `csr_if` — target | `control` | out | the trap-entry state (`mepc`, `mcause`, `mstatus`) | target: written by `control` as the trap is taken | `spec.md` §6 (`FR-23`, `FR-48`) |
 
 Four interfaces (`id_ex_if`, `ex_ma_if`, `ma_wb_if`, `ctrl_if`) repeat §4.1 rather than duplicating a
 20-signal list four times; the payload is identical on both sides of a pipeline register by construction.
@@ -188,6 +283,16 @@ One row per directed edge a figure may draw. `#` is stable and cited from figure
 | C8 | `instruction_decode` | `instruction_fetch`, `control` | `jump_if` | `decode` → `fetch`, `decode` → `control` | dashed |
 | C9 | integrator | core | `clk_rst_if` | `integrator` → `core` | thick |
 | C10 | integrator | `control` | `trap_req_if` | `integrator` → `control` | dashed |
+| C11 | interrupt controller (target) | core | `irq_if` | `irqctrl` → `core` | dashed |
+| C12 | platform timer (target) | core | `mtime_if` | `platform` → `core` | dashed |
+| C13 | external Debug Module (target) | core hart side | `dbg_if` | `debug_module` → `hart` | thick |
+| C14 | pipeline, ID/EX/WB (target) | CSR file | `csr_if` | `pipeline` → `csrfile` | solid |
+| C15 | `control` (target) | CSR file | `csr_if` | `control` → `csrfile` | dashed |
+| C16 | platform strap (target) | core | `auth_if` | `integrator` → `core` | dashed |
+
+Rows C11–C16 are target: no such net, port or module exists in `rtl/` (`rtl/riscv_small.sv:41-57`).
+In the target, C13 is the hart side of an external Debug Module and carries no DMI, which `C-13` keeps
+between the DTM and the Debug Module.
 
 ### 4.4 Top-level ports
 
@@ -208,15 +313,27 @@ Direction is from the core's point of view.
 | `data_rd` | in | 32 | data memory | `memory_access` | `dataBus_u`; must be valid in the cycle the load commits in WB | — |
 | `data_rd_en_ma` | out | 1 | `execution` (EX/MA register) | data memory | registered read strobe; one cycle per load unless a stall freezes MA | 0 |
 | `data_wr_en_ma` | out | 1 | `execution` (EX/MA register) | data memory | registered write strobe; one cycle per store unless a stall freezes MA; **not** qualified by `data_ready` (`G-18`) | 0 |
-| `data_wr` | out | 32 | `execution` (`rs2_ma`) | data memory | `dataBus_u`; store data after the `storage_src` mux; not lane-shifted (`G-08`) | 0 |
+| `data_wr` | out | 32 | `execution` (`rs2_ma`) | data memory | `dataBus_u`; store data after the `storage_src` mux; not lane-shifted (`G-08`, store half) | 0 |
 | `data_addr` | out | 32 | `execution` (`alu_ma`) | data memory | `dataBus_u`; byte address, equals the ALU result of EX (`rtl/riscv_small.sv:119`) | 0 |
 | `data_rd_wr_ctrl` | out | 2 | `execution` (`funct3_ma`), truncated | data memory | `logic [1:0]`; `funct3_ma[1:0]`, driven for every instruction (section 8) | 0 |
 
-> **Target, not as built.** The fifteen rows above are the port set of `rtl/riscv_small.sv:40-58`: the
-> data port has no byte write strobe and no second beat (`G-22`). The target adds a sixteenth port,
-> `data_wr_strb[3:0]`, so the core places the store value in the addressed lane and the memory never
-> shifts or justifies, and it splits an access that crosses a word boundary into two word-aligned
-> transactions under `FR-42` (`Q-28`, `Q-29`).
+> **Target, not as built.** The fifteen rows above are the as-built port set of `rtl/riscv_small.sv:41-57`,
+> and the as-built port count is therefore fifteen. Every addition below is target. The target adds
+> `data_wr_strb[3:0]` on the data path, so the core places the store value in the addressed lane, asserts
+> the strobes for the bytes it drives and the memory never shifts or justifies (`FR-42`, `Q-28`,
+> `Q-29`). The target widens the existing one-bit `exception` input to `exception[3:0]`, a cause bus
+> carrying the reason of a synchronous request, rather than adding a new group (`FR-22`, `Q-35`); as
+> built that input is one level-sensitive bit (`rtl/riscv_small.sv:44`). The target adds three
+> level-sensitive interrupt inputs, `mtip`, `meip` and `msip`, one per machine interrupt source
+> (`FR-39`, `FR-40`, `FR-36`, `FR-48`). The target adds the 64-bit `mtime[63:0]` input that `time` and
+> `timeh` view (`FR-49`, `Q-42`). The target adds the debug group of eighteen signals — seventeen on
+> `dbg_if`, the run-control, abstract-command and program-buffer channels, and one on `auth_if`, the
+> `dbg_auth` strap from the platform (`FR-54`..`FR-56`, `FR-59`, `C-14`, `D-11`) — and
+> that group is absent when `DEBUG_ENABLED` = 0 (`C-13`, `spec.md` §6). The target adds the
+> store-conditional success indication on the data response side that `FR-35` requires, which is not
+> one of the sixteen data-path signals. The "sixteen" of `spec.md` §6 is the fifteen as-built rows plus `data_wr_strb` and
+> counts the data path only; it does not include the interrupt requests, the trap cause, the timer or
+> the debug group, so the target port count of the whole core is larger than sixteen.
 
 Two internal connections are part of this contract and are easy to miss:
 
@@ -240,7 +357,11 @@ Reset de-assertion is the **core's** obligation, not the integrator's: `C-01` ha
 `rst_n` directly and add no second synchroniser, and `FR-41` requires the core to release reset through
 `RESET_SYNC_STAGES` enabled edges, with `A-06` and the project decision `D-09` fixing the hybrid style
 (`doc/spec.md` §0.1, §5.1, §5.2). None of that exists in `rtl/`: the release is as asynchronous as the
-assertion, which is `G-21`.
+assertion, which is `G-21`. One further part of `FR-41` is target, not as built: the target first fetch
+address after reset is the build-time parameter `RESET_VECTOR`, default `0x8000_0000`, whose value is
+fixed by `Q-33` and which software cannot move because it is not a CSR (`FR-41`, `Q-33`, `spec.md`
+§5.2). As built there is no such parameter and `pc` resets to 0, so the first fetch leaves at address 0
+(`rtl/instruction_fetch.sv:84-87`).
 
 The asynchronous reset appears in seven `always_ff` blocks, all with the same sensitivity list
 `posedge clk or negedge rst_n`:
@@ -335,7 +456,7 @@ write-back data (`rtl/execution.sv:157-174`), and runs `alu` combinationally
 
 **MA.** Asserts the data strobes and the address, which are the registered EX outputs
 (`rtl/execution.sv:100-106`, `rtl/riscv_small.sv:119`), and extends the load data according to
-`rd_wr_ctrl_wb` (`rtl/memory_access.sv:80-102`). Both strobes are the EX/MA register outputs, so a
+`rd_wr_ctrl_wb` and `alu_wb[1:0]` (`rtl/memory_access.sv:89-111`). Both strobes are the EX/MA register outputs, so a
 frozen EX/MA holds them asserted (section 8).
 
 **WB.** There is no WB module: `memory_access` registers the MA result into MA/WB
@@ -372,6 +493,10 @@ instantiated inside `execution` (`rtl/execution.sv:179`).
 | BLK-JMP | `jump_decision` | `rtl/jump_decision.sv` | `u_jump_decision` | `instruction_decode` (`rtl/instruction_decode.sv:177`) |
 
 The instance name `u_exection` is the spelling in the RTL (`rtl/riscv_small.sv:172`).
+
+Three further block IDs — `BLK-CSR`, `BLK-TRAP` and `BLK-DBG` — have no module, no file and no
+instance: they are target blocks of v0.7 and are described in §7.10–§7.12, which is why they are absent
+from the table above.
 
 ### 7.0 BLK-TOP — `riscv_small` (`rtl/riscv_small.sv`)
 
@@ -458,6 +583,16 @@ flushed IF/ID holds `0`, which decodes as "no write" (section 7.2).
 - The PC is gated by `if_id_clk_en`, so any stall that freezes IF/ID also freezes the address. That
   is what makes the data-wait stall stop the fetch stream without a separate PC enable
   (`rtl/control.sv:247`, `rtl/riscv_small.sv:125`).
+
+**Parcel alignment — target, not as built.** With `IALIGN=16` (`FR-44`) a 32-bit instruction may start
+on a 2-mod-4 address, so the fetch must hold the previous word's trailing halfword — two bytes, the
+minimum for a 2-mod-4 start, and buffering the line as `FR-27` asks removes the distinction — in order to
+assemble the two parcels into one instruction. The as-built fetch presents one 32-bit
+word per cycle (`rtl/instruction_fetch.sv:63`, `:73-76`) and the decoder picks its arm from that word's
+`opcode` field alone (`rtl/instruction_decode.sv:45`, `:247`), so the parcel alignment does not exist and
+a 32-bit instruction that begins at a 2-mod-4 address cannot be formed; `FR-20` is the per-word path that
+would have to carry both parcels, `FR-27` the line fill that replaces it, and the missing length handling
+is `G-06`.
 
 Withholding the grant neither holds the fetch nor pauses the pipeline (T3).
 
@@ -568,6 +703,15 @@ The forward mux selects `RD_ID` (the register-file value), `RD_EX` (`rd0_data_ex
   `rtl/control.sv:113-115`).
 - `funct3_ex` is `inst.i_type_load.funct3` for every opcode (`rtl/instruction_decode.sv:125`), i.e.
   bits `[14:12]` of the word, not a decoded load type. Consequence in section 8.
+- **Target, not as built.** The decoder is 32-bit-only and decodes only the RV32I base subset: `M`
+  (`FR-43`), `C` (`FR-44`) and `MRET`/`WFI` (`FR-45`, `FR-46`) are absent, so today each of those
+  encodings either aliases onto the base ALU (`rtl/instruction_decode.sv:325`) or falls through the
+  no-write default (`rtl/instruction_decode.sv:238-247`, `:333-335`) (`G-06`, `G-13`). The target
+  decode adds three groups this block does not have: the six `Zicsr` encodings of `FR-47`, which the
+  target decodes into a `csr_if` request (§7.10); the `MRET`/`WFI` system encodings, which share the
+  empty system arm at `rtl/instruction_decode.sv:333-335`; and the debug system encodings — `DRET`
+  plus the `EBREAK` that enters debug mode — which are target items of §7.12 behind `DEBUG_ENABLED`
+  (`FR-53`). Every one of those groups is target, and none of them is decoded by the RTL.
 
 ### 7.3 BLK-EX — `execution` (`rtl/execution.sv`)
 
@@ -661,29 +805,35 @@ Interfaces: `ex_ma_if` (`memory`), `ma_wb_if` (`memory`), `ctrl_if` (`stage`).
 **State.** `rd_wr_ctrl_wb`, `rd0_addr_wb`, `wb_mux_sel_wb`, `rd0_wr_en_wb`, `alu_wb`
 (`rtl/memory_access.sv:62-78`). No flush input; reset writes zero to every field it assigns.
 
-**Behaviour.** `wb_mux_sel_wb` is simply the registered `data_rd_en` (`rtl/memory_access.sv:74`), so
+**Behaviour.** `wb_mux_sel_wb` is simply the registered `data_rd_en` (`rtl/memory_access.sv:83`), so
 it marks a load for the WB mux (`rtl/riscv_small.sv:219`) and for the data-wait stall
-(`rtl/control.sv:246`). The extension is combinational and keyed on the registered `funct3`:
-`LB`/`LH` take `data.s_bytes[0]`/`s_half[0]`, `LBU`/`LHU` take `u_bytes[0]`/`u_half[0]`, `LW` takes
-the whole word, and the default arm also takes the whole word (`rtl/memory_access.sv:80-102`).
+(`rtl/control.sv:246`). The extension is combinational and keyed on the registered `funct3`, and the
+lane comes from `ld_lane = alu_wb[1:0]` (`rtl/memory_access.sv:68-69`): `alu_wb` is the effective
+address registered at the same edge as `rd_wr_ctrl_wb`, so it stays aligned with `data` while the
+load commits in WB. `dataBus_u` declares its byte array as `[0:3]`, where index 0 holds bits
+`[31:24]`, so the lane is taken from an indexed part-select of `u_data` and never from a byte-array
+index: offset 0 is `data[7:0]` and offset 3 is `data[31:24]`.
 
 | `rd_wr_ctrl_wb` | Lane used | Extension | Cite |
 |---|---|---|---|
-| `LB` `3'b000` | `data[7:0]` | sign | `rtl/memory_access.sv:82-84` |
-| `LH` `3'b001` | `data[15:0]` | sign | `:85-87` |
-| `LW` `3'b010` | `data[31:0]` | none | `:88-90` |
-| `LBU` `3'b100` | `data[7:0]` | zero | `:91-93` |
-| `LHU` `3'b101` | `data[15:0]` | zero | `:94-96` |
-| any other | `data[31:0]` | none | `:97-99` |
+| `LB` `3'b000` | `data[8*lane +: 8]` | sign | `rtl/memory_access.sv:91-93` |
+| `LH` `3'b001` | `data[16*lane[1] +: 16]` | sign | `:94-96` |
+| `LW` `3'b010` | `data[31:0]` | none | `:97-99` |
+| `LBU` `3'b100` | `data[8*lane +: 8]` | zero | `:100-102` |
+| `LHU` `3'b101` | `data[16*lane[1] +: 16]` | zero | `:103-105` |
+| any other | `data[31:0]` | none | `:106-108` |
 
 **Corner cases.**
 
 - `data_addr` is a **byte address** — the registered ALU result, `assign data_addr = alu_ma`
   (`rtl/riscv_small.sv:119`) — and `data_wr` is always the value of `rs2`, wired straight out of
-  `rs2_ma` (`rtl/riscv_small.sv:193`). The lane is always the lowest, whatever `data_addr[1:0]` says,
-  and an access crossing a word boundary is issued as a single transaction: neither the lane shift nor
-  the split exists as built (`G-08`, `G-22`, `A-05`). The target asserts `data_wr_strb[3:0]` in the
-  addressed lane and adds the second beat (`FR-42`, `Q-28`, `Q-29`).
+  `rs2_ma` (`rtl/riscv_small.sv:193`). A **load** selects its lane from `data_addr[1:0]` (`T-06`),
+  while a **store** still drives one lane whatever `data_addr[1:0]` says, and an access crossing a
+  word boundary is issued as a single transaction: neither the store lane shift nor the split exists
+  as built (`G-08`, `G-22`, `A-05`). The target asserts `data_wr_strb[3:0]` in the
+  addressed lane and adds the second beat (`FR-42`, `Q-28`, `Q-29`). The target also excludes atomics
+  from that path: with `ENABLE_A=1`, `LR`, `SC` and `AMO` are **not** split, and they must be naturally
+  aligned or take a misaligned or access-fault exception (`FR-35`, `FR-42`).
 - `ld_data_wb` is not registered, so the load data must be present on `data_rd` in the cycle the
   write-back commits. While `data_ready` is low that commit is postponed, and the whole pipeline is
   frozen (`rtl/control.sv:246-251`).
@@ -749,6 +899,16 @@ Interfaces: `ctrl_if` (`control`), `jump_if` (`control`), `trap_req_if` (`contro
 updated only when `clk_en` and `exception` are both true: `sepc <= pc_ex`, `scause <= 0`
 (`rtl/control.sv:262-266`). Neither is exported, so both are write-only state today (`G-02`,
 `G-13`).
+
+**Trap entry — target, not as built.** There is no `mstatus`, no `mie` and no `mip` — the port list
+carries none of them and the only trap state is the pair above (`rtl/control.sv:41-80`, `:257-261`) —
+so no interrupt-entry stack of `MIE`/`MPIE`/`MPP` exists, no evaluation point between instructions
+exists, and no MEI-then-MSI-then-MTI priority exists; `MRET` does not exist either, because the system
+opcode is an empty case (`rtl/instruction_decode.sv:333-335`). As built the vector is the constant and
+the cause is tied to zero (`rtl/control.sv:255`, `:265`, `G-01`, `G-02`, `G-13`, `G-14`). The target is
+`FR-45` for the return and `FR-48` for the entry state, the evaluation points and the priority, with the
+shape of the request and cause signals fixed by `Q-35`: the cause travels on `exception[3:0]` and the
+three interrupts are the level-sensitive `mtip`, `meip` and `msip` inputs.
 
 **Behaviour.** The defaults are set first (`rtl/control.sv:88-101`) and then overwritten in this
 order, so a later condition wins over an earlier one.
@@ -1026,6 +1186,257 @@ address it is asked for, and `data_memory` grants on the address range only, and
 `data_rd_en` rather than on a write strobe (`rtl/data_memory.sv:66`, `:74-77`). The DUT's real memory
 model is the testbench driver (`A-01`).
 
+### 7.10 BLK-CSR — machine-mode CSR file (target)
+
+**Purpose.** **Target, not as built.** This block is the CSR file that `FR-50` requires: the target
+owns every machine-mode address the map lists, answers the six `Zicsr` instructions of `FR-47`, and
+holds the software-visible trap and status state that §7.11 reads and writes. No such module exists in
+`rtl/`: the system opcode is an empty arm (`rtl/instruction_decode.sv:333-335`) and the only trap
+registers the core keeps, `sepc` and `scause`, are private to `control` and unreadable
+(`rtl/control.sv:257-268`), which is `G-13`.
+
+**Interface.** Target interfaces: `csr_if` (`pipeline` and `control` as initiators, `csrfile` as
+target; `C14`, `C15`), `mtime_if` (`core`) for the two timer views, and `irq_if` (`core`) for the
+three `mip` bits. The as-built core exposes none of the three: its port list carries no CSR, timer or
+interrupt signal (`rtl/riscv_small.sv:41-57`).
+
+The map of `FR-50` is written in five groups, and every register below is target. Four of the groups
+are reachable from machine mode in every build; the fifth is target but conditional on `NUM_TRIGGERS`
+and on debug mode.
+
+| Group (`FR-50`) | Target addresses | Target access rule |
+|---|---|---|
+| machine trap and status | `mstatus` 0x300, `misa` 0x301, `mie` 0x304, `mtvec` 0x305, `mstatush` 0x310, `mscratch` 0x340, `mepc` 0x341, `mcause` 0x342, `mtval` 0x343, `mip` 0x344 | target: read/write addresses; `misa`, `mstatush` and `mip` hold only read-only bits, so a target write is accepted and ignored |
+| machine counters | `mcycle` 0xB00, `minstret` 0xB02, `mcycleh` 0xB80, `minstreth` 0xB82, read/write; the views `cycle` 0xC00, `time` 0xC01, `instret` 0xC02, `cycleh` 0xC80, `timeh` 0xC81, `instreth` 0xC82, read-only | target: the four counters are writable; a target write to any of the six views traps, because `csr[11:10] = 2'b11`; `time`/`timeh` are target views of `mtime` (`FR-49`) |
+| identification | `mvendorid` 0xF11, `marchid` 0xF12, `mimpid` 0xF13, `mhartid` 0xF14, `mconfigptr` 0xF15 | target: read-only; `mhartid` reports the hart identifier, the other four read zero |
+| performance counters | `mhpmcounter3`–`mhpmcounter31` 0xB03–0xB1F and `mhpmevent3`–`mhpmevent31` 0x323–0x33F | target: read-only zero because only event 0 exists; a target write is accepted and ignored, because the addresses are not `2'b11` |
+| triggers and debug | `tselect` 0x7A0, `tdata1` 0x7A1, `tdata2` 0x7A2, `tdata3` 0x7A3, `tinfo` 0x7A4; `dcsr` 0x7B0, `dpc` 0x7B1, `dscratch0` 0x7B2, `dscratch1` 0x7B3 | target: the trigger window exists only while `NUM_TRIGGERS` > 0 (`FR-57`), and the four debug addresses are reachable only in debug mode, so a target machine-mode access to any of them traps with cause 2 (`FR-50`, `FR-53`) |
+
+**State.** **Target, not as built.** The target state is one register per implemented address plus the
+`csr[11:10]` decode that decides whether a write traps. The target reset values that the requirements
+fix are `mscratch` = 0 (`FR-51`, a project choice for determinism), `mtval` = 0 (`FR-52`), `misa` at
+the maximal set of the build (`FR-37`), and `dcsr` = 0 with `dpc` = `RESET_VECTOR` while
+`dbg_dmactive` is low (`FR-54`). As built there is no CSR state at all; the pair that does exist,
+`sepc` and `scause`, resets to 0 and updates only when `clk_en` and `exception` are both true
+(`rtl/control.sv:257-266`).
+
+**Behaviour.**
+
+- **Read and write by address, target.** The target rule is the one vol. II §1.1.1 draws at the
+  address: a target write to a `csr[11:10] = 2'b11` address traps with cause 2, and a target write to a
+  read/write address whose bits are read-only is accepted, ignored and does not trap (`FR-50`,
+  `FR-52`). A target `CSRRS`/`CSRRC` with `rs1 = x0`, and a target `CSRRSI`/`CSRRCI` with `uimm = 0`,
+  reads, writes nothing and raises no trap even on a read-only address (`FR-50`, `FR-47`).
+- **WARL legalisation, target.** A target WARL field legalises a written value instead of trapping:
+  `mstatus.MPP` accepts only `2'b11` (`FR-48`), `mtvec.MODE` ≥ 2 legalises to a supported mode
+  (`FR-29`), `misa` legalises to the value it already holds (`FR-37`, `Q-30`), `mtval` legalises to
+  zero (`FR-52`), and `tselect` legalises an index at or beyond `NUM_TRIGGERS` (`FR-57`).
+- **Which stage supplies what, target.** The target decode point is ID, which recognises the six
+  `Zicsr` encodings and raises the `csr_if` request; the target write commits from EX, where the
+  source value and the set/clear mask are resolved; and the target read value returns in WB, where it
+  joins the write-back path. As built no stage has a CSR port, so this stage split does not exist
+  (`rtl/riscv_small.sv:41-57`).
+- **Interaction with forwarding and hazards, target.** Because the target read returns in WB, a
+  consumer of a `CSR*` destination is served by the same paths the as-built core already uses for an
+  ALU or memory result — the WB forward in `control` (`rtl/control.sv:186-188`) and the register-file
+  bypass (`rtl/reg_file.sv:71-73`). A `CSR*` that is followed by a read of the same CSR needs a hazard
+  the as-built `control` does not compute, because its `always_comb` compares register addresses and no
+  CSR address (`rtl/control.sv:87-253`); the target adds that comparison, and `G-13` is the gap that
+  records its absence.
+
+**Corner cases.**
+
+- Target: an access to any address outside the map — `medeleg` 0x302, `mideleg` 0x303, every
+  supervisor and hypervisor address, and 0x7A5–0x7AF — traps with cause 2 and `mepc` at the `CSR*`
+  instruction (`FR-50`); the as-built core has no address decode at all (`G-13`).
+- Target: with `NUM_TRIGGERS` = 0 the five trigger addresses are unimplemented and trap, which is the
+  opposite of the target behaviour with a trigger unit built (`FR-57`).
+- Target: `mip` is a read-only view of the three interrupt levels of `irq_if`, so a write to 0x344 is
+  accepted and ignored rather than trapping (`FR-48`, `FR-50`).
+- Target: `x0` as the destination of a `CSR*` discards the read value and still performs the write,
+  exactly as the register file discards a write to `x0` today (`rtl/reg_file.sv:100-103`, `FR-14`).
+- As built: none of the above exists, which is `G-13`; the trap state the core does keep is
+  unreachable from software (`rtl/control.sv:257-268`).
+
+### 7.11 BLK-TRAP — trap entry and exit (target)
+
+**Purpose.** **Target, not as built.** This block is the target trap path of `FR-23`, `FR-45` and
+`FR-48`: it writes the target entry state, picks the target entry address from `mtvec`, honours the
+target mask and priority of the three machine interrupts, and restores state on `MRET`. As built the
+same job is done by two registers inside `control` with a constant vector and a zeroed cause
+(`rtl/control.sv:255-266`), which `G-01`, `G-02` and `G-14` record.
+
+**Interface.** Target interfaces: `trap_req_if` (`integrator` → `control`, widened to
+`exception[3:0]`; `C10`), `irq_if` (`irqctrl` → `core`; `C11`) and `csr_if` (`control` → `csrfile`;
+`C15`). As built the whole trap boundary is the one level-sensitive `exception` bit
+(`rtl/riscv_small.sv:44`) and the internal constant `trap_addr` (`rtl/control.sv:255`).
+
+| Target register | Address | Written by the target on | Target value |
+|---|---|---|---|
+| `mepc` | 0x341 | every entry | the interrupted instruction address; bit 0 always zero, bit 1 zero while `IALIGN` = 32 (`FR-23`, `FR-48`) |
+| `mcause` | 0x342 | every entry | the cause number, bit 31 set for an interrupt (`FR-48`) |
+| `mtval` | 0x343 | never | read-only zero (`FR-52`) |
+| `mstatus` | 0x300 | entry and `MRET` | entry: `MPIE` ← `MIE`, `MIE` ← 0, `MPP` ← `2'b11`; `MRET`: `MIE` ← `MPIE`, `MPIE` ← 1, `MPP` ← `2'b11` (`FR-45`, `FR-48`) |
+| `mie` | 0x304 | software only | `MTIE`, `MSIE` and `MEIE` writable (`FR-48`) |
+| `mip` | 0x344 | never | read-only view of `mtip`, `msip` and `meip` (`FR-48`) |
+| `mtvec` | 0x305 | software only | `BASE` in `[XLEN-1:2]` plus `MODE`, direct or vectored (`FR-29`, `FR-30`) |
+
+**State.** **Target, not as built.** The target state is the seven registers above plus the target
+entry stack they form. As built the state is `sepc` and `scause` only: both reset to 0, `sepc`
+captures `pc_ex` and `scause` is tied to zero whenever `clk_en` and `exception` are both true
+(`rtl/control.sv:257-266`), and neither is exported (`G-02`).
+
+**Behaviour.**
+
+- **Target entry stack.** On a target entry the block writes `mepc`, `mcause`, the `mstatus` triple
+  and the program counter, in that order of effect, so `MIE` reads 0 in the first handler instruction
+  (`FR-48`).
+- **Target entry address.** The target takes `mtvec.BASE` in direct mode, and `BASE + 4 × cause` for
+  an interrupt in vectored mode while an exception still enters at `BASE` (`FR-29`, `FR-30`). As
+  built the entry address is the decimal constant 1000 (`rtl/control.sv:255`, `G-01`).
+- **Target priority.** With the three requests asserted together the target serves MEI, then MSI, then
+  MTI, so the observed causes are 11, then 3, then 7 with bit 31 set (`FR-48`).
+- **Target evaluation points.** The target evaluates pending interrupts between instructions,
+  immediately after a `CSR*` that sets `MIE` or a `mie` bit, and immediately after `MRET`; it takes a
+  request only while `mstatus.MIE` and the matching `mie` bit are both 1 and leaves it pending
+  otherwise (`FR-48`).
+- **Target return.** `MRET` restores `MIE`, `MPIE` and `MPP` and loads the program counter from
+  `mepc`; as built `MRET` is not decoded at all, because the system opcode is an empty arm
+  (`rtl/instruction_decode.sv:333-335`, `FR-45`).
+- **Target interrupt inputs.** The three levels arrive on `irq_if`, and the target `mip` bits are views
+  of those levels rather than latched state; the synchronous cause arrives on `exception[3:0]` and the
+  target captures it at entry (`FR-39`, `FR-40`, `FR-48`, `Q-35`).
+- **Target precision.** The target keeps the as-built imprecision that `FR-22` accepts: an instruction
+  already past decode still completes, because the target flushes only IF/ID and ID/EX
+  (`rtl/control.sv:234-238`, `G-01`).
+
+**Corner cases.**
+
+- Target: a request held high re-enters the handler after every `MRET` until the level drops, because
+  `mtip`, `msip` and `meip` are levels and not edges (`FR-39`, `FR-40`); as built the same is true of
+  `exception` (`rtl/control.sv:262-266`).
+- Target: an interrupt raised while the hart is in debug mode stays pending and is taken only after
+  `DRET`, and then only while `MIE` and the matching `mie` bit are both set (`FR-48`, §7.12).
+- Target: a synchronous request withdrawn between assertion and entry still reports the cause it
+  presented, because the target captures the bus at entry and does not re-read it (`FR-22`, `Q-35`).
+- Target: writing `mstatus.MPP` with `2'b00` legalises to `2'b11` and does not trap, while `MPRV`,
+  `TW`, `FS` and `XS` read zero whatever is written (`FR-48`).
+- As built: the trap vector is a constant and the cause is zero, so every trap is indistinguishable
+  (`G-01`, `G-02`); there is no interrupt input to enter on (`G-14`).
+
+### 7.12 BLK-DBG — debug mode (target)
+
+**Purpose.** **Target, not as built.** This block is the target hart side of the debug contract of
+`FR-53`..`FR-59`: the target debug state (`dcsr`, `dpc`, `dscratch0`, `dscratch1`), the target
+run-control handshake, the target abstract-command and program-buffer execution, the target trigger
+unit and the target `dbg_auth` strap. As built there is no debug signal in the port list
+(`rtl/riscv_small.sv:41-57`), no debug mode, and the system opcode group is a no-operation
+(`rtl/instruction_decode.sv:333-335`), which is `G-23` and `G-24`.
+
+**Interface.** Target interfaces: `dbg_if` (`debug_module` as initiator, `hart` as target; `C13`),
+`auth_if` (`integrator` as initiator, `core` as target; `C16`), the target `csr_if` for the four debug
+registers (`C14`), and the as-built `dmem_if` reused for a target abstract-command memory access
+(`FR-55`). The target `dbg_if` carries seventeen signals in three channels, and with the one `dbg_auth`
+signal on `auth_if` the debug group is eighteen signals; the whole group is absent when
+`DEBUG_ENABLED` = 0 (`FR-54`..`FR-56`, `FR-59`, `C-13`, `C-14`).
+
+| Target channel | Target signals | Target contract |
+|---|---|---|
+| run control and status | in `dbg_dmactive`, `dbg_haltreq`, `dbg_resumereq`, `dbg_resethaltreq`; out `dbg_halted`, `dbg_running`, `dbg_havereset`, `dbg_resumeack` | target: the hart side of Debug Spec v1.0 §3.1.5 (`FR-54`) |
+| abstract commands | in `dbg_command[31:0]`, `dbg_data0_wdata[31:0]`; out `dbg_data0_rdata[31:0]`, `dbg_busy`, `dbg_cmderr[2:0]` | target: one command at a time, with a defined error instead of an outstanding command (`FR-55`) |
+| program buffer | in `dbg_progbuf_inst[31:0]`, `dbg_progbuf_wr_en`; out `dbg_progbuf_ready`, `dbg_progbuf_done` | target: words run in order in debug mode and control returns to the Debug Module (`FR-56`) |
+| authorization strap (`auth_if`) | in `dbg_auth` | target: the platform strap of `C-14`; low makes the hart ignore halt and reset-halt, never enter debug mode and report `dbg_halted` = 0 (`FR-59`, `D-11`) |
+
+**State.** **Target, not as built.** The target state is `dcsr` (with `cause`, `prv`, `step` and
+`ebreakm`), `dpc`, `dscratch0`, `dscratch1`, the target debug-mode flag, and a target program-buffer
+program counter that is not the architectural `pc` (`FR-53`, `FR-56`, `FR-58`). The target
+`dcsr.cause` is one of 1, 2, 3, 4 or 5 and never 6 (`FR-53`). As built none of that state exists
+(`G-23`), and no trigger state exists either (`G-24`).
+
+**Behaviour.**
+
+- **Target run control.** A halt request is honoured at an instruction boundary, never in the middle
+  of an instruction, and the target ignores a further request while halted; a resume request leaves
+  debug mode and the target asserts `dbg_resumeack` only once `dbg_running` is high; a reset-halt
+  request makes the target enter debug mode immediately after reset, before the first instruction
+  retires (`FR-54`, `Q-40`).
+- **Target `dbg_dmactive` gate.** While `dbg_dmactive` is low the target is never in debug mode,
+  ignores `dbg_haltreq` and `dbg_resethaltreq`, does not remember them, reports `dbg_halted` = 0, and
+  holds `dcsr` = 0 with `dpc` = `RESET_VECTOR` (`FR-54`).
+- **Target `dbg_auth` strap (`auth_if`).** `dbg_auth` is a platform strap and not Debug Module state:
+  while it is low the target ignores `dbg_haltreq` and `dbg_resethaltreq`, never enters debug mode and
+  reports `dbg_halted` = 0. It is an additional hart-side gate beside the authentication Debug Spec
+  v1.0 §3.1.12 places in the Debug Module, not a replacement for it (`FR-59`, `C-14`, `D-11`).
+- **Target `dbg_havereset`.** The target reports a reset until the Debug Module acknowledges it, so a
+  Debug Module can tell a reset from a halt (`FR-54`).
+- **Target entry causes and `dpc`.** The target records `dcsr.cause` = 5 for a reset-halt, 3 for a halt
+  request, 2 for a trigger, 1 for an `EBREAK` with `dcsr.ebreakm` set, and 4 for a completed single
+  step; the target `dpc` holds the address Table 3 of Debug Spec v1.0 §4.1.9 fixes for that cause
+  (`FR-53`).
+- **Target abstract commands.** The target executes a command against a general-purpose register, a
+  CSR of the §7.10 map, or a memory location, and places the result on `dbg_data0_rdata`; a command it
+  cannot complete leaves a non-zero `dbg_cmderr` with `dbg_busy` low, so the target never leaves a
+  command outstanding (`FR-55`).
+- **Target program buffer.** The target runs the buffer words in the order they were placed, reports
+  an exception as a command error rather than taking a trap, and returns control at the end of the
+  buffer without executing the instruction at `dpc` (`FR-56`).
+- **Target triggers.** The target implements `NUM_TRIGGERS` `mcontrol6` triggers matching an
+  instruction address, a load/store address or store data; target action 0 raises cause 3 with `mepc`
+  at the next instruction to execute, target action 1 enters debug mode with `dpc` at that same
+  address and is legal only with `dmode` = 1, and the target never reads back `dmode` = 0 with
+  action = 1 (`FR-57`, `Q-38`, Debug Spec v1.0 §5.1.2). The target fires no trigger while in debug
+  mode (`FR-57`).
+- **Target single step.** The target lets the debugger write `dcsr.step`, executes exactly one
+  instruction per resume while it is set, leaves the bit alone, and re-enters debug mode with `dpc` at
+  the next instruction; a target step over a trap records the trap and re-enters with cause 4, and a
+  target step whose instruction fires an action-1 trigger re-enters with cause 2 (`FR-58`).
+- **Target `dbg_auth` strap.** With the strap low the target ignores `dbg_haltreq` and
+  `dbg_resethaltreq`, never enters debug mode, reports `dbg_halted` = 0, raises cause 3 for an
+  `EBREAK` with `dcsr.ebreakm` set, and makes an action-1 trigger inert while an action-0 trigger
+  still raises cause 3; the target strap is additional to the Debug Module's own authentication and
+  replaces nothing (`FR-59`, `C-14`, `D-11`).
+
+Debug mode is entered from running by run control, a breakpoint, a trigger or a step, and left only by resume or DRET.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Target debug run-control states
+    accDescr: A target hart runs, halts into debug mode through one of five causes, and leaves debug mode only on a resume request or a DRET. Reset-halt is the one entry that bypasses the running state.
+
+    state "running" as Running
+    state "debug mode, halted" as Halted
+    state "reset-halt" as ResetHalt
+
+    [*] --> Running: rst_n released, no dbg_resethaltreq
+    [*] --> ResetHalt: rst_n released, dbg_resethaltreq
+    ResetHalt --> Halted: reset completes, dcsr.cause = 5
+    Running --> Halted: dbg_haltreq, dcsr.cause = 3
+    Running --> Halted: EBREAK and dcsr.ebreakm, cause 1
+    Running --> Halted: trigger action 1, cause 2
+    Running --> Halted: single step completes, cause 4
+    Halted --> Running: dbg_resumereq or DRET
+```
+
+*S1 — target: Debug mode is entered from running by run control, a breakpoint, a trigger or a step, and
+left only by resume or DRET. Three target states and eight target edges carry the five entry causes
+of `FR-53`; the as-built core has no state register here at all (`G-23`). Source: inline, section
+7.12.*
+
+**Corner cases.**
+
+- Target: an interrupt raised while halted stays pending and is taken only after `DRET` (`FR-48`,
+  `FR-53`); as built there is no debug state for a request to wait in (`G-23`).
+- Target: a target instruction that would raise a synchronous exception in debug mode is reported on
+  `dbg_cmderr` and is not taken as a trap (`FR-55`, `FR-56`).
+- Target: with `NUM_TRIGGERS` = 0 the five trigger addresses trap, so a target debugger detects the
+  absent unit exactly as `FR-57` prescribes (`G-24`).
+- Target: an `EBREAK` with `dcsr.ebreakm` clear raises cause 3 instead of entering debug mode, and so
+  does every `EBREAK` in the `DEBUG_ENABLED` = 0 build (`FR-25`, `FR-53`).
+- Target: `dpc` is always 4-byte aligned while `IALIGN` = 32, so a target write of an address with bit
+  0 or bit 1 set does not retain those bits (`FR-53`, `FR-44`).
+- As built: none of the target state, ports or commands exists, which is `G-23` for the subsystem and
+  `G-24` for the trigger unit.
+
 ## 8. External memory contract
 
 The contract is one word per port per cycle, with a level grant. There is no burst, no beat count,
@@ -1077,6 +1488,17 @@ requires `mux_sel_rd_wb`, which is zero for a store. A store therefore asserts i
 cycle whatever the grant does (`G-18`). The contract in `spec.md` `FR-38` (a store completes on the
 grant) is not what the RTL does.
 
+**Target, not as built — the store-conditional response.** `SC` needs the memory to report whether the
+conditional store succeeded, and the present read path carries only `data_rd` and `data_ready`
+(`rtl/riscv_small.sv:51-52`). Without such a response the core cannot write 0 on success and a
+non-zero value on failure to `rd`, so `FR-35` is unimplementable on this two-signal path.
+
+**Target, not as built — the timer is not a memory access.** In the target, `time` (0xC01) and
+`timeh` (0xC81) are read-only views of the `mtime[63:0]` input on `mtime_if`, sampled in the CSR read
+path of §7.10 (`FR-49`, `Q-42`). The target issues no data-port transaction to read the timer, and the
+as-built core has neither a timer input nor an address that could read one (`rtl/riscv_small.sv:41-57`,
+`G-13`).
+
 Alignment is not checked. `data_addr` is a byte address and address bits `[1:0]` are never used to
 select a lane on either port (`G-08`, `A-05`). Misaligned accesses are passed through unchanged.
 
@@ -1125,6 +1547,15 @@ There is no trap output: `trap_addr` is an internal constant and `sepc`/`scause`
 (`rtl/control.sv:255-268`, `G-01`, `G-02`). A test can observe a trap only by watching the fetch
 address jump to 1000.
 
+Three further tests are target and none of them exists; the registered set is `T-01` and `T-02`; `T-03`..`T-05` are registered as
+`deferred` in `doc/verification.md` and none of the three is implemented, and every row below is absent with the gap that keeps it absent.
+
+| ID | Scope | Status |
+|---|---|---|
+| `T-03` | target: the `FR-50` address map, `misa`, `mepc`/`mcause`/`mtval`, `mscratch`, the reset vector | target, absent (`G-13`) |
+| `T-04` | target: `mtip`/`meip`/`msip`, `mie`/`mip`/`mstatus`, the entry stack and the priority order | target, absent (`G-14`) |
+| `T-05` | target: hart-side run control, abstract commands, the program buffer, triggers, single step and the `dbg_auth` strap; it needs a Debug Module model | target, absent (`G-23`) |
+
 Requirement-to-block mapping is the `Traces to` column of `spec.md` §4; the test evidence and the
 canonical gap table are in [verification.md](verification.md). This document does not duplicate
 either.
@@ -1135,7 +1566,9 @@ RTL-behaviour gaps, summarised from the canonical table in [verification.md](ver
 owner and target are the commitments of `A-09`, confirmed by the designer on 2026-10-28 under `Q-12`,
 not proposals. `G-03`, `G-04`, `G-10` and `G-11` are release blockers because the `Q-11` signoff bar cannot be met
 without them, `G-07` and `G-08` because `Q-06` fixed the ISA deviations, and every other gap is a dated commitment.
-All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors them.
+All twenty-four rows are canonical in `doc/verification.md`; this summary mirrors them. `G-23` and
+`G-24` are the v0.7 debug gaps: the first covers the target debug subsystem of `FR-53`..`FR-56`,
+`FR-58` and `FR-59`, the second the target trigger unit of `FR-57`.
 
 - **G-01** — `trap_addr` is hardcoded to 1000 (`rtl/control.sv:255`); the target is the `mtvec` CSR with
   direct and vectored modes (`FR-29`, `FR-30`). Consequence as built: every trap lands at the same
@@ -1145,7 +1578,7 @@ All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors
   cannot tell a timer tick from an illegal instruction. Owner: designer. Target: 2026-12-31.
 - **G-03** — the `cg_sum` covergroup is empty (`tb/env/top/riscv_small_coverage.sv`). Consequence: no
   functional coverage, so `NFR-06` cannot be measured; a **release blocker** since `Q-11` fixed the
-  signoff bar (`A-09`). Owner: verification lead. Target: 2026-12-31.
+  signoff bar (`A-09`). Owner: designer. Target: 2026-12-31.
 - **G-04** — the reference model and the scoreboard cover only `LW`/`SW`. Consequence: other opcodes are
   not checked, so the twenty as-built requirements outside `LW`/`SW` cannot become `verified`. Owner:
   verification lead. Target: 2026-12-31.
@@ -1156,17 +1589,18 @@ All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors
   through the decode default (`rtl/instruction_decode.sv:238-247`, `:325`), `FENCE` is an empty case
   (`:330-332`) and `ECALL`/`EBREAK`/CSR are an empty case (`:333-335`). Consequence: no
   illegal-instruction trap, so `FR-24`, `FR-25` and `FR-26` stay `deferred`, `M` and `C` cannot be
-  claimed in phase 1, and since `Q-05` (2026-10-28) requires every unimplemented encoding to trap this
-  is a conformance blocker rather than a scope choice, with the `FENCE` half now phase-1 `FR-26`
-  blocked only by this decoder gap (`Q-15`). Owner: designer. Target: 2026-12-31.
+  claimed in phase 1 because this gap blocks `FR-43` and `FR-44` outright, and since `Q-05`
+  (2026-10-28) requires every unimplemented encoding to trap this is a conformance blocker rather than
+  a scope choice, with the `FENCE` half now phase-1 `FR-26` blocked only by this decoder gap (`Q-15`).
+  Owner: designer. Target: 2026-12-31.
 - **G-07** — `JALR` does not clear bit 0 of the target address (`rtl/jump_decision.sv:111`).
   Consequence: a non-conformant indirect jump for odd targets; a **release blocker** since `Q-06`
   (2026-10-28), decided by `FR-07`'s acceptance. Owner: designer. Target: 2026-12-31.
-- **G-08** — sub-word loads always extend the lowest lane and sub-word stores always drive the lowest
-  lane; address bits `[1:0]` are never used to select a lane (`rtl/memory_access.sv:80-102`,
-  `rtl/execution.sv:157-174`). Consequence: `SB`/`SH`/`LB`/`LH` behaviour depends on an unspecified
-  memory model; a **release blocker** since `Q-06` (2026-10-28), decided by the acceptance of `FR-11`
-  and `FR-12`. Owner: designer. Target: 2026-12-31.
+- **G-08** — sub-word **stores** always drive the same lane, whatever `data_addr[1:0]` says
+  (`rtl/execution.sv:157-174`, `rtl/riscv_small.sv:193`). The load half closed in v0.7.4: `LB`, `LBU`,
+  `LH` and `LHU` select the addressed lane (`rtl/memory_access.sv:68-69`, `:91-105`, `T-06`).
+  Consequence: `SB`/`SH` behaviour still depends on an unspecified memory model; a **release blocker**
+  since `Q-06` (2026-10-28), decided by the acceptance of `FR-11`. Owner: designer. Target: 2026-12-31.
 - **G-09** — no fetch stall exists: while the fetch grant is withheld only the IF/ID registers are
   flushed (`rtl/control.sv:241-243`) and the program counter keeps advancing unless IF/ID is held
   (`rtl/instruction_fetch.sv:84-103`). Consequence: a cache miss cannot hold the program counter, which
@@ -1175,7 +1609,7 @@ All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors
 - **G-10** — the sanity-test flow emits `build/sanity_tests/<test>.hex`
   (`scripts/compile_sanity_tests.cmake:13-14`) but no testbench path consumes a hex image, because
   there is no `$readmemh` anywhere under `tb/`. Consequence: `NFR-05` (RISC-V suite conformance) cannot
-  be measured. Owner: verification lead. Target: 2026-12-31.
+  be measured. Owner: designer. Target: 2026-12-31.
 - **G-11** — `T-02` adds no stimulus: `riscv_small_corner_seq::body()` only calls `super.body()`
   (`tb/tests/sequence_lib/riscv_small_corner_seq.sv:31`), so it repeats `T-01`. Consequence: no
   requirement can cite `T-02`, and boundary values are untested. Owner: verification lead. Target:
@@ -1187,12 +1621,16 @@ All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors
 - **G-13** — no CSR file and no CSR instruction: `CSR*` is decoded as a no-operation
   (`rtl/instruction_decode.sv:333-335`) and the trap state registers are unreadable
   (`rtl/control.sv:257-268`). Consequence: `FR-23`, `FR-24`, `FR-25`, `FR-29`, `FR-30`, `FR-32`,
-  `FR-37`, and `Zicsr`/`Zicntr` in §7.1 of the specification, stay `deferred`. Owner: designer. Target:
-  2026-12-31.
+  `FR-37`, `FR-50`, `FR-51`, `FR-52`, and `Zicsr`/`Zicntr` in §7.1 of the specification, stay
+  `deferred`, and this gap also blocks
+  `FR-45` (the `mstatus` restoration has no register to restore), `FR-46` (`mstatus.TW` has no
+  register), `FR-47` (the six instructions have no CSR port) and `FR-49` (no counter and no CSR read
+  path). Owner: designer. Target: 2026-12-31.
 - **G-14** — no machine-mode interrupt subsystem: the only trap request is the level-sensitive
   `exception` input (`rtl/riscv_small.sv:44`), with no `mip`/`mie`, no timer and no external controller
-  interface. Consequence: `FR-39`, `FR-40`, `FR-36` and the vectored mode of `FR-30` stay `deferred`,
-  and `D-01`'s preemption cannot be demonstrated. Owner: designer. Target: 2026-12-31.
+  interface. Consequence: `FR-36`, `FR-39`, `FR-40`, `FR-48` and the vectored mode of `FR-30` stay
+  `deferred`, `FR-48` has no request to enter on and no `mip`/`mie` to mask with, and `D-01`'s
+  preemption cannot be demonstrated. Owner: designer. Target: 2026-12-31.
 - **G-15** — no instruction cache and no line-based fetch: `rtl/instruction_fetch.sv:63-77` drives one
   word address per cycle with no burst and no last-beat signal, and neither `ICACHE_BYTES` nor
   `ICACHE_LINE` exists. Consequence: `FR-27`, `FR-28`, `FR-31` and `FR-34` stay `deferred`, §5.2 of the
@@ -1202,7 +1640,7 @@ All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors
   hart-identity input, no `NUM_HARTS`, no `A` encodings (`rtl/riscv_definitions_pkg.sv:129-187`) and no
   software interrupt. Consequence: `FR-32`, `FR-33`, `FR-35` and `FR-36` stay `deferred`, and the
   `MCU_SMP` configuration of §5.2 cannot be built. Owner: designer. Target: 2026-12-31.
-- **G-17** — no decision log: `doc/decisions.md` does not exist, so `D-01` to `D-09` live in
+- **G-17** — no decision log: `doc/decisions.md` does not exist, so `D-01` to `D-11` live in
   `doc/spec.md` §0.1. Consequence: decisions are not indexed beside the requirements they justify, and
   a superseded decision has nowhere to be retired. Owner: designer. Target: 2026-12-31.
 - **G-18** — stores do not wait for the data grant: the stall condition at `rtl/control.sv:246` also
@@ -1234,6 +1672,15 @@ All twenty-two rows are canonical in `doc/verification.md`; this summary mirrors
   crossing a word boundary cannot complete on a one-word port; the target is `data_wr_strb[3:0]` with
   the core driving the addressed lane plus the two-beat split (`FR-42`, `Q-28`, `Q-29`). Owner:
   designer. Target: 2026-12-31.
+- **G-23** — no debug subsystem: the DUT has no debug port, no debug mode, no `dcsr`/`dpc`/`dscratch`
+  and no abstract-command or program-buffer path (`rtl/riscv_small.sv:41-57`,
+  `rtl/instruction_decode.sv:333-335`). Consequence: `FR-53` to `FR-56`, `FR-58` and `FR-59` stay
+  `deferred`, the target debug block of §7.12 has no RTL to describe, and `T-05` cannot exist until a
+  Debug Module model is built. Owner: designer. Target: 2026-12-31.
+- **G-24** — no trigger unit: `tselect`, `tdata1`, `tdata2`, `tdata3` and `tinfo` are not decoded and
+  no address or store-data comparator exists (`rtl/instruction_decode.sv:333-335`). Consequence:
+  `FR-57` stays `deferred`, the target trigger unit of §7.12 is absent, and breakpoints and watchpoints
+  cannot be observed in any configuration. Owner: designer. Target: 2026-12-31.
 
 ### 11.1 Observed while writing this document
 
