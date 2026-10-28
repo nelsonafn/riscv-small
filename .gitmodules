@@ -1,3 +1,6 @@
 [submodule "src/riscv-tests"]
 	path = src/riscv-tests
 	url = git@github.com:riscv-software-src/riscv-tests.git
+[submodule ".opencode"]
+	path = .opencode
+	url = git@github.com:nelsonafn/.opencode-riscv-small.git
