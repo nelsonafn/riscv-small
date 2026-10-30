@@ -12,7 +12,7 @@ all: check_build
 
 # Everything else is proxied into build/ by the pattern rule below, including
 # the verification targets declared in CMakeLists.txt section 12:
-#   make regress / sanity / coverage
+#   make regress / sanity / coverage / negative-control / signoff-check
 #   make -C build <same target>
 # Arguments travel as make variables, e.g.
 #   make regress REGRESS_ARGS="--test T-01 --wp 0"

@@ -40,9 +40,19 @@ include(${CMAKE_CURRENT_LIST_DIR}/common.cmake)
 # Configure mode: the gate, and the evidence it audits as dependencies.
 # =============================================================================
 if(NOT CMAKE_SCRIPT_MODE_FILE)
+    # The negative control proves that each test fails on the defect it covers,
+    # by rebuilding a disposable copy of the tree with that defect. It is part
+    # of the chain on purpose: `rm -rf build` must not be able to erase the
+    # evidence, and a fresh machine must be able to produce it.
+    add_custom_target(negative-control
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/negative_control.cmake
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Proving every work-package test fails on its mutant..."
+        USES_TERMINAL
+    )
     add_custom_target(signoff-check
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(SIGNOFF_ARGS)
-        DEPENDS regress coverage sanity
+        DEPENDS regress coverage sanity negative-control
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running the signoff gate (A-09)..."
         USES_TERMINAL
@@ -609,59 +619,47 @@ else()
     endif()
 endif()
 
-# --- 11. work-package red evidence -------------------------------------------
+# --- 11. work-package negative control (test-first) --------------------------
+# A stored red run is history: it dies with `build/` and cannot be regenerated
+# on fixed RTL. What is reproducible is that the test fails on its mutant, so
+# this check reads build/red/<T-id>/results.json, produced by the
+# `negative-control` target that this gate depends on.
 if(WP STREQUAL "")
-    add_row("11::work-package red evidence (test-first)::skipped::checked per work package; see --wp <n>")
+    add_row("11::work-package negative control (test-first)::skipped::checked per work package; see --wp <n>")
 else()
-    set(RED_PROBLEMS "")
+    set(NC_PROBLEMS "")
     riscv_manifest_rows(MANIFEST_ROWS "${MANIFEST}")
     foreach(MROW IN LISTS MANIFEST_ROWS)
         string(REPLACE "|" ";" MF "${MROW}")
         list(GET MF 0 TID)
         list(GET MF 2 TW)
         list(LENGTH MF NF)
-        set(RED_REQUIRED "yes")
+        set(RED_SPEC "no")
         if(NF GREATER 5)
-            list(GET MF 5 RED_REQUIRED)
+            list(GET MF 5 RED_SPEC)
         endif()
-        if(NOT TW STREQUAL WP OR NOT RED_REQUIRED STREQUAL "yes")
+        if(NOT TW STREQUAL WP OR NOT RED_SPEC MATCHES "^mutant:")
             continue()
         endif()
 
-        set(RED_RUN "")
-        foreach(F IN LISTS RUN_RESULTS)
-            json_field(REC "${F}" "record")
-            if(NOT REC STREQUAL "red")
-                continue()
-            endif()
-            json_field(WD "${F}" "wp")
-            if(WD STREQUAL "")
-                json_field(WD "${F}" "wave")   # pre-rename evidence
-            endif()
-            if(NOT WD STREQUAL WP AND NOT WD STREQUAL "null")
-                continue()
-            endif()
-            file(READ "${F}" RJSON)
-            if(RJSON MATCHES "\"id\": \"${TID}\", \"test\": \"[^\"]*\", \"status\": \"(fail|timeout)\"")
-                set(RED_RUN "${F}")
-            endif()
-        endforeach()
-
-        if(RED_RUN STREQUAL "")
-            list(APPEND RED_PROBLEMS "${TID}(no-red-run)")
-        else()
-            json_field(RD "${RED_RUN}" "rtl_digest")
-            if(RD STREQUAL CURRENT_RTL)
-                list(APPEND RED_PROBLEMS "${TID}(red-recorded-at-current-digest)")
-            endif()
+        set(NC "${BUILD}/red/${TID}/results.json")
+        if(NOT EXISTS "${NC}")
+            list(APPEND NC_PROBLEMS "${TID}(no-negative-control; run make negative-control)")
+            continue()
+        endif()
+        file(READ "${NC}" NCJSON)
+        if(NOT NCJSON MATCHES "\"id\": \"${TID}\", \"test\": \"[^\"]*\", \"status\": \"(fail|timeout)\"")
+            list(APPEND NC_PROBLEMS "${TID}(mutant-not-detected)")
+        elseif(NOT NCJSON MATCHES "\"uvm_errors\": [1-9]")
+            list(APPEND NC_PROBLEMS "${TID}(no-uvm-error-on-mutant)")
         endif()
     endforeach()
 
-    if(RED_PROBLEMS)
-        list(JOIN RED_PROBLEMS " " RTEXT)
-        add_row("11::work-package red evidence (test-first)::blocked::${RTEXT}")
+    if(NC_PROBLEMS)
+        list(JOIN NC_PROBLEMS " " NTEXT)
+        add_row("11::work-package negative control (test-first)::blocked::${NTEXT}")
     else()
-        add_row("11::work-package red evidence (test-first)::ok::every work-package test has a failing run at an older rtl_digest")
+        add_row("11::work-package negative control (test-first)::ok::every WP test fails on the mutant it carries")
     endif()
 endif()
 
