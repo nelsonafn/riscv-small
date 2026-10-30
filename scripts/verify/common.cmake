@@ -18,6 +18,18 @@
 #       since the project forbids automatic commits
 # =============================================================================
 
+# --- safe line reader --------------------------------------------------------
+# file(STRINGS) splits a line at every non-ASCII byte (measured: "emdash—tail"
+# becomes two items), and the specification tables put the status in the last
+# column -- so 35 of the 59 FR rows lost it. Read the whole file and split on
+# newlines only; `;` is CMake's list separator, so neutralise it first.
+function(riscv_read_lines OUT_VAR FILE)
+    file(READ "${FILE}" TEXT)
+    string(REPLACE ";" "@SEMI@" TEXT "${TEXT}")
+    string(REPLACE "\n" ";" LINES "${TEXT}")
+    set(${OUT_VAR} "${LINES}" PARENT_SCOPE)
+endfunction()
+
 # --- manifest ----------------------------------------------------------------
 function(riscv_manifest_rows OUT_VAR MANIFEST)
     if(NOT EXISTS "${MANIFEST}")
