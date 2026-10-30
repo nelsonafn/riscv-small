@@ -14,8 +14,8 @@
 #       gate audits.
 #
 #   cmake -P scripts/verify/regress.cmake --list
-#   cmake -P scripts/verify/regress.cmake --wave 0
-#   cmake -P scripts/verify/regress.cmake --test T-06 --record red --wave 0
+#   cmake -P scripts/verify/regress.cmake --wp 0
+#   cmake -P scripts/verify/regress.cmake --test T-06 --record red --wp 0
 #
 # Division of labour -- each fact is defined once, where it already lived:
 #   CTest     test name (T-id), command, timeout, labels, selection (-R/-L),
@@ -55,7 +55,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         string(REPLACE "|" ";" FIELDS "${ROW}")
         list(GET FIELDS 0 TID)
         list(GET FIELDS 1 TEST_CLASS)
-        list(GET FIELDS 2 TEST_WAVE)
+        list(GET FIELDS 2 TEST_WP)
         list(GET FIELDS 3 TEST_FRS)
         list(GET FIELDS 4 TEST_TIMEOUT)
 
@@ -68,10 +68,10 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
         # Labels are the selection keys and the class carrier: run mode filters
-        # with -R (T-id) and -L (wave/class) and reads the class back from the
+        # with -R (T-id) and -L (wp/class) and reads the class back from the
         # JUnit label, so it never parses tests.tsv a second time.
         string(REPLACE "," ";" TEST_LABELS "${TEST_FRS}")
-        list(APPEND TEST_LABELS "${TID}" "wave${TEST_WAVE}" "class:${TEST_CLASS}")
+        list(APPEND TEST_LABELS "${TID}" "wp${TEST_WP}" "class:${TEST_CLASS}")
         set_tests_properties(${TID} PROPERTIES
             TIMEOUT ${TEST_TIMEOUT}
             LABELS "${TEST_LABELS}")
@@ -82,7 +82,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     # Elaboration belongs to the build system, so the target depends on it and
     # run mode asks the build system again: a direct `cmake -P` can never
     # simulate a stale snapshot. `$(REGRESS_ARGS)` is a make variable, e.g.
-    # `make regress REGRESS_ARGS="--wave 0"`.
+    # `make regress REGRESS_ARGS="--wp 0"`.
     add_custom_target(regress
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(REGRESS_ARGS)
         DEPENDS elaborate
@@ -110,7 +110,7 @@ if(CMAKE_ARGC GREATER 3)
         list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
-cmake_parse_arguments(R "all;list" "wave;seed;record;out;config" "test" ${ARGS})
+cmake_parse_arguments(R "all;list" "wp;seed;record;out;config" "test" ${ARGS})
 if(R_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
 endif()
@@ -147,8 +147,8 @@ if(R_test)
     list(JOIN R_test "|" PATTERN)
     list(APPEND CTEST_SELECT -R "^(${PATTERN})$")
 endif()
-if(NOT "${R_wave}" STREQUAL "")
-    list(APPEND CTEST_SELECT -L "^wave${R_wave}$")
+if(NOT "${R_wp}" STREQUAL "")
+    list(APPEND CTEST_SELECT -L "^wp${R_wp}$")
 endif()
 
 # --- chain: ./configure -> elaborate ----------------------------------------
@@ -279,15 +279,15 @@ endforeach()
 string(TIMESTAMP FINISHED "%Y-%m-%dT%H:%M:%SZ" UTC)
 string(REPLACE ";" ",\n" TESTS_JSON "${TEST_ROWS}")
 
-if(NOT "${R_wave}" STREQUAL "")
-    set(WAVE_JSON "${R_wave}")
+if(NOT "${R_wp}" STREQUAL "")
+    set(WP_JSON "${R_wp}")
 else()
-    set(WAVE_JSON "null")
+    set(WP_JSON "null")
 endif()
 
 file(WRITE "${OUT}/results.json" "{
   \"kind\": \"regression\",
-  \"wave\": ${WAVE_JSON},
+  \"wp\": ${WP_JSON},
   \"record\": \"${RECORD}\",
   \"runner\": \"ctest\",
   \"config\": { \"name\": \"${CONFIG_NAME}\", \"params\": {}, \"seed\": ${SEED}, \"sim_args\": \"\" },
@@ -308,7 +308,7 @@ file(WRITE "${OUT}/summary.md" "# Regression ${STARTED}
 |---|---|
 | Record | `${RECORD}` |
 | Runner | ctest |
-| Wave | ${WAVE_JSON} |
+| Work package | ${WP_JSON} |
 | Config | `${CONFIG_NAME}` |
 | Seed | ${SEED} |
 | RTL digest | `${RTL_DIGEST}` |

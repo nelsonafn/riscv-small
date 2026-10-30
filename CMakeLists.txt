@@ -448,11 +448,11 @@ add_custom_target(docs-check
 #
 # Usage:
 #   make regress                                        every test in tests.tsv
-#   make regress REGRESS_ARGS="--test T-01 --wave 0"
-#   make regress REGRESS_ARGS="--record red --wave 0"   test-first evidence
+#   make regress REGRESS_ARGS="--test T-01 --wp 0"
+#   make regress REGRESS_ARGS="--record red --wp 0"   test-first evidence
 #   make sanity    [SANITY_ARGS="rv32ui-p-add"]
 #   make coverage  [COVERAGE_ARGS="--test T-01"]
-#   make signoff-check [SIGNOFF_ARGS="--wave 0"]
+#   make signoff-check [SIGNOFF_ARGS="--wp 0"]
 
 # --- regression: included, not duplicated ------------------------------------
 # regress.cmake is a module in two modes. Included, it declares one CTest test

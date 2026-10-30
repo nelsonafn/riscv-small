@@ -69,7 +69,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         string(REPLACE "|" ";" FIELDS "${ROW}")
         list(GET FIELDS 0 TID)
         list(GET FIELDS 1 TEST_CLASS)
-        list(GET FIELDS 2 TEST_WAVE)
+        list(GET FIELDS 2 TEST_WP)
         list(GET FIELDS 4 TEST_TIMEOUT)
 
         add_test(NAME COV-${TID}
@@ -78,7 +78,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         set_tests_properties(COV-${TID} PROPERTIES
             TIMEOUT ${TEST_TIMEOUT}
             SKIP_RETURN_CODE 77
-            LABELS "cov;${TID};wave${TEST_WAVE};class:${TEST_CLASS}")
+            LABELS "cov;${TID};wp${TEST_WP};class:${TEST_CLASS}")
         list(APPEND COV_TESTS "COV-${TID}")
     endforeach()
     message(STATUS "Coverage tests: ${COV_TESTS}")

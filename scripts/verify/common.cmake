@@ -6,7 +6,7 @@
 # a target and it is safe in `cmake -P` as well as at configure time.
 #
 #   riscv_manifest_rows(OUT <tests.tsv>)
-#       one row per test: `T-id|uvm_test|wave|requirements|timeout|red`
+#       one row per test: `T-id|uvm_test|wp|requirements|timeout|red`
 #
 #   riscv_junit_rows(OUT <junit.xml>)
 #       one row per executed test: `T-id|pass|fail|timeout|skip|class`

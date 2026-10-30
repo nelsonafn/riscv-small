@@ -15,7 +15,7 @@ all: check_build
 #   make regress / sanity / coverage
 #   make -C build <same target>
 # Arguments travel as make variables, e.g.
-#   make regress REGRESS_ARGS="--test T-01 --wave 0"
+#   make regress REGRESS_ARGS="--test T-01 --wp 0"
 #
 # A missing build/ bootstraps itself: the target then pulls its own chain
 # (configure -> compile -> elaborate -> ctest / coverage / images). Only the EDA

@@ -2,7 +2,7 @@
 # signoff_check.cmake - the release gate (A-09 / Q-11) as an exit code.
 #
 #   cmake -P scripts/verify/signoff_check.cmake                release (1-11)
-#   cmake -P scripts/verify/signoff_check.cmake --wave 0       wave gate
+#   cmake -P scripts/verify/signoff_check.cmake --wp 0        work-package gate
 #   cmake -P scripts/verify/signoff_check.cmake --no-docs
 #
 # Checks
@@ -16,7 +16,7 @@
 #   8  doc/measurements/NFR-01..04 present and dated  release only
 #   9  NFR-07 lint evidence                           release only
 #  10  A-09: every FR `verified`                      release only
-#  11  every wave test has a red run at an older digest
+#  11  every work-package test has a red run at an older digest
 #
 # Never edits anything. Writes build/signoff/report.md.
 #
@@ -67,7 +67,7 @@ if(CMAKE_ARGC GREATER 3)
         if("${CMAKE_ARGV${I}}" MATCHES "^--")
             # Option tokens only: `no-docs` -> `no_docs`, so the variable the
             # parser creates is addressable without a hyphen. Values are left
-            # alone (a wave number, a T-id).
+            # alone (a work-package number, a T-id).
             string(REGEX REPLACE "^--" "" ARG "${CMAKE_ARGV${I}}")
             string(REPLACE "-" "_" ARG "${ARG}")
         else()
@@ -76,15 +76,15 @@ if(CMAKE_ARGC GREATER 3)
         list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
-cmake_parse_arguments(R "release;no_docs" "wave" "" ${ARGS})
+cmake_parse_arguments(R "release;no_docs" "wp" "" ${ARGS})
 if(R_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
     return()
 endif()
 
-# --release is the default (no wave); it stays accepted for symmetry with
-# `--wave <n>`, which CMakeLists.txt passes through SIGNOFF_ARGS.
-set(WAVE "${R_wave}")
+# --release is the default (no work package); it stays accepted for symmetry with
+# `--wp <n>`, which CMakeLists.txt passes through SIGNOFF_ARGS.
+set(WP "${R_wp}")
 set(DO_DOCS TRUE)
 if(R_no_docs)
     set(DO_DOCS FALSE)
@@ -97,12 +97,12 @@ foreach(F IN ITEMS "${SPEC}" "${VERIF}" "${QUESTIONS}" "${MANIFEST}")
     endif()
 endforeach()
 
-if(WAVE STREQUAL "")
+if(WP STREQUAL "")
     set(RELEASE TRUE)
     set(MODE "release")
 else()
     set(RELEASE FALSE)
-    set(MODE "wave ${WAVE}")
+    set(MODE "work package ${WP}")
 endif()
 
 file(MAKE_DIRECTORY "${OUT}")
@@ -378,14 +378,18 @@ file(GLOB RUN_RESULTS "${BUILD}/regress/*/results.json")
 set(LATEST "")
 set(LATEST_TIME 0)
 foreach(F IN LISTS RUN_RESULTS)
-    if(WAVE STREQUAL "")
+    if(WP STREQUAL "")
         set(MATCH TRUE)
     else()
-        json_field(W "${F}" "wave")
+        json_field(W "${F}" "wp")
+        if(W STREQUAL "")
+            # Evidence recorded before the rename still carries the old key.
+            json_field(W "${F}" "wave")
+        endif()
         string(STRIP "${W}" W)
-        # A full regression (wave = null) covers the wave as well; a run that
-        # names another wave does not.
-        if(W STREQUAL WAVE OR W STREQUAL "null")
+        # A full regression (wp = null) covers the work package as well; a run
+        # that names another work package does not.
+        if(W STREQUAL WP OR W STREQUAL "null")
             set(MATCH TRUE)
         else()
             set(MATCH FALSE)
@@ -439,7 +443,7 @@ if(NOT RELEASE)
         else()
             set(NUM_KEY "${N}")
         endif()
-        add_row("${NUM_KEY}::release check ${N}::skipped::wave gate")
+        add_row("${NUM_KEY}::release check ${N}::skipped::work-package gate")
     endforeach()
 else()
     # 6. sanity
@@ -570,9 +574,9 @@ else()
     endif()
 endif()
 
-# --- 11. wave red evidence ---------------------------------------------------
-if(WAVE STREQUAL "")
-    add_row("11::wave red evidence (test-first)::skipped::checked per wave; see --wave <n>")
+# --- 11. work-package red evidence -------------------------------------------
+if(WP STREQUAL "")
+    add_row("11::work-package red evidence (test-first)::skipped::checked per work package; see --wp <n>")
 else()
     set(RED_PROBLEMS "")
     riscv_manifest_rows(MANIFEST_ROWS "${MANIFEST}")
@@ -585,7 +589,7 @@ else()
         if(NF GREATER 5)
             list(GET MF 5 RED_REQUIRED)
         endif()
-        if(NOT TW STREQUAL WAVE OR NOT RED_REQUIRED STREQUAL "yes")
+        if(NOT TW STREQUAL WP OR NOT RED_REQUIRED STREQUAL "yes")
             continue()
         endif()
 
@@ -595,8 +599,11 @@ else()
             if(NOT REC STREQUAL "red")
                 continue()
             endif()
-            json_field(WD "${F}" "wave")
-            if(NOT WD STREQUAL WAVE AND NOT WD STREQUAL "null")
+            json_field(WD "${F}" "wp")
+            if(WD STREQUAL "")
+                json_field(WD "${F}" "wave")   # pre-rename evidence
+            endif()
+            if(NOT WD STREQUAL WP AND NOT WD STREQUAL "null")
                 continue()
             endif()
             file(READ "${F}" RJSON)
@@ -617,9 +624,9 @@ else()
 
     if(RED_PROBLEMS)
         list(JOIN RED_PROBLEMS " " RTEXT)
-        add_row("11::wave red evidence (test-first)::blocked::${RTEXT}")
+        add_row("11::work-package red evidence (test-first)::blocked::${RTEXT}")
     else()
-        add_row("11::wave red evidence (test-first)::ok::every wave test has a failing run at an older rtl_digest")
+        add_row("11::work-package red evidence (test-first)::ok::every work-package test has a failing run at an older rtl_digest")
     endif()
 endif()
 
@@ -680,16 +687,16 @@ foreach(ROW IN LISTS ROWS)
     message("${ROW_NUM}  ${ROW_NAME}  ${ROW_SEV}")
     if(NOT ROW_SEV STREQUAL "ok" AND NOT ROW_SEV STREQUAL "skipped")
         if(ROW_NUM STREQUAL "5")
-            if(WAVE STREQUAL "")
+            if(WP STREQUAL "")
                 list(APPEND NEXT_ACTIONS "make regress                      (records the run check 5 audits)")
             else()
-                list(APPEND NEXT_ACTIONS "make regress REGRESS_ARGS=\"--wave ${WAVE}\"   (records the run check 5 audits)")
+                list(APPEND NEXT_ACTIONS "make regress REGRESS_ARGS=\"--wp ${WP}\"   (records the run check 5 audits)")
             endif()
         elseif(ROW_NUM STREQUAL "11")
-            if(WAVE STREQUAL "")
-                list(APPEND NEXT_ACTIONS "record a red run per wave (see the wave plan)")
+            if(WP STREQUAL "")
+                list(APPEND NEXT_ACTIONS "record a red run per work package (see the WP plan)")
             else()
-                list(APPEND NEXT_ACTIONS "make regress REGRESS_ARGS=\"--test <T-id> --record red --wave ${WAVE}\"   (test-first evidence)")
+                list(APPEND NEXT_ACTIONS "make regress REGRESS_ARGS=\"--test <T-id> --record red --wp ${WP}\"   (test-first evidence)")
             endif()
         elseif(ROW_NUM STREQUAL "7")
             list(APPEND NEXT_ACTIONS "make coverage")

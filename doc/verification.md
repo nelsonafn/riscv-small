@@ -103,12 +103,12 @@ itself make a row `deferred`: `deferred` is about the capability, not about the 
 
 `A-09` and `Q-11` fix the bar; `cmake -P scripts/verify/signoff_check.cmake` turns it into an exit code. The target is declared
 in `CMakeLists.txt` §12, so `make signoff-check` and `make -C build signoff-check` are the same command. It writes
-`build/signoff/report.md`; `make signoff-check SIGNOFF_ARGS="--wave <n>"` runs the wave subset (checks 1-5,
-7 and 11). Check 11 is what makes the wave gate test-first rather than pass-only: a test written after its RTL has
+`build/signoff/report.md`; `make signoff-check SIGNOFF_ARGS="--wp <n>"` runs the work-package subset (checks 1-5,
+7 and 11). Check 11 is what makes the work-package gate test-first rather than pass-only: a test written after its RTL has
 no recorded failing run, so it has no red evidence at an older `rtl_digest`.
 
 The tests run under CTest: `CMakeLists.txt` §12 declares one CTest test per line of `scripts/verify/tests.tsv`, with
-the timeout and the `wave`/requirement labels. The verdict comes from the `UVM_RESULT: PASS` line the testbench
+the timeout and the `wp`/requirement labels. The verdict comes from the `UVM_RESULT: PASS` line the testbench
 prints, because `xsim` exits `0` even when the run ends with `UVM_ERROR`s.
 
 | # | Check | Fails when | 2026-10-28 |
@@ -123,10 +123,10 @@ prints, because `xsim` exits `0` even when the run ends with `UVM_ERROR`s.
 | 8 | `doc/measurements/NFR-01..04-*.md` | a file is missing, has no method or no date | not measurable |
 | 9 | `doc/measurements/NFR-07-*.md` | absent (no synthesis lint flow, `G-05`) | not measurable |
 | 10 | `A-09`: every FR `verified` | any FR is not `verified` | blocked (3/59) |
-| 11 | wave gate: every wave test has a recorded red run at an older `rtl_digest` | no red run, missing log, or the red run is at the current digest | ok (wave 0) |
+| 11 | work-package gate: every WP test has a recorded red run at an older `rtl_digest` | no red run, missing log, or the red run is at the current digest | ok (WP-0) |
 
-The wave gate runs checks 1-5, 7 and 11. Checks 6 and 8-10 are release evidence and are reported as `skipped` in a
-wave. Check 7 runs in both modes on purpose: a wave that changes behaviour without re-measuring coverage has no
+The work-package gate runs checks 1-5, 7 and 11. Checks 6 and 8-10 are release evidence and are reported as `skipped` in a
+WP. Check 7 runs in both modes on purpose: a WP that changes behaviour without re-measuring coverage has no
 evidence that its new bins were exercised, and a coverage merge older than the current `rtl_digest` is reported as
 stale.
 
