@@ -1607,7 +1607,7 @@ All twenty-four rows are canonical in `doc/verification.md`; this summary mirror
   makes this the prerequisite for the instruction cache; `FR-28` is the requirement that closes it.
   Owner: designer. Target: 2026-12-31.
 - **G-10** — the sanity-test flow emits `build/sanity_tests/<test>.hex`
-  (`scripts/compile_sanity_tests.cmake:13-14`) but no testbench path consumes a hex image, because
+  (`scripts/verify/sanity.cmake`, configure mode) but no testbench path consumes a hex image, because
   there is no `$readmemh` anywhere under `tb/`. Consequence: `NFR-05` (RISC-V suite conformance) cannot
   be measured. Owner: designer. Target: 2026-12-31.
 - **G-11** — `T-02` adds no stimulus: `riscv_small_corner_seq::body()` only calls `super.body()`

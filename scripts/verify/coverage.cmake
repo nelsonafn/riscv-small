@@ -1,148 +1,209 @@
 # =============================================================================
-# coverage.cmake - elaborate and simulate with coverage, merge with xcrg (NFR-06).
+# scripts/verify/coverage.cmake - coverage (NFR-06), declared once, run by CTest
+#
+# One file, two modes, exactly like regress.cmake:
+#
+#   configure mode (included by CMakeLists.txt)
+#       - declares the instrumented snapshot `top_sim_cov` through the same
+#         `add_elaborate_target()` that builds `top_sim`, so the xelab command
+#         line exists once, in CMakeLists.txt;
+#       - declares one CTest test per manifest line (`COV-T-01`, label `cov`):
+#         the regression's simulation command plus the coverage database flags;
+#       - declares the `coverage` target that runs this file with `cmake -P`.
+#
+#   run mode (`cmake -P`, reached through `make coverage`)
+#       selects the tests, merges the databases with xcrg and publishes
+#       build/cov_report/summary.json.
 #
 #   cmake -P scripts/verify/coverage.cmake
 #   cmake -P scripts/verify/coverage.cmake --test T-01 --seed 42
 #
-# The build system is reused, not reimplemented:
-#   - elaboration runs the `elaborate` target with ELAB_ARGS carrying the
-#     coverage flags, because an instrumented snapshot is a different build of
-#     the same sources;
-#   - the test list comes from scripts/verify/tests.tsv, the same file that
-#     declares the CTest tests.
+# Why these are CTest tests: a coverage run is the same test against another
+# snapshot, so timeout, the `UVM_RESULT:` verdict, the log and the JUnit XML are
+# the regression's contract, not a second implementation of it. A plain `ctest`
+# skips them (exit 77 -> SKIP_RETURN_CODE) because it never built that snapshot;
+# the coverage target asks for them with RISCV_COVERAGE=1.
 #
 # Functional coverage is code-read: the collector must contain at least one
-# coverpoint. An empty covergroup makes it `missing_bins`, which is a signoff
-# blocker, not a pass.
+# coverpoint. An empty covergroup makes it `missing_bins`, a signoff blocker.
 #
-# Results: build/cov_db/ (databases), build/cov_report/summary.json and the
-#          xcrg text report.
+# Results: build/cov_db/ (per-test databases), build/cov_report/summary.json and
+#          the xcrg text report. The instrumented snapshot lives apart from
+#          `top_sim`, so a coverage run no longer invalidates the regression's.
 #
 # Exit codes: 0 measured, 1 measured but no coverpoint, 2 not measurable.
 # =============================================================================
-cmake_minimum_required(VERSION 3.21)
 
+if(CMAKE_VERSION VERSION_LESS 3.21)
+    message(FATAL_ERROR "coverage.cmake needs CMake >= 3.21 for `ctest --output-junit` (found ${CMAKE_VERSION})")
+endif()
+
+set(DOLLAR "$")
+
+# manifest rows, JUnit rows and the content digest: the same implementation
+# regress.cmake and signoff_check.cmake use, in both modes.
+include(${CMAKE_CURRENT_LIST_DIR}/common.cmake)
+
+# =============================================================================
+# Configure mode: declare the instrumented snapshot, the tests and the target.
+# =============================================================================
+if(NOT CMAKE_SCRIPT_MODE_FILE)
+    if(NOT SEED)
+        set(SEED 1)
+    endif()
+
+    set(COV_DB_ELAB "${CMAKE_BINARY_DIR}/cov_db_elab")
+    set(COV_DB "${CMAKE_BINARY_DIR}/cov_db")
+    set(COV_REPORT "${CMAKE_BINARY_DIR}/cov_report")
+    file(MAKE_DIRECTORY "${COV_DB_ELAB}" "${COV_DB}" "${COV_REPORT}")
+
+    # The snapshot is the only difference from `elaborate`: same function, same
+    # command line, coverage flags appended by the caller.
+    add_elaborate_target(elaborate_cov top_sim_cov
+        --cc_type sbct --cc_libs
+        --cov_db_dir ${COV_DB_ELAB} --cov_db_name cov_elab)
+
+    riscv_manifest_rows(ROWS "${CMAKE_SOURCE_DIR}/scripts/verify/tests.tsv")
+    set(COV_TESTS "")
+    foreach(ROW IN LISTS ROWS)
+        string(REPLACE "|" ";" FIELDS "${ROW}")
+        list(GET FIELDS 0 TID)
+        list(GET FIELDS 1 TEST_CLASS)
+        list(GET FIELDS 2 TEST_WAVE)
+        list(GET FIELDS 4 TEST_TIMEOUT)
+
+        add_test(NAME COV-${TID}
+            COMMAND bash -c "test -n \"${DOLLAR}RISCV_COVERAGE\" || exit 77; xsim top_sim_cov --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} --cov_db_dir ${COV_DB} --cov_db_name cov_${TID} > ${COV_REPORT}/${TID}.log 2>&1 && grep -q '^UVM_RESULT: PASS' ${COV_REPORT}/${TID}.log"
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        set_tests_properties(COV-${TID} PROPERTIES
+            TIMEOUT ${TEST_TIMEOUT}
+            SKIP_RETURN_CODE 77
+            LABELS "cov;${TID};wave${TEST_WAVE};class:${TEST_CLASS}")
+        list(APPEND COV_TESTS "COV-${TID}")
+    endforeach()
+    message(STATUS "Coverage tests: ${COV_TESTS}")
+
+    add_custom_target(coverage
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(COVERAGE_ARGS)
+        DEPENDS elaborate_cov
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Measuring and merging coverage with xcrg (NFR-06)..."
+        USES_TERMINAL
+    )
+    return()
+endif()
+
+# =============================================================================
+# Run mode: elaborate through the build system, run, merge, publish.
+# =============================================================================
 get_filename_component(ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(BUILD "${ROOT}/build")
-set(MANIFEST "${ROOT}/scripts/verify/tests.tsv")
-set(COV_DB_DIR "${BUILD}/cov_db")
+set(COV_DB "${BUILD}/cov_db")
 set(COV_MERGED "${BUILD}/cov_merged")
 set(COV_REPORT "${BUILD}/cov_report")
-set(SEED "1")
-set(FORMAT "text")
-set(REQUESTED "")
 
+# --- arguments ---------------------------------------------------------------
+# `foreach(RANGE 3 2)` counts *down* when there is no argument and would read
+# the script path from CMAKE_ARGV2 as an option: guard the range.
+set(ARGS "")
 math(EXPR LAST_ARG "${CMAKE_ARGC} - 1")
 if(CMAKE_ARGC GREATER 3)
     foreach(I RANGE 3 ${LAST_ARG})
-        set(ARG "${CMAKE_ARGV${I}}")
-        if(ARG STREQUAL "--seed")
-            math(EXPR I "${I} + 1")
-            set(SEED "${CMAKE_ARGV${I}}")
-        elseif(ARG STREQUAL "--format")
-            math(EXPR I "${I} + 1")
-            set(FORMAT "${CMAKE_ARGV${I}}")
-        elseif(ARG STREQUAL "--test")
-            math(EXPR I "${I} + 1")
-            list(APPEND REQUESTED "${CMAKE_ARGV${I}}")
-        elseif(ARG MATCHES "^-")
-            message(FATAL_ERROR "unknown option '${ARG}'")
-            return()
-        else()
-            list(APPEND REQUESTED "${ARG}")
-        endif()
+        string(REGEX REPLACE "^--" "" ARG "${CMAKE_ARGV${I}}")
+        list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
+cmake_parse_arguments(R "" "seed;format" "test" ${ARGS})
+if(R_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
+endif()
 
+set(SEED "${R_seed}")
+if(NOT SEED)
+    set(SEED "$ENV{SEED}")
+endif()
+if(NOT SEED)
+    set(SEED 1)
+endif()
+if(NOT SEED MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "--seed must be an unsigned integer, got '${SEED}'")
+endif()
+
+set(FORMAT "${R_format}")
+if(NOT FORMAT)
+    set(FORMAT text)
+endif()
+
+# --- selection: the CTest filters, on the coverage-labelled tests -------------
+set(CTEST_SELECT -L "^cov$")
+if(R_test)
+    list(JOIN R_test "|" PATTERN)
+    list(APPEND CTEST_SELECT -R "^COV-(${PATTERN})$")
+endif()
+
+# --- chain: ./configure -> elaborate_cov ------------------------------------
+file(MAKE_DIRECTORY "${BUILD}/regress")
 if(NOT EXISTS "${BUILD}/Makefile")
-    message(FATAL_ERROR "build/ is not configured; run ./configure first")
-endif()
-
-# --- manifest ----------------------------------------------------------------
-file(STRINGS "${MANIFEST}" MANIFEST_LINES)
-set(TEST_IDS "")
-set(TEST_CLASSES "")
-foreach(LINE IN LISTS MANIFEST_LINES)
-    if(LINE MATCHES "^#" OR LINE STREQUAL "")
-        continue()
+    message(STATUS "build/ is not configured; bootstrapping with ./configure")
+    execute_process(
+        COMMAND "${ROOT}/configure"
+        WORKING_DIRECTORY "${ROOT}"
+        RESULT_VARIABLE RC
+        OUTPUT_FILE "${BUILD}/regress/configure.log"
+        ERROR_FILE "${BUILD}/regress/configure.log")
+    if(NOT RC EQUAL 0)
+        message(FATAL_ERROR "bootstrap failed; see build/regress/configure.log")
     endif()
-    string(REPLACE "\t" ";" FIELDS "${LINE}")
-    list(GET FIELDS 0 TID)
-    list(GET FIELDS 1 TCLASS)
-    list(APPEND TEST_IDS "${TID}")
-    list(APPEND TEST_CLASSES "${TCLASS}")
-endforeach()
-
-set(RUN_IDS "")
-if(REQUESTED)
-    foreach(WANT IN LISTS REQUESTED)
-        set(FOUND FALSE)
-        foreach(TID IN LISTS TEST_IDS)
-            if(WANT STREQUAL TID)
-                list(APPEND RUN_IDS "${TID}")
-                set(FOUND TRUE)
-            endif()
-        endforeach()
-        if(NOT FOUND)
-            message(FATAL_ERROR "'${WANT}' is not a T-id in scripts/verify/tests.tsv")
-            return()
-        endif()
-    endforeach()
-else()
-    set(RUN_IDS "${TEST_IDS}")
 endif()
 
-string(REPLACE ";" "|" JOINED_IDS "${RUN_IDS}")
-
-# --- functional coverage is code-read ----------------------------------------
-file(READ "${ROOT}/tb/env/top/riscv_small_coverage.sv" COV_SOURCE)
-string(REGEX MATCHALL "coverpoint" COV_POINTS "${COV_SOURCE}")
-list(LENGTH COV_POINTS N_COVERPOINTS)
-
-file(MAKE_DIRECTORY "${COV_DB_DIR}" "${COV_REPORT}")
-
-# --- elaborate with coverage (reuses the elaborate target) -------------------
-set(ELAB_FLAGS "--cc_type sbct --cc_libs --cov_db_dir ${COV_DB_DIR} --cov_db_name cov_elab_seed${SEED}")
-message(STATUS "elaborating with coverage")
+message(STATUS "elaborating top_sim_cov through the build system")
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env "ELAB_ARGS=${ELAB_FLAGS}"
-            "${CMAKE_COMMAND}" --build "${BUILD}" --target elaborate
+    COMMAND ${CMAKE_COMMAND} --build "${BUILD}" --target elaborate_cov
+    WORKING_DIRECTORY "${BUILD}"
     RESULT_VARIABLE RC
     OUTPUT_FILE "${BUILD}/coverage_elaborate.log"
     ERROR_FILE "${BUILD}/coverage_elaborate.log")
 if(NOT RC EQUAL 0)
-    message(FATAL_ERROR "coverage elaboration failed; see build/coverage_elaborate.log")
+    message(FATAL_ERROR "coverage elaboration failed (is the EDA environment sourced?); see build/coverage_elaborate.log")
 endif()
 
-# --- simulate ----------------------------------------------------------------
+# A database from an older run would be merged as if it were evidence. The
+# elaboration database is not touched: it belongs to the snapshot, not to a run.
+file(REMOVE_RECURSE "${COV_DB}" "${COV_MERGED}" "${COV_REPORT}")
+file(MAKE_DIRECTORY "${COV_DB}" "${COV_REPORT}")
+
+# --- run the tests through CTest --------------------------------------------
+message(STATUS "running the coverage-labelled tests")
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E env RISCV_COVERAGE=1 "SEED=${SEED}"
+            ${CMAKE_CTEST_COMMAND} --output-junit "${COV_REPORT}/junit.xml" ${CTEST_SELECT}
+    WORKING_DIRECTORY "${BUILD}"
+    RESULT_VARIABLE CTEST_RC
+    OUTPUT_FILE "${COV_REPORT}/ctest.log"
+    ERROR_FILE "${COV_REPORT}/ctest.log")
+
+riscv_junit_rows(ROWS "${COV_REPORT}/junit.xml")
+if(NOT ROWS)
+    message(FATAL_ERROR "no coverage test matched the selection; see build/cov_report/ctest.log")
+endif()
+
 set(DB_NAMES "")
-foreach(TID IN LISTS RUN_IDS)
-    list(FIND TEST_IDS "${TID}" IDX)
-    list(GET TEST_CLASSES ${IDX} TCLASS)
-    set(DB "cov_${TID}_seed${SEED}")
-    list(APPEND DB_NAMES "${DB}")
-    set(LOG "${COV_REPORT}/${TID}.log")
-    message(STATUS "running ${TID} with coverage db '${DB}'")
-    execute_process(
-        COMMAND xsim top_sim --R
-                --testplusarg "UVM_TESTNAME=${TCLASS}"
-                --testplusarg NO_COLOR
-                --sv_seed "${SEED}"
-                --cov_db_dir "${COV_DB_DIR}" --cov_db_name "${DB}"
-        WORKING_DIRECTORY "${BUILD}"
-        TIMEOUT 600
-        RESULT_VARIABLE RC
-        OUTPUT_FILE "${LOG}" ERROR_FILE "${LOG}")
-    file(READ "${LOG}" LOG_TEXT)
-    if(LOG_TEXT MATCHES "UVM_RESULT: FAIL")
-        message(FATAL_ERROR "${TID} failed under coverage; see build/cov_report/${TID}.log")
+foreach(ROW IN LISTS ROWS)
+    string(REPLACE "|" ";" FIELDS "${ROW}")
+    list(GET FIELDS 0 NAME)
+    list(GET FIELDS 1 STATUS)
+    string(REPLACE "COV-" "" TID "${NAME}")
+    if(NOT STATUS STREQUAL "pass")
+        message(FATAL_ERROR "${TID} ${STATUS} under coverage; see build/cov_report/${TID}.log")
     endif()
+    list(APPEND DB_NAMES "cov_${TID}")
 endforeach()
+message(STATUS "  ${DB_NAMES}")
 
 # --- merge -------------------------------------------------------------------
 set(MERGE_ARGS "")
 foreach(DB IN LISTS DB_NAMES)
-    list(APPEND MERGE_ARGS -cov_db_dir "${COV_DB_DIR}" -cov_db_name "${DB}")
+    list(APPEND MERGE_ARGS -cov_db_dir "${COV_DB}" -cov_db_name "${DB}")
 endforeach()
 
 message(STATUS "merging ${DB_NAMES} into build/cov_merged")
@@ -157,6 +218,7 @@ if(NOT RC EQUAL 0)
     message(FATAL_ERROR "xcrg merge failed; see build/cov_report/xcrg.log")
 endif()
 
+# --- publish -----------------------------------------------------------------
 set(REPORT_FILE "${COV_REPORT}/functionalCoverageReport/xcrg_func_cov_report.txt")
 if(NOT EXISTS "${REPORT_FILE}")
     set(REPORT_FILE "${COV_REPORT}/xcrg.log")
@@ -175,6 +237,12 @@ if(PERCENTAGES)
     string(REPLACE ";" "," PERCENTAGES "${PERCENTAGES}")
 endif()
 
+# Functional coverage is code-read: it is measured only if the collector has a
+# coverpoint, whatever xcrg reports for code coverage.
+file(READ "${ROOT}/tb/env/top/riscv_small_coverage.sv" COV_SOURCE)
+string(REGEX MATCHALL "coverpoint" COV_POINTS "${COV_SOURCE}")
+list(LENGTH COV_POINTS N_COVERPOINTS)
+
 set(STATUS "measured")
 set(REASON "")
 if(N_COVERPOINTS EQUAL 0)
@@ -182,20 +250,8 @@ if(N_COVERPOINTS EQUAL 0)
     set(REASON "tb/env/top/riscv_small_coverage.sv has no coverpoint: functional coverage is not measured (NFR-06)")
 endif()
 
-function(cov_tree_digest OUT_VAR DIR)
-    file(GLOB_RECURSE FILES "${DIR}/*.sv" "${DIR}/*.svh")
-    list(SORT FILES)
-    set(ACC "")
-    foreach(F IN LISTS FILES)
-        file(READ "${F}" CONTENT)
-        string(APPEND ACC "${CONTENT}")
-    endforeach()
-    string(SHA256 H "${ACC}")
-    set(${OUT_VAR} "sha256:${H}" PARENT_SCOPE)
-endfunction()
-
-cov_tree_digest(RTL_DIGEST "${ROOT}/rtl")
-cov_tree_digest(TB_DIGEST "${ROOT}/tb")
+riscv_tree_digest(RTL_DIGEST "${ROOT}/rtl")
+riscv_tree_digest(TB_DIGEST "${ROOT}/tb")
 string(REPLACE ";" "\", \"" DB_JSON "${DB_NAMES}")
 string(TIMESTAMP STAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
 
@@ -214,11 +270,6 @@ file(WRITE "${COV_REPORT}/summary.json" "{
   \"percentages\": \"${PERCENTAGES}\"
 }
 ")
-
-# The instrumented snapshot must not leak into a plain regression: drop it so the
-# next `make elaborate` rebuilds without coverage flags.
-file(REMOVE_RECURSE "${BUILD}/xsim.dir/top_sim")
-file(REMOVE "${BUILD}/xsim.dir/.elaborated")
 
 message(STATUS "report:  ${REPORT_FILE}")
 message(STATUS "summary: build/cov_report/summary.json")

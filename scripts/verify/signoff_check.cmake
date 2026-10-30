@@ -20,9 +20,35 @@
 #
 # Never edits anything. Writes build/signoff/report.md.
 #
+# Two modes, like the other gates: included by CMakeLists.txt it declares the
+# `signoff-check` target with the evidence it audits as dependencies; with
+# `cmake -P` it only audits, so a clean tree answers "blocked" without building
+# anything (and without needing the EDA environment).
+#
 # Exit codes: 0 signoff-ready, 1 blocked, 2 the gate itself could not run.
 # =============================================================================
-cmake_minimum_required(VERSION 3.21)
+
+# Including this file must not raise the caller's policy floor (CMakeLists.txt
+# targets 3.10); script mode is where the newer policies apply.
+if(CMAKE_SCRIPT_MODE_FILE)
+    cmake_minimum_required(VERSION 3.21)
+endif()
+
+include(${CMAKE_CURRENT_LIST_DIR}/common.cmake)
+
+# =============================================================================
+# Configure mode: the gate, and the evidence it audits as dependencies.
+# =============================================================================
+if(NOT CMAKE_SCRIPT_MODE_FILE)
+    add_custom_target(signoff-check
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(SIGNOFF_ARGS)
+        DEPENDS regress coverage sanity
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running the signoff gate (A-09)..."
+        USES_TERMINAL
+    )
+    return()
+endif()
 
 get_filename_component(ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(BUILD "${ROOT}/build")
@@ -33,28 +59,35 @@ set(QUESTIONS "${ROOT}/doc/spec-questions.md")
 set(MANIFEST "${ROOT}/scripts/verify/tests.tsv")
 set(MAX_AGE_DAYS 7)
 
-set(WAVE "")
-set(DO_DOCS TRUE)
-
+# The same argument style as regress/coverage: options without their `--`.
+set(ARGS "")
 math(EXPR LAST_ARG "${CMAKE_ARGC} - 1")
 if(CMAKE_ARGC GREATER 3)
-    set(NEXT "")
     foreach(I RANGE 3 ${LAST_ARG})
-        set(ARG "${CMAKE_ARGV${I}}")
-        if(NEXT STREQUAL "wave")
-            set(WAVE "${ARG}")
-            set(NEXT "")
-        elseif(ARG STREQUAL "--wave")
-            set(NEXT "wave")
-        elseif(ARG STREQUAL "--release")
-            set(WAVE "")
-        elseif(ARG STREQUAL "--no-docs")
-            set(DO_DOCS FALSE)
-        elseif(ARG MATCHES "^-")
-            message(FATAL_ERROR "unknown option '${ARG}'")
-            return()
+        if("${CMAKE_ARGV${I}}" MATCHES "^--")
+            # Option tokens only: `no-docs` -> `no_docs`, so the variable the
+            # parser creates is addressable without a hyphen. Values are left
+            # alone (a wave number, a T-id).
+            string(REGEX REPLACE "^--" "" ARG "${CMAKE_ARGV${I}}")
+            string(REPLACE "-" "_" ARG "${ARG}")
+        else()
+            set(ARG "${CMAKE_ARGV${I}}")
         endif()
+        list(APPEND ARGS "${ARG}")
     endforeach()
+endif()
+cmake_parse_arguments(R "release;no_docs" "wave" "" ${ARGS})
+if(R_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
+    return()
+endif()
+
+# --release is the default (no wave); it stays accepted for symmetry with
+# `--wave <n>`, which CMakeLists.txt passes through SIGNOFF_ARGS.
+set(WAVE "${R_wave}")
+set(DO_DOCS TRUE)
+if(R_no_docs)
+    set(DO_DOCS FALSE)
 endif()
 
 foreach(F IN ITEMS "${SPEC}" "${VERIF}" "${QUESTIONS}" "${MANIFEST}")
@@ -112,17 +145,6 @@ function(norm_status IN OUT_VAR)
     set(${OUT_VAR} "${S}" PARENT_SCOPE)
 endfunction()
 
-function(tree_digest OUT_VAR DIR)
-    file(GLOB_RECURSE FILES "${DIR}/*.sv" "${DIR}/*.svh")
-    list(SORT FILES)
-    set(ACC "")
-    foreach(F IN LISTS FILES)
-        file(READ "${F}" CONTENT)
-        string(APPEND ACC "${CONTENT}")
-    endforeach()
-    string(SHA256 H "${ACC}")
-    set(${OUT_VAR} "sha256:${H}" PARENT_SCOPE)
-endfunction()
 
 function(json_field OUT_VAR FILE KEY)
     if(NOT EXISTS "${FILE}")
@@ -152,6 +174,22 @@ function(add_row ENTRY)
     else()
         set(ROWS "${ROWS};${ENTRY}" PARENT_SCOPE)
     endif()
+endfunction()
+
+# Split a stored row back into its four fields, once, for both consumers: the
+# report table and the console/next-actions loop. `^0+` turns "06" into "6" and
+# leaves "10" alone.
+function(row_fields ENTRY)
+    string(REPLACE "::" ";" CELL "${ENTRY}")
+    list(GET CELL 0 NUM)
+    string(REGEX REPLACE "^0+" "" NUM "${NUM}")
+    set(ROW_NUM "${NUM}" PARENT_SCOPE)
+    list(GET CELL 1 NAME)
+    set(ROW_NAME "${NAME}" PARENT_SCOPE)
+    list(GET CELL 2 SEV)
+    set(ROW_SEV "${SEV}" PARENT_SCOPE)
+    list(GET CELL 3 DETAIL)
+    set(ROW_DETAIL "${DETAIL}" PARENT_SCOPE)
 endfunction()
 
 # --- 1. documentation gates --------------------------------------------------
@@ -335,7 +373,7 @@ else()
 endif()
 
 # --- 5. latest regression ----------------------------------------------------
-tree_digest(CURRENT_RTL "${ROOT}/rtl")
+riscv_tree_digest(CURRENT_RTL "${ROOT}/rtl")
 file(GLOB RUN_RESULTS "${BUILD}/regress/*/results.json")
 set(LATEST "")
 set(LATEST_TIME 0)
@@ -345,7 +383,9 @@ foreach(F IN LISTS RUN_RESULTS)
     else()
         json_field(W "${F}" "wave")
         string(STRIP "${W}" W)
-        if(W STREQUAL WAVE)
+        # A full regression (wave = null) covers the wave as well; a run that
+        # names another wave does not.
+        if(W STREQUAL WAVE OR W STREQUAL "null")
             set(MATCH TRUE)
         else()
             set(MATCH FALSE)
@@ -535,12 +575,9 @@ if(WAVE STREQUAL "")
     add_row("11::wave red evidence (test-first)::skipped::checked per wave; see --wave <n>")
 else()
     set(RED_PROBLEMS "")
-    file(STRINGS "${MANIFEST}" MANIFEST_LINES)
-    foreach(ML IN LISTS MANIFEST_LINES)
-        if(ML MATCHES "^#" OR ML STREQUAL "")
-            continue()
-        endif()
-        string(REPLACE "\t" ";" MF "${ML}")
+    riscv_manifest_rows(MANIFEST_ROWS "${MANIFEST}")
+    foreach(MROW IN LISTS MANIFEST_ROWS)
+        string(REPLACE "|" ";" MF "${MROW}")
         list(GET MF 0 TID)
         list(GET MF 2 TW)
         list(LENGTH MF NF)
@@ -559,7 +596,7 @@ else()
                 continue()
             endif()
             json_field(WD "${F}" "wave")
-            if(NOT WD STREQUAL WAVE)
+            if(NOT WD STREQUAL WAVE AND NOT WD STREQUAL "null")
                 continue()
             endif()
             file(READ "${F}" RJSON)
@@ -607,7 +644,7 @@ else()
     set(VERDICT "signoff-ready")
 endif()
 
-tree_digest(CURRENT_TB "${ROOT}/tb")
+riscv_tree_digest(CURRENT_TB "${ROOT}/tb")
 string(TIMESTAMP RECORDED "%Y-%m-%dT%H:%M:%SZ" UTC)
 
 set(REPORT "# Signoff report - ${MODE}
@@ -628,18 +665,8 @@ set(REPORT "# Signoff report - ${MODE}
 |---|---|---|---|
 ")
 foreach(ROW IN LISTS ROWS)
-    string(REPLACE "::" ";" CELL "${ROW}")
-    list(GET CELL 0 NUM)
-    if(NUM MATCHES "^0")
-        string(SUBSTRING "${NUM}" 1 -1 NUM)
-        if(NUM MATCHES "^0")
-            string(SUBSTRING "${NUM}" 1 -1 NUM)
-        endif()
-    endif()
-    list(GET CELL 1 NAME)
-    list(GET CELL 2 SEV)
-    list(GET CELL 3 DETAIL)
-    string(APPEND REPORT "| ${NUM} | ${NAME} | ${SEV} | ${DETAIL} |\n")
+    row_fields("${ROW}")
+    string(APPEND REPORT "| ${ROW_NUM} | ${ROW_NAME} | ${ROW_SEV} | ${ROW_DETAIL} |\n")
 endforeach()
 string(APPEND REPORT "
 Generated by \`scripts/verify/signoff_check.cmake\`; every severity is derived from a file, a digest or an exit code.
@@ -647,20 +674,41 @@ Generated by \`scripts/verify/signoff_check.cmake\`; every severity is derived f
 
 file(WRITE "${OUT}/report.md" "${REPORT}")
 
+set(NEXT_ACTIONS "")
 foreach(ROW IN LISTS ROWS)
-    string(REPLACE "::" ";" CELL "${ROW}")
-    list(GET CELL 0 NUM)
-    if(NUM MATCHES "^0")
-        string(SUBSTRING "${NUM}" 1 -1 NUM)
-        if(NUM MATCHES "^0")
-            string(SUBSTRING "${NUM}" 1 -1 NUM)
+    row_fields("${ROW}")
+    message("${ROW_NUM}  ${ROW_NAME}  ${ROW_SEV}")
+    if(NOT ROW_SEV STREQUAL "ok" AND NOT ROW_SEV STREQUAL "skipped")
+        if(ROW_NUM STREQUAL "5")
+            if(WAVE STREQUAL "")
+                list(APPEND NEXT_ACTIONS "make regress                      (records the run check 5 audits)")
+            else()
+                list(APPEND NEXT_ACTIONS "make regress REGRESS_ARGS=\"--wave ${WAVE}\"   (records the run check 5 audits)")
+            endif()
+        elseif(ROW_NUM STREQUAL "11")
+            if(WAVE STREQUAL "")
+                list(APPEND NEXT_ACTIONS "record a red run per wave (see the wave plan)")
+            else()
+                list(APPEND NEXT_ACTIONS "make regress REGRESS_ARGS=\"--test <T-id> --record red --wave ${WAVE}\"   (test-first evidence)")
+            endif()
+        elseif(ROW_NUM STREQUAL "7")
+            list(APPEND NEXT_ACTIONS "make coverage")
+        elseif(ROW_NUM STREQUAL "6")
+            list(APPEND NEXT_ACTIONS "make sanity                      (needs the +HEX mode in the TB, G-10)")
+        elseif(ROW_NUM STREQUAL "10")
+            list(APPEND NEXT_ACTIONS "close the FR gaps: see doc/verification.md")
         endif()
     endif()
-    list(GET CELL 1 NAME)
-    list(GET CELL 2 SEV)
-    list(GET CELL 3 DETAIL)
-    message("${NUM}  ${NAME}  ${SEV}")
 endforeach()
+
+if(NEXT_ACTIONS)
+    list(REMOVE_DUPLICATES NEXT_ACTIONS)
+    message("")
+    message("SIGNOFF needs evidence before it can pass:")
+    foreach(ACTION IN LISTS NEXT_ACTIONS)
+        message("  - ${ACTION}")
+    endforeach()
+endif()
 
 message(STATUS "report: build/signoff/report.md")
 message("SIGNOFF ${VERDICT} (blocked=${N_BLOCKED} not_measurable=${N_NOTMEAS})")

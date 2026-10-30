@@ -56,9 +56,20 @@ set(VIVADO_PARMS "--R" CACHE STRING "Pass extra Vivado parameters for xsim (e.g.
 # ==============================================================================
 # Verify if the Vivado toolchain is properly loaded and initialized.
 # This prevents obscure errors later in the compilation/simulation steps.
+# Configuring is project generation, not tool execution: it must succeed on a
+# machine without Vivado, because the documentation checks and the signoff gate
+# do not need one. The toolchain is checked here and reported as a warning; the
+# targets that really run it (compile, elaborate, sim) fail with the tool's own
+# message when it is missing.
 if(NOT DEFINED ENV{XILINX_VIVADO})
-    message(FATAL_ERROR "XILINX_VIVADO environment variable is not set. Ensure you have sourced settings64.sh! Look at scripts/setup.sh for more info. Fix it, source it, and try again. $ source scripts/setup.sh")
+    message(WARNING "XILINX_VIVADO is not set: configure proceeds, but compile/elaborate/sim will fail. Run: source /opt/Xilinx/Vivado/<version>/settings64.sh (see scripts/setup.sh)")
 endif()
+foreach(VIVADO_TOOL xvlog xelab xsim)
+    find_program(${VIVADO_TOOL}_BIN ${VIVADO_TOOL})
+    if(NOT ${VIVADO_TOOL}_BIN)
+        message(WARNING "${VIVADO_TOOL} not found on PATH: the targets that use it will fail until the EDA environment is sourced.")
+    endif()
+endforeach()
 
 # Convert VIVADO_PARMS into a list format.
 # This ensures that multiple spaces or separate arguments aren't incorrectly grouped as a single string during execution.
@@ -295,20 +306,31 @@ endif()
 # Elaborate target: links the compiled units into a simulated snapshot ('top_sim') using xelab.
 get_property(ALL_STAMP_FILES GLOBAL PROPERTY ALL_STAMP_FILES)
 string(REPLACE ";" " " STAMP_LIST "${ALL_STAMP_FILES}")
+# One xelab invocation, reused by every snapshot: the regression's `top_sim`
+# (`elaborate`) and the coverage module's instrumented `top_sim_cov`
+# (`elaborate_cov`). Extra xelab flags come from the caller (ARGN), so the
+# command line and the "drop the snapshot when a library changed" rule exist
+# once. ELAB_ARGS still applies to both for manual runs.
+#
 # The snapshot is discarded whenever a compiled library is newer than the marker
 # written at the end of the last successful elaboration. Comparing against the
 # snapshot *directory* does not work: a simulation writes into it, so its mtime
 # is always newer than the stamps and a stale snapshot survives a library change
-# ("needs to be re-saved since ... changed" from xsim).
-add_custom_target(elaborate
-    COMMAND bash -c "for s in ${STAMP_LIST}; do if [ ! -f xsim.dir/.elaborated ] || [ \"$s\" -nt xsim.dir/.elaborated ]; then echo \"Library $s updated. Cleaning snapshot to force full elaboration.\"; rm -rf xsim.dir/top_sim; break; fi; done"
-    COMMAND xelab ${TOP_NAME} -L uvm ${XELAB_LIBS} --timescale 1ns/1ps -s top_sim --debug typical --mt 16 --incr $(ELAB_ARGS)
-    COMMAND ${CMAKE_COMMAND} -E touch xsim.dir/.elaborated
-    DEPENDS compile ${ALL_STAMP_FILES}
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Elaborating design snapshot (top_sim)..."
-    VERBATIM
-)
+# ("needs to be re-saved since ... changed" from xsim). Each snapshot has its
+# own marker, so measuring coverage never invalidates `top_sim`.
+function(add_elaborate_target TARGET SNAPSHOT)
+    add_custom_target(${TARGET}
+        COMMAND bash -c "for s in ${STAMP_LIST}; do if [ ! -f xsim.dir/.elaborated_${SNAPSHOT} ] || [ \"$s\" -nt xsim.dir/.elaborated_${SNAPSHOT} ]; then echo \"Library $s updated. Cleaning snapshot to force full elaboration.\"; rm -rf xsim.dir/${SNAPSHOT}; break; fi; done"
+        COMMAND xelab ${TOP_NAME} -L uvm ${XELAB_LIBS} --timescale 1ns/1ps -s ${SNAPSHOT} --debug typical --mt 16 --incr ${ARGN} $(ELAB_ARGS)
+        COMMAND ${CMAKE_COMMAND} -E touch xsim.dir/.elaborated_${SNAPSHOT}
+        DEPENDS compile ${ALL_STAMP_FILES}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Elaborating design snapshot (${SNAPSHOT})..."
+        VERBATIM
+    )
+endfunction()
+
+add_elaborate_target(elaborate top_sim)
 
 set(DOLLAR "$")
 set(LBRACE "{")
@@ -374,8 +396,9 @@ endforeach()
 # ==============================================================================
 # 9. External Targets (Tests compilation)
 # ==============================================================================
-# Injects the separate logic to sync and compile external RISC-V tests
-include(${CMAKE_SOURCE_DIR}/scripts/compile_sanity_tests.cmake)
+# The riscv-tests pipeline is one module: it declares the per-image build
+# targets (compile_sanity_*), the `sanity` CTest tests and the `sanity` target.
+include(${CMAKE_SOURCE_DIR}/scripts/verify/sanity.cmake)
 
 # ==============================================================================
 # 10. FPGA Vivado Project Targets
@@ -412,14 +435,16 @@ add_custom_target(docs-check
 # ==============================================================================
 # 12. Verification and Signoff Targets
 # ==============================================================================
-# The gates are shell scripts under scripts/verify/; what lives here is only the
-# wiring, so `make <gate>` (root proxy) and `make -C build <gate>` reach the same
-# implementation a CI job would call. Elaboration stays with the build system:
-# `regress` depends on `elaborate` and runs the existing snapshot, instead of
-# building a second one inside the script.
+# Every gate is a module under scripts/verify/, included here: it declares its
+# own build steps, its CTest tests and its target, so `make <gate>` (root proxy)
+# and `make -C build <gate>` reach the same implementation a CI job would call,
+# and `cmake -P` on the same file runs it without the build system.
+# Elaboration stays with the build system: `regress` depends on `elaborate` and
+# reuses that snapshot instead of building a second one inside the script.
 #
-# Every script sources its own EDA environment and exits 2 with an actionable
-# message when it cannot judge anything, so these targets never pretend to pass.
+# Each gate decides for itself whether it can judge anything and exits non-zero
+# with an actionable message when it cannot, so these targets never pretend to
+# pass.
 #
 # Usage:
 #   make regress                                        every test in tests.tsv
@@ -429,80 +454,29 @@ add_custom_target(docs-check
 #   make coverage  [COVERAGE_ARGS="--test T-01"]
 #   make signoff-check [SIGNOFF_ARGS="--wave 0"]
 
-# --- one CTest test per manifest line ----------------------------------------
-# CMake owns what a test is and how it runs: name (T-id), command, timeout and
-# labels (wave, requirements). `ctest -L wave0`, `ctest -R T-06`, `ctest -j4`
-# and `make test` all work without a wrapper script.
-#
-# The verdict cannot come from the simulator: xsim exits 0 even with UVM_ERRORs.
-# The testbench prints `UVM_RESULT: PASS|FAIL ...` from its report server, so the
-# wrapper is a single grep and CTest reports the truth.
-enable_testing()
-set(VERIFY_MANIFEST "${CMAKE_SOURCE_DIR}/scripts/verify/tests.tsv")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/regress")
+# --- regression: included, not duplicated ------------------------------------
+# regress.cmake is a module in two modes. Included, it declares one CTest test
+# per line of tests.tsv (name, command, timeout, labels) and the `regress`
+# target; run with `cmake -P` by that target, it executes the selection and
+# writes results.json. One file owns both halves, so the manifest is parsed
+# once per mode and there is no second definition of a test.
+include(${CMAKE_SOURCE_DIR}/scripts/verify/regress.cmake)
 
-if(EXISTS "${VERIFY_MANIFEST}")
-    file(STRINGS "${VERIFY_MANIFEST}" MANIFEST_LINES)
-    set(MANIFEST_TESTS "")
-    foreach(LINE IN LISTS MANIFEST_LINES)
-        if(LINE MATCHES "^#" OR LINE STREQUAL "")
-            continue()
-        endif()
-        string(REPLACE "\t" ";" FIELDS "${LINE}")
-        list(GET FIELDS 0 TID)
-        list(GET FIELDS 1 TEST_CLASS)
-        list(GET FIELDS 2 TEST_WAVE)
-        list(GET FIELDS 3 TEST_FRS)
-        list(GET FIELDS 4 TEST_TIMEOUT)
+# --- sanity: included in §9, with the images it builds -----------------------
+# The `sanity` target lives in scripts/verify/sanity.cmake, next to the image
+# rules and the CTest tests it runs: one file for the whole NFR-05 pipeline.
 
-        set(TEST_LOG "${CMAKE_BINARY_DIR}/regress/${TID}.log")
-        add_test(NAME ${TID}
-            COMMAND bash -c "xsim top_sim --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}${DOLLAR}{SEED:-${SEED}} > ${TEST_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${TEST_LOG}"
-            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+# --- coverage: included, like the regression --------------------------------
+# coverage.cmake declares the instrumented snapshot (`elaborate_cov`, built by
+# the same add_elaborate_target as `top_sim`), one COV-<T-id> CTest test per
+# manifest line and the `coverage` target; run with `cmake -P`, it merges the
+# databases with xcrg and writes summary.json. Elaboration is a dependency, so
+# `make coverage` never builds a second snapshot by hand.
+include(${CMAKE_SOURCE_DIR}/scripts/verify/coverage.cmake)
 
-        string(REPLACE "," ";" TEST_LABELS "${TEST_FRS}")
-        list(APPEND TEST_LABELS "${TID}" "wave${TEST_WAVE}")
-        set_tests_properties(${TID} PROPERTIES
-            TIMEOUT ${TEST_TIMEOUT}
-            LABELS "${TEST_LABELS}"
-            FAIL_REGULAR_EXPRESSION "FAIL")
-        list(APPEND MANIFEST_TESTS "${TID}")
-    endforeach()
-    message(STATUS "Verification tests from tests.tsv: ${MANIFEST_TESTS}")
-endif()
-
-# `make regress` = ctest, plus the evidence layer in the adapter. The adapter
-# still owns what CTest cannot: the run directory, the digests and results.json.
-add_custom_target(regress
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/scripts/verify/regress.cmake --no-elaborate $(REGRESS_ARGS)
-    DEPENDS elaborate
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Running the regression and recording evidence (results.json)..."
-    USES_TERMINAL
-)
-
-# sanity.sh decides for itself whether it can run: with no +HEX mode in the
-# testbench it records "not measurable" and exits 2, which is an answer, not a
-# build failure. It deliberately does not depend on `elaborate`.
-add_custom_target(sanity
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/scripts/verify/sanity.cmake $(SANITY_ARGS)
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Running the bundled RISC-V test images (NFR-05)..."
-    USES_TERMINAL
-)
-
-# coverage.sh re-runs `elaborate` with ELAB_ARGS (--cc_type/--cc_libs), because
-# an instrumented snapshot is a different build of the same sources.
-add_custom_target(coverage
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/scripts/verify/coverage.cmake $(COVERAGE_ARGS)
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Measuring and merging coverage with xcrg (NFR-06)..."
-    USES_TERMINAL
-)
-
-add_custom_target(signoff-check
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/scripts/verify/signoff_check.cmake $(SIGNOFF_ARGS)
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Running the signoff gate (A-09)..."
-    USES_TERMINAL
-)
+# --- signoff: the gate and its evidence chain -------------------------------
+# signoff_check.cmake declares `signoff-check` with regress/coverage/sanity as
+# dependencies, so one command builds the evidence and then audits it. The one
+# exception by nature: the red run of check 11 must be recorded before the RTL
+# fix exists, so no dependency can produce it.
+include(${CMAKE_SOURCE_DIR}/scripts/verify/signoff_check.cmake)
