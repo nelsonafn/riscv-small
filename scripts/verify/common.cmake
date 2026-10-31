@@ -89,6 +89,11 @@ function(riscv_junit_rows OUT_VAR XML_FILE)
             endif()
         endforeach()
 
+        # CMP0007: a row ending in an empty field makes `list(GET)` warn.
+        # The sanity CTest tests carry no `class:` label; use a placeholder.
+        if(CLASS STREQUAL "")
+            set(CLASS "-")
+        endif()
         list(APPEND ROWS "${ID}|${STATUS}|${CLASS}")
     endforeach()
     set(${OUT_VAR} "${ROWS}" PARENT_SCOPE)

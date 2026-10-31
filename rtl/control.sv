@@ -220,7 +220,10 @@ import riscv_definitions_pkg::*; // import package into $unit space
                 end
                 // If rd0 data is not from memory
                 else begin
-                    alu_src2 = RD_MA_S2; //Do forward from memory access
+                    //Only the ALU source can be forwarded; a store keeps rs1 + imm as address
+                    if (alu_src2_ex == RS2) begin
+                        alu_src2 = RD_MA_S2; //Do forward from memory access
+                    end
                     storage_src = RD_MA_S2; //TODO:TBR
                 end
             end

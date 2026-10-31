@@ -99,13 +99,14 @@ same command works from the project root or from inside `build/`.
 | `make regress` | runs the manifest through CTest, writes `build/regress/<run>/results.json` (per-test log, `rtl_digest`, `tb_digest`) |
 | `make regress REGRESS_ARGS="--test T-06"` | one test |
 | `make coverage` | builds an instrumented snapshot, runs the manifest tests and merges the databases with `xcrg` into `build/cov_report/summary.json` |
-| `make sanity` | runs the bundled `rv32ui-p-*` images against the core (`NFR-05`; needs the `+HEX`/`+TOHOST` testbench mode, still open as `G-10`) |
+| `make sanity` | runs the 42 bundled `rv32ui-p-*` images through the core and records `build/sanity/summary.json` (`NFR-05`); 1/42 pass today, the failures are triaged in `doc/measurements/NFR-05-riscv-tests.md` |
 | `make negative-control` | rebuilds each covered defect and proves the test fails on it (`build/red/<T-id>/results.json`) |
 | `make signoff-check` | the release gate: all 11 checks, report in `build/signoff/report.md` |
 | `make signoff-check SIGNOFF_ARGS="--wp 0"` | the gate of one work package: checks 1-5, 7 and 11 (6 and 8-10 are release evidence, reported as `skipped`) |
 
 A **work package (WP)** is one closed increment of requirements: `.opencode/plan/wp-<n>-<slug>.md` holds its scope, its
-test plan and its acceptance. WP-0 (sub-word load lane, `FR-12`) is closed; WP-1 (CSR/`Zicsr`/trap entry) is drafted.
+test plan and its acceptance. WP-0 (sub-word load lane, `FR-12`), WP-2 (gate parser), WP-3 (negative control), WP-4 (sanity harness) and
+WP-4b (sanity architecture) are closed; WP-4c (`G-27`/`G-26`) is next; WP-1 (CSR/`Zicsr`/trap entry) is drafted.
 
 ### What the signoff gate means
 
@@ -116,7 +117,8 @@ The gate never pretends to pass. It answers with an exit code and a report:
 - exit `2` when the gate itself could not run.
 
 `not-measurable` is a blocker, never a pass. The release gate is expected to stay `blocked` until every requirement is
-`verified` (`A-09`) and `NFR-05`/`NFR-07` can be measured.
+`verified` (`A-09`) and `NFR-05`/`NFR-07` can be measured. `NFR-05` is now **measured** (1 of 42 images pass); the
+remaining failures are `G-26`, `G-27`, `G-07`, `G-20`, `G-08`, `G-15` and `FR-42`.
 
 ### Why "red" evidence is reproducible
 
@@ -194,7 +196,6 @@ $ SIM_ARGS="--testplusarg NO_COLOR" make sim_riscv_small_corner_test
 
 ## Install cmake
 sudo apt install cmake
-sudo apt install autoconf
 
 ## Compiling RISC-V Sanity Tests
 The project features a submodule containing the official RISC-V ISA test-suite. We've automated its compilation natively into CMake!
@@ -207,13 +208,21 @@ $ sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
 ```
 
 **2. Execute the integrated CMake target:**
-Once in your localized build folder, CMake elegantly processes an out-of-tree configure script, safely passes variables to trick the compiler into only tracking your target test (e.g., `rv32ui-p-addi`), and skips the heavy unneeded benchmarks—without leaving a single trash artifact inside the native `src/riscv-tests` submodule!
+Each `src/riscv-tests/isa/rv32ui/*.S` is compiled directly by CMake with the project environment
+`scripts/verify/sanity/riscv_test.h` + `link.ld` -- no `autoconf`, no out-of-tree suite Makefile, nothing written
+inside the `src/riscv-tests` submodule. The project environment replaces the suite's `ECALL`/trap pass/fail
+ceremony (which `riscv_small` does not implement, `G-13`) with a direct store to `tohost`; the test bodies are
+unmodified.
 ```bash
-$ cd build/
-$ make compile_sanity_tests
+$ make compile_sanity_tests            # HEX_TEST_NAME=rv32ui-p-addi
+$ make compile_sanity_rv32ui-p-add     # one image
+$ make compile_sanity_images           # every rv32ui-p-* image
 ```
 
 **3. Test Payload:**
-The generated instruction payload is dumped at `build/sanity_tests/hex/<image>.hex` (with `tohost` in
-`build/sanity_tests/tohost/<image>`). `make sanity` runs the images through the core once the testbench has the
-`+HEX`/`+TOHOST` mode; until then it records `not measurable`, which the release gate treats as a blocker.
+The ELF, hex, `tohost` address and disassembly are written to `build/sanity_tests/{isa,hex,tohost,dump}/<image>`.
+The test reads `+HEX`, the sequence builds the program item, the driver is the memory BFM and the
+`riscv_small_sanity_checker` decides from the monitor. `make sanity` runs all 42 images; each run ends with
+`SANITY: PASS` or `SANITY: FAIL testnum=<n>` (a missing store is `SANITY: TIMEOUT`). The current baseline is 1/42; the
+triage is in `doc/measurements/NFR-05-riscv-tests.md`, and the release gate reports it as `blocked` until the images
+pass.

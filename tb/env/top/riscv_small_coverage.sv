@@ -58,6 +58,9 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
   endfunction: new
 
   function void write(riscv_small_transaction t);
+    // Fetch transactions share the analysis port but not the memory covergroup:
+    // sampling them would leave lane/direction bins that no data access made.
+    if (t.op_is_inst) return;
     $cast(cov_trans, t);
     cg_mem.sample(cov_trans.captured_data_wr_ctrl[1:0],
                   cov_trans.captured_data_addr[1:0],

@@ -3,13 +3,18 @@
 # judge them.
 #
 # Included by CMakeLists.txt (configure mode), it owns the whole riscv-tests
-# pipeline that used to be split between this file and
-# scripts/compile_sanity_tests.cmake:
-#   1. initialise the src/riscv-tests submodule;
-#   2. configure the suite out-of-tree in build/sanity_tests/;
-#   3. build one ELF per image, convert it to hex and extract its `tohost`;
-#   4. declare one CTest test per image (label `sanity`) and the `sanity`
+# pipeline:
+#   1. compile each isa/rv32ui/*.S image with the project's own environment
+#      (scripts/verify/sanity/riscv_test.h + link.ld) -- no autoconf, no
+#      out-of-tree configure, no suite Makefile;
+#   2. convert the ELF to a Verilog hex and extract `tohost` from the ELF;
+#   3. declare one CTest test per image (label `sanity`) and the `sanity`
 #      target, which runs this same file with `cmake -P`.
+#
+# Why a project environment: the stock env/p images need Zicsr, MRET and a trap
+# handler for ECALL, none of which riscv_small implements (G-13). The test
+# bodies are unmodified; only the pass/fail ceremony is local (see
+# scripts/verify/sanity/riscv_test.h).
 #
 # Build targets (unchanged, so the documented commands keep working):
 #   compile_sanity_tests     one image, from the HEX_TEST_NAME cache variable
@@ -21,6 +26,7 @@
 #   cmake -P scripts/verify/sanity.cmake --compile-only   build the images only
 #   cmake -P scripts/verify/sanity.cmake --list
 #   cmake -P scripts/verify/sanity.cmake --exclude rv32ui-p-x
+#   cmake -P scripts/verify/sanity.cmake --trace          add +TRACE to the TB
 #
 # What the run mode keeps, because nobody else can do it: `tohost` is read from
 # the ELF (never from a literal) and the verdict line is `SANITY: PASS|FAIL`.
@@ -29,7 +35,11 @@
 # coverage runs; a plain `ctest` skips these tests (exit 77) because it never
 # built the images.
 #
-# Results: build/sanity/summary.json and one log per image.
+# Scope: only isa/rv32ui. rv32mi needs CSR/trap (E6/E7), rv32um/rv32uc need
+# M/C (E8); rv32si is not in NFR-05. The glob is a one-line change when those
+# requirements land.
+#
+# Results: build/sanity/summary.json, one log per image, one dump per image.
 # Exit codes: 0 the measurement ran (not measurable is still a run), 1 an image
 #             failed, 2 the environment is missing.
 # =============================================================================
@@ -52,38 +62,42 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     set(SANITY_TEST "riscv_small_sanity_test")
 
     set(RISCV_TESTS_DIR "${CMAKE_SOURCE_DIR}/src/riscv-tests")
+    set(SANITY_ENV "${CMAKE_SOURCE_DIR}/scripts/verify/sanity")
     set(RISCV_PREFIX "riscv64-unknown-elf-")
     set(SANITY_DIR "${CMAKE_BINARY_DIR}/sanity_tests")
     set(SANITY_ISA_DIR "${SANITY_DIR}/isa")
     set(SANITY_HEX_DIR "${SANITY_DIR}/hex")
     set(SANITY_TOHOST_DIR "${SANITY_DIR}/tohost")
+    set(SANITY_DUMP_DIR "${SANITY_DIR}/dump")
     set(SANITY_OUT "${CMAKE_BINARY_DIR}/sanity")
-    file(MAKE_DIRECTORY "${SANITY_ISA_DIR}" "${SANITY_HEX_DIR}" "${SANITY_TOHOST_DIR}" "${SANITY_OUT}")
+    file(MAKE_DIRECTORY "${SANITY_ISA_DIR}" "${SANITY_HEX_DIR}" "${SANITY_TOHOST_DIR}"
+                        "${SANITY_DUMP_DIR}" "${SANITY_OUT}")
 
     # Missing tools are a warning, not a configure error: the sanity images are
     # one target among many and the rest of the project must still configure.
-    # `nm` joins them because the run needs `tohost` from the ELF.
+    # The fallback plain name keeps the build failure readable.
     foreach(PAIR "RISCV_OBJCOPY;riscv64-unknown-elf-objcopy"
-                  "AUTOCONF;autoconf"
                   "RISCV_GCC;riscv64-unknown-elf-gcc"
-                  "RISCV_NM;riscv64-unknown-elf-nm")
+                  "RISCV_NM;riscv64-unknown-elf-nm"
+                  "RISCV_OBJDUMP;riscv64-unknown-elf-objdump")
         list(GET PAIR 0 VAR)
         list(GET PAIR 1 BIN)
         find_program(${VAR} ${BIN})
         if(NOT ${VAR})
-            message(WARNING "${BIN} not found: the sanity-image targets will fail. Install with: sudo apt install binutils-riscv64-unknown-elf gcc-riscv64-unknown-elf autoconf")
+            message(WARNING "${BIN} not found: the sanity-image targets will fail. Install with: sudo apt install binutils-riscv64-unknown-elf gcc-riscv64-unknown-elf")
+            set(${VAR} "${BIN}")
         endif()
     endforeach()
+
+    if(NOT EXISTS "${RISCV_TESTS_DIR}/isa/rv32ui")
+        message(FATAL_ERROR "No riscv-tests sources under ${RISCV_TESTS_DIR}/isa/rv32ui. Run: git submodule update --init src/riscv-tests")
+    endif()
 
     # --- image list ---------------------------------------------------------
     # Each isa/rv32ui/<stem>.S builds the bare-metal image rv32ui-p-<stem>
     # ("-p-" is the physical target of the bundled suite). The list is written
     # to images.txt so the run mode never globs the sources a second time.
     file(GLOB SANITY_SOURCES "${RISCV_TESTS_DIR}/isa/rv32ui/*.S")
-    if(NOT SANITY_SOURCES)
-        message(FATAL_ERROR "No riscv-tests sources under ${RISCV_TESTS_DIR}/isa/rv32ui. Run: git submodule update --init src/riscv-tests")
-    endif()
-
     set(SANITY_IMAGES "")
     foreach(SANITY_SOURCE IN LISTS SANITY_SOURCES)
         get_filename_component(SANITY_STEM "${SANITY_SOURCE}" NAME_WE)
@@ -98,50 +112,57 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         message(FATAL_ERROR "HEX_TEST_NAME='${HEX_TEST_NAME}' is not one of the ${SANITY_IMAGE_COUNT} bundled images (e.g. ${SANITY_IMAGES})")
     endif()
 
-    # --- configure the suite once -------------------------------------------
-    # The suite Makefile is the output, so configure runs again only when the
-    # out-of-tree Makefile disappears.
-    add_custom_command(
-        OUTPUT "${SANITY_DIR}/Makefile"
-        COMMAND git submodule update --init --recursive "${RISCV_TESTS_DIR}"
-        COMMAND "${RISCV_TESTS_DIR}/configure" --srcdir "${RISCV_TESTS_DIR}"
-        WORKING_DIRECTORY "${SANITY_DIR}"
-        COMMENT "Configuring riscv-tests out-of-tree..."
-        USES_TERMINAL
-        VERBATIM
-    )
-
     # --- one rule and one target per image ----------------------------------
-    # elf -> hex -> tohost: three artefacts of the same image, each one a real
-    # build dependency, so nothing is recomputed at simulation time.
-    set(SANITY_HEX_FILES "")
+    # elf -> hex + tohost + dump: four artefacts of the same image, each one a
+    # real build dependency, so nothing is recomputed at simulation time.
+    # The compile rule is ours: no suite Makefile, no autoconf. `-march=rv32i`
+    # proves the image only uses the base ISA (the suite links with -march=rv32g
+    # which merely permits M/A/F/D). `fence_i.S` is Zifencei.
+    set(SANITY_ARTIFACTS "")
     foreach(SANITY_IMAGE IN LISTS SANITY_IMAGES)
+        set(SANITY_STEM "${SANITY_IMAGE}")
+        string(REGEX REPLACE "^rv32ui-p-" "" SANITY_STEM "${SANITY_STEM}")
+        set(SANITY_SOURCE "${RISCV_TESTS_DIR}/isa/rv32ui/${SANITY_STEM}.S")
         set(SANITY_ELF "${SANITY_ISA_DIR}/${SANITY_IMAGE}")
         set(SANITY_HEX "${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex")
         set(SANITY_TOHOST "${SANITY_TOHOST_DIR}/${SANITY_IMAGE}")
+        set(SANITY_DUMP "${SANITY_DUMP_DIR}/${SANITY_IMAGE}.dump")
+
+        set(SANITY_ARCH "rv32i")
+        if(SANITY_STEM STREQUAL "fence_i")
+            set(SANITY_ARCH "rv32i_zifencei")
+        endif()
 
         add_custom_command(
             OUTPUT "${SANITY_ELF}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${SANITY_ISA_DIR}"
-            COMMAND make -C "${SANITY_DIR}" XLEN=32 RISCV_PREFIX="${RISCV_PREFIX}" RISCV_PREFIX_VAR="${SANITY_IMAGE}" isa
-            DEPENDS "${SANITY_DIR}/Makefile"
-            WORKING_DIRECTORY "${SANITY_DIR}"
-            COMMENT "Building ${SANITY_IMAGE}..."
+            COMMAND ${RISCV_GCC}
+                    -march=${SANITY_ARCH} -mabi=ilp32
+                    -static -mcmodel=medany -fvisibility=hidden
+                    -nostdlib -nostartfiles
+                    -I${SANITY_ENV}
+                    -I${RISCV_TESTS_DIR}/env
+                    -I${RISCV_TESTS_DIR}/isa/macros/scalar
+                    -T${SANITY_ENV}/link.ld
+                    ${SANITY_SOURCE} -o ${SANITY_ELF}
+            DEPENDS "${SANITY_SOURCE}" "${SANITY_ENV}/riscv_test.h" "${SANITY_ENV}/link.ld"
+            COMMENT "Compiling ${SANITY_IMAGE}..."
             VERBATIM
         )
 
         add_custom_command(
             OUTPUT "${SANITY_HEX}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${SANITY_HEX_DIR}"
+            # No --reverse-bytes: `--reverse-bytes=4` byte-swaps every word and
+            # the TB would fetch 0x2320300c instead of 0x0c302023. The image is
+            # little-endian, exactly as the core fetches it.
             COMMAND ${RISCV_OBJCOPY} -O verilog
-                    -j .text -j .text.startup -j .text.init -j .data
-                    --gap-fill 00000000 --set-start=0 --reverse-bytes=4
-                    --verilog-data-width 4
+                    -j .text.init -j .text -j .tohost -j .data
+                    --gap-fill 00000000 --set-start=0 --verilog-data-width 4
                     "${SANITY_ELF}" "${SANITY_HEX}"
             COMMAND sed -i.bak "1 s/.*/@00000000/" "${SANITY_HEX}"
             COMMAND ${CMAKE_COMMAND} -E remove "${SANITY_HEX}.bak"
             DEPENDS "${SANITY_ELF}"
-            WORKING_DIRECTORY "${SANITY_DIR}"
             COMMENT "Converting ${SANITY_IMAGE} to a hex image..."
             VERBATIM
         )
@@ -154,17 +175,27 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
             COMMAND ${CMAKE_COMMAND} -E make_directory "${SANITY_TOHOST_DIR}"
             COMMAND bash -c "${RISCV_NM} '${SANITY_ELF}' | awk '$NF == \"tohost\" { print \"0x\" $1; exit }' > '${SANITY_TOHOST}' && test -s '${SANITY_TOHOST}'"
             DEPENDS "${SANITY_ELF}"
-            WORKING_DIRECTORY "${SANITY_DIR}"
             COMMENT "Reading tohost from ${SANITY_IMAGE}..."
             VERBATIM
         )
 
+        # The dump is the debug artefact: a failing image prints its TESTNUM and
+        # the last PCs, and the dump maps both back to the assembly.
+        add_custom_command(
+            OUTPUT "${SANITY_DUMP}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${SANITY_DUMP_DIR}"
+            COMMAND bash -c "${RISCV_OBJDUMP} -d '${SANITY_ELF}' > '${SANITY_DUMP}' && test -s '${SANITY_DUMP}'"
+            DEPENDS "${SANITY_ELF}"
+            COMMENT "Disassembling ${SANITY_IMAGE}..."
+            VERBATIM
+        )
+
         add_custom_target(compile_sanity_${SANITY_IMAGE}
-            DEPENDS "${SANITY_HEX}" "${SANITY_TOHOST}")
-        list(APPEND SANITY_HEX_FILES "${SANITY_HEX}")
+            DEPENDS "${SANITY_ELF}" "${SANITY_HEX}" "${SANITY_TOHOST}" "${SANITY_DUMP}")
+        list(APPEND SANITY_ARTIFACTS "${SANITY_HEX}" "${SANITY_DUMP}")
     endforeach()
 
-    add_custom_target(compile_sanity_images DEPENDS ${SANITY_HEX_FILES})
+    add_custom_target(compile_sanity_images DEPENDS ${SANITY_ARTIFACTS})
 
     # Backwards-compatible target: the single image chosen by HEX_TEST_NAME,
     # still used by scripts/xrun.sh and the README.
@@ -178,7 +209,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     if(EXISTS "${CMAKE_SOURCE_DIR}/tb/tests/${SANITY_TEST}.sv")
         foreach(SANITY_IMAGE IN LISTS SANITY_IMAGES)
             add_test(NAME ${SANITY_IMAGE}
-                COMMAND bash -c "test -n \"${DOLLAR}RISCV_SANITY\" || exit 77; xsim top_sim --R --testplusarg UVM_TESTNAME=${SANITY_TEST} --testplusarg HEX=${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex --testplusarg TOHOST=$(cat ${SANITY_TOHOST_DIR}/${SANITY_IMAGE}) --testplusarg NO_COLOR > ${SANITY_OUT}/${SANITY_IMAGE}.log 2>&1 && grep -q '^SANITY: PASS' ${SANITY_OUT}/${SANITY_IMAGE}.log"
+                COMMAND bash -c "test -n \"${DOLLAR}RISCV_SANITY\" || exit 77; TRACE=\"\"; if [ -n \"${DOLLAR}SANITY_TRACE\" ]; then TRACE=\"--testplusarg TRACE\"; fi; xsim top_sim --R --testplusarg UVM_TESTNAME=${SANITY_TEST} --testplusarg HEX=${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex --testplusarg TOHOST=$(cat ${SANITY_TOHOST_DIR}/${SANITY_IMAGE}) --testplusarg NO_COLOR ${DOLLAR}TRACE > ${SANITY_OUT}/${SANITY_IMAGE}.log 2>&1 && grep -q '^SANITY: PASS' ${SANITY_OUT}/${SANITY_IMAGE}.log"
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
             set_tests_properties(${SANITY_IMAGE} PROPERTIES
                 LABELS "sanity"
@@ -199,6 +230,16 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         COMMENT "Running the bundled RISC-V test images (NFR-05)..."
         USES_TERMINAL
     )
+
+    # Same measurement, exit 0 even when images fail: the signoff gate reads
+    # summary.json and check 6 turns the failures into `blocked`. Without this,
+    # `make signoff-check` would abort in the dependency before judging.
+    add_custom_target(sanity-evidence
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} --allow-fail $(SANITY_ARGS)
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Measuring NFR-05 for the signoff gate (failures are a verdict)..."
+        USES_TERMINAL
+    )
     return()
 endif()
 
@@ -211,6 +252,7 @@ set(SANITY_DIR "${BUILD}/sanity_tests")
 set(ISA_DIR "${SANITY_DIR}/isa")
 set(HEX_DIR "${SANITY_DIR}/hex")
 set(TOHOST_DIR "${SANITY_DIR}/tohost")
+set(DUMP_DIR "${SANITY_DIR}/dump")
 set(OUT "${BUILD}/sanity")
 set(SANITY_TEST "riscv_small_sanity_test")
 
@@ -219,6 +261,8 @@ set(IMAGES "")
 set(EXCLUDE "")
 set(COMPILE_ONLY FALSE)
 set(DO_LIST FALSE)
+set(DO_TRACE FALSE)
+set(ALLOW_FAIL FALSE)
 math(EXPR LAST_ARG "${CMAKE_ARGC} - 1")
 if(CMAKE_ARGC GREATER 3)
     foreach(I RANGE 3 ${LAST_ARG})
@@ -227,6 +271,13 @@ if(CMAKE_ARGC GREATER 3)
             set(COMPILE_ONLY TRUE)
         elseif(ARG STREQUAL "--list")
             set(DO_LIST TRUE)
+        elseif(ARG STREQUAL "--trace")
+            set(DO_TRACE TRUE)
+        elseif(ARG STREQUAL "--allow-fail")
+            # Measurement mode for the signoff gate: a failing image is a
+            # verdict (blocked in check 6), not a build error that stops the
+            # evidence chain. The public `make sanity` keeps exit 1.
+            set(ALLOW_FAIL TRUE)
         elseif(ARG STREQUAL "--exclude")
             set(NEED_EXCLUDE TRUE)
         elseif(DEFINED NEED_EXCLUDE)
@@ -354,8 +405,12 @@ endforeach()
 # --- run through CTest -------------------------------------------------------
 message(STATUS "running ${N_IMAGES} image(s) through ctest (label 'sanity')")
 list(JOIN IMAGES "|" PATTERN)
+set(TRACE_ENV "")
+if(DO_TRACE)
+    set(TRACE_ENV "SANITY_TRACE=1")
+endif()
 execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env RISCV_SANITY=1
+    COMMAND ${CMAKE_COMMAND} -E env RISCV_SANITY=1 ${TRACE_ENV}
             ${CMAKE_CTEST_COMMAND} --output-junit "${OUT}/junit.xml"
             -L "^sanity$" -R "^(${PATTERN})$"
     WORKING_DIRECTORY "${BUILD}"
@@ -385,7 +440,19 @@ foreach(ROW IN LISTS ROWS)
         string(STRIP "${TOHOST}" TOHOST)
     endif()
 
+    set(TESTNUM "")
+    set(PC "")
     set(LOG "${OUT}/${IMAGE}.log")
+    set(LOG_TEXT "")
+    if(EXISTS "${LOG}")
+        file(READ "${LOG}" LOG_TEXT)
+        if(LOG_TEXT MATCHES "SANITY: FAIL testnum=([0-9]+) value=0x[0-9a-fA-F]+")
+            set(TESTNUM "${CMAKE_MATCH_1}")
+        elseif(LOG_TEXT MATCHES "SANITY: TIMEOUT pc=0x([0-9a-fA-F]+)")
+            set(PC "0x${CMAKE_MATCH_1}")
+        endif()
+    endif()
+
     if(STATUS STREQUAL "pass")
         set(STATUS "pass")
         math(EXPR N_PASS "${N_PASS} + 1")
@@ -399,10 +466,6 @@ foreach(ROW IN LISTS ROWS)
     else()
         # `fail` is only a verdict if the testbench said so; no SANITY line at
         # all means the +HEX mode did not answer, which is not measurable.
-        set(LOG_TEXT "")
-        if(EXISTS "${LOG}")
-            file(READ "${LOG}" LOG_TEXT)
-        endif()
         if(NOT LOG_TEXT MATCHES "SANITY:")
             set(NOT_MEASURABLE "${IMAGE} produced no SANITY verdict line; see build/sanity/${IMAGE}.log")
             break()
@@ -411,8 +474,8 @@ foreach(ROW IN LISTS ROWS)
         math(EXPR N_FAIL "${N_FAIL} + 1")
     endif()
 
-    message(STATUS "  ${IMAGE} -> ${STATUS} (tohost=${TOHOST})")
-    list(APPEND IMAGE_ROWS "    { \"image\": \"${IMAGE}\", \"status\": \"${STATUS}\", \"tohost\": \"${TOHOST}\", \"log\": \"build/sanity/${IMAGE}.log\" }")
+    message(STATUS "  ${IMAGE} -> ${STATUS} (tohost=${TOHOST} testnum=${TESTNUM} pc=${PC})")
+    list(APPEND IMAGE_ROWS "    { \"image\": \"${IMAGE}\", \"status\": \"${STATUS}\", \"tohost\": \"${TOHOST}\", \"testnum\": \"${TESTNUM}\", \"pc\": \"${PC}\", \"log\": \"build/sanity/${IMAGE}.log\" }")
 endforeach()
 
 if(NOT NOT_MEASURABLE STREQUAL "")
@@ -424,6 +487,6 @@ endif()
 write_summary("measured" "" ${N_PASS} ${N_FAIL} "${IMAGE_ROWS}")
 message(STATUS "results: build/sanity/summary.json")
 
-if(N_FAIL GREATER 0)
+if(N_FAIL GREATER 0 AND NOT ALLOW_FAIL)
     message(FATAL_ERROR "sanity failures")
 endif()

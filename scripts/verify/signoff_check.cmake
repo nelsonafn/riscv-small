@@ -52,7 +52,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     )
     add_custom_target(signoff-check
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(SIGNOFF_ARGS)
-        DEPENDS regress coverage sanity negative-control
+        DEPENDS regress coverage sanity-evidence negative-control
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running the signoff gate (A-09)..."
         USES_TERMINAL
@@ -498,7 +498,12 @@ else()
     else()
         json_field(ST "${SAN}" "status")
         json_field(REASON "${SAN}" "reason")
-        if(ST STREQUAL "measured")
+        json_field(SAN_RTL "${SAN}" "rtl_digest")
+        json_field(SAN_TB "${SAN}" "tb_digest")
+        riscv_tree_digest(SAN_TB_NOW "${ROOT}/tb")
+        if(NOT SAN_RTL STREQUAL CURRENT_RTL OR NOT SAN_TB STREQUAL SAN_TB_NOW)
+            add_row("06::sanity images (NFR-05)::blocked::summary.json is stale (rtl/tb digest); re-run make sanity")
+        elseif(ST STREQUAL "measured")
             json_field(SAN_FAIL "${SAN}" "fail")
             if(SAN_FAIL GREATER 0)
                 add_row("06::sanity images (NFR-05)::blocked::${SAN_FAIL} image(s) failed")
@@ -734,7 +739,7 @@ foreach(ROW IN LISTS ROWS)
         elseif(ROW_NUM STREQUAL "7")
             list(APPEND NEXT_ACTIONS "make coverage")
         elseif(ROW_NUM STREQUAL "6")
-            list(APPEND NEXT_ACTIONS "make sanity                      (needs the +HEX mode in the TB, G-10)")
+            list(APPEND NEXT_ACTIONS "make sanity                      (see doc/measurements/NFR-05-riscv-tests.md for the failing images)")
         elseif(ROW_NUM STREQUAL "10")
             list(APPEND NEXT_ACTIONS "close the FR gaps: see doc/verification.md")
         endif()

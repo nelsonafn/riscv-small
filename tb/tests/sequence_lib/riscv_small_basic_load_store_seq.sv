@@ -24,7 +24,6 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     int regs[];
 
     req = riscv_small_transaction::type_id::create("req");
-    start_item(req);
     
     // N loads + BUBBLE_COUNT NOPs + N stores + FLUSH_CYCLES NOP final
     req.instruction_addr = new[N + BUBBLE_COUNT + N + FLUSH_CYCLES];
@@ -113,11 +112,24 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
       req.instruction_list[idx]  = 32'h00000033;
     end
 
+    // The program item is complete: publish it to the reference model, then
+    // hand the same item to the driver.
+    publish_program(req);
+    start_item(req);
     finish_item(req);
 
     // Wait long enough for the pipeline to process everything
     // N loads + BUBBLE_COUNT + N stores = approx 200ns
   endtask
+
+  // The reference model receives the program from here, never from the driver.
+  function void publish_program(riscv_small_transaction item);
+    uvm_analysis_port#(riscv_small_transaction) program_port;
+    if (uvm_config_db#(uvm_analysis_port#(riscv_small_transaction))::get(m_sequencer, "", "program_port", program_port))
+      program_port.write(item);
+    else
+      `uvm_warning("PROGRAM_PORT", "no program_port: the reference model will not see this program")
+  endfunction
 
 endclass
 

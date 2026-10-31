@@ -72,9 +72,30 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         list(GET FIELDS 2 TEST_WP)
         list(GET FIELDS 4 TEST_TIMEOUT)
 
-        add_test(NAME COV-${TID}
-            COMMAND bash -c "test -n \"${DOLLAR}RISCV_COVERAGE\" || exit 77; xsim top_sim_cov --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} --cov_db_dir ${COV_DB} --cov_db_name cov_${TID} > ${COV_REPORT}/${TID}.log 2>&1 && grep -q '^UVM_RESULT: PASS' ${COV_REPORT}/${TID}.log"
-            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        # Optional 7th column: the same `sanity:<image>` contract as the
+        # regression. Without it the sanity class has no +HEX and dies with a
+        # UVM_FATAL in the instrumented snapshot, so the coverage run would
+        # report a broken test instead of a measurement.
+        set(TEST_IMAGE "")
+        list(LENGTH FIELDS NFIELDS)
+        if(NFIELDS GREATER 6)
+            list(GET FIELDS 6 TEST_EXTRA)
+            if(TEST_EXTRA MATCHES "^sanity:(.+)$")
+                set(TEST_IMAGE "${CMAKE_MATCH_1}")
+            endif()
+        endif()
+
+        if(TEST_IMAGE STREQUAL "")
+            add_test(NAME COV-${TID}
+                COMMAND bash -c "test -n \"${DOLLAR}RISCV_COVERAGE\" || exit 77; xsim top_sim_cov --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} --cov_db_dir ${COV_DB} --cov_db_name cov_${TID} > ${COV_REPORT}/${TID}.log 2>&1 && grep -q '^UVM_RESULT: PASS' ${COV_REPORT}/${TID}.log"
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        else()
+            set(TEST_HEX "${CMAKE_BINARY_DIR}/sanity_tests/hex/${TEST_IMAGE}.hex")
+            set(TEST_TOHOST "${CMAKE_BINARY_DIR}/sanity_tests/tohost/${TEST_IMAGE}")
+            add_test(NAME COV-${TID}
+                COMMAND bash -c "test -n \"${DOLLAR}RISCV_COVERAGE\" || exit 77; test -f ${TEST_HEX} || { echo 'missing ${TEST_HEX}: run make compile_sanity_${TEST_IMAGE}'; exit 1; }; TOHOST=${DOLLAR}(cat ${TEST_TOHOST}); xsim top_sim_cov --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --testplusarg HEX=${TEST_HEX} --testplusarg TOHOST=${DOLLAR}TOHOST --sv_seed ${DOLLAR}{SEED:-${SEED}} --cov_db_dir ${COV_DB} --cov_db_name cov_${TID} > ${COV_REPORT}/${TID}.log 2>&1 && grep -q '^UVM_RESULT: PASS' ${COV_REPORT}/${TID}.log && grep -q '^SANITY: PASS' ${COV_REPORT}/${TID}.log"
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        endif()
         set_tests_properties(COV-${TID} PROPERTIES
             TIMEOUT ${TEST_TIMEOUT}
             SKIP_RETURN_CODE 77
@@ -156,9 +177,25 @@ if(NOT EXISTS "${BUILD}/Makefile")
     endif()
 endif()
 
-message(STATUS "elaborating top_sim_cov through the build system")
+# The sanity test needs its image before CTest runs COV-T-08; build it next to
+# the instrumented snapshot, exactly like the regression does.
+set(BUILD_TARGETS elaborate_cov)
+riscv_manifest_rows(MANIFEST_ROWS "${ROOT}/scripts/verify/tests.tsv")
+foreach(MROW IN LISTS MANIFEST_ROWS)
+    string(REPLACE "|" ";" MF "${MROW}")
+    list(LENGTH MF NF)
+    if(NF GREATER 6)
+        list(GET MF 6 MF_EXTRA)
+        if(MF_EXTRA MATCHES "^sanity:(.+)$")
+            list(APPEND BUILD_TARGETS "compile_sanity_${CMAKE_MATCH_1}")
+        endif()
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES BUILD_TARGETS)
+
+message(STATUS "building ${BUILD_TARGETS} through the build system")
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build "${BUILD}" --target elaborate_cov
+    COMMAND ${CMAKE_COMMAND} --build "${BUILD}" --target ${BUILD_TARGETS}
     WORKING_DIRECTORY "${BUILD}"
     RESULT_VARIABLE RC
     OUTPUT_FILE "${BUILD}/coverage_elaborate.log"

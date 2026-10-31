@@ -14,6 +14,11 @@
 #               this test covers; the negative control rebuilds it and requires the test to fail
 #               no: the test predates the flow; there is no mutant yet
 #
+# Optional 7th column, `sanity:<image>`: the test is the UVM sanity harness and
+# runs a pre-built riscv-tests image. regress.cmake passes +HEX/+TOHOST (the
+# tohost address is read from the ELF, never hardcoded) and requires both
+# `UVM_RESULT: PASS` and `SANITY: PASS` in the log.
+#
 # A test listed here must exist in tb/tests/<uvm_test>.sv. After adding a line,
 # re-run ./configure so CMake picks up the new sim_<uvm_test> target.
 #
@@ -21,3 +26,5 @@
 T-01	riscv_small_basic_load_store_test	0	FR-09,FR-10	300	no
 T-02	riscv_small_corner_test	0	FR-09,FR-10	300	no
 T-06	riscv_small_subword_access_test	0	FR-12	300	mutant:T-06
+T-08	riscv_small_sanity_test	4	NFR-05	300	mutant:sanity-addi	sanity:rv32ui-p-simple
+T-09	riscv_small_passive_test	4b	-	300	mutant:passive-agent-always-active

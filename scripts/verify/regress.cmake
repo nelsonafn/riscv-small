@@ -59,13 +59,34 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         list(GET FIELDS 3 TEST_FRS)
         list(GET FIELDS 4 TEST_TIMEOUT)
 
+        # Optional 7th column: `sanity:<image>` runs the sanity test against a
+        # pre-built riscv-tests image. The image is built by the run mode (see
+        # the `compile_sanity_*` targets below) and its tohost address is read
+        # from the ELF artefact, never hardcoded.
+        set(TEST_IMAGE "")
+        list(LENGTH FIELDS NFIELDS)
+        if(NFIELDS GREATER 6)
+            list(GET FIELDS 6 TEST_EXTRA)
+            if(TEST_EXTRA MATCHES "^sanity:(.+)$")
+                set(TEST_IMAGE "${CMAKE_MATCH_1}")
+            endif()
+        endif()
+
         # The verdict is the testbench's own `UVM_RESULT:` line, never xsim's
         # exit code: xsim returns 0 even with UVM_ERRORs. The log stays on disk
         # as evidence; CTest only sees the grep.
         set(TEST_LOG "${CMAKE_BINARY_DIR}/regress/${TID}.log")
-        add_test(NAME ${TID}
-            COMMAND bash -c "xsim top_sim --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} > ${TEST_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${TEST_LOG}"
-            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        if(TEST_IMAGE STREQUAL "")
+            add_test(NAME ${TID}
+                COMMAND bash -c "xsim top_sim --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} > ${TEST_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${TEST_LOG}"
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        else()
+            set(TEST_HEX "${CMAKE_BINARY_DIR}/sanity_tests/hex/${TEST_IMAGE}.hex")
+            set(TEST_TOHOST "${CMAKE_BINARY_DIR}/sanity_tests/tohost/${TEST_IMAGE}")
+            add_test(NAME ${TID}
+                COMMAND bash -c "test -f ${TEST_HEX} || { echo 'missing ${TEST_HEX}: run make compile_sanity_${TEST_IMAGE}'; exit 1; }; TOHOST=${DOLLAR}(cat ${TEST_TOHOST}); xsim top_sim --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --testplusarg HEX=${TEST_HEX} --testplusarg TOHOST=${DOLLAR}TOHOST --sv_seed ${DOLLAR}{SEED:-${SEED}} > ${TEST_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${TEST_LOG} && grep -q '^SANITY: PASS' ${TEST_LOG}"
+                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        endif()
 
         # Labels are the selection keys and the class carrier: run mode filters
         # with -R (T-id) and -L (wp/class) and reads the class back from the
@@ -141,8 +162,11 @@ endif()
 
 # --- selection: CTest's own filters, nothing re-implemented -------------------
 # The coverage tests (label `cov`) are these same tests against an instrumented
-# snapshot: they belong to `make coverage`, never to the regression.
-set(CTEST_SELECT -LE "^cov$")
+# snapshot: they belong to `make coverage`, never to the regression. The sanity
+# images (label `sanity`) are the mirror case: they are skipped (exit 77)
+# unless `make sanity` runs them with RISCV_SANITY=1, so a plain regression must
+# not count them as failures.
+set(CTEST_SELECT -LE "^(cov|sanity)$")
 if(R_test)
     list(JOIN R_test "|" PATTERN)
     list(APPEND CTEST_SELECT -R "^(${PATTERN})$")
@@ -175,15 +199,32 @@ if(R_list)
     return()
 endif()
 
-message(STATUS "elaborating through the build system")
+# The sanity test needs its image built before CTest runs it. Build exactly
+# the images named by the manifest's optional 7th column, next to `elaborate`,
+# so a direct `cmake -P` cannot simulate an image that was never produced.
+set(BUILD_TARGETS elaborate)
+riscv_manifest_rows(MANIFEST_ROWS "${ROOT}/scripts/verify/tests.tsv")
+foreach(MROW IN LISTS MANIFEST_ROWS)
+    string(REPLACE "|" ";" MF "${MROW}")
+    list(LENGTH MF NF)
+    if(NF GREATER 6)
+        list(GET MF 6 MF_EXTRA)
+        if(MF_EXTRA MATCHES "^sanity:(.+)$")
+            list(APPEND BUILD_TARGETS "compile_sanity_${CMAKE_MATCH_1}")
+        endif()
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES BUILD_TARGETS)
+
+message(STATUS "building ${BUILD_TARGETS} through the build system")
 execute_process(
-    COMMAND ${CMAKE_COMMAND} --build "${BUILD}" --target elaborate
+    COMMAND ${CMAKE_COMMAND} --build "${BUILD}" --target ${BUILD_TARGETS}
     WORKING_DIRECTORY "${BUILD}"
     RESULT_VARIABLE RC
     OUTPUT_FILE "${BUILD}/regress/elaborate.log"
     ERROR_FILE "${BUILD}/regress/elaborate.log")
 if(NOT RC EQUAL 0)
-    message(FATAL_ERROR "elaboration failed (is the EDA environment sourced?); see build/regress/elaborate.log")
+    message(FATAL_ERROR "elaboration/image build failed (is the EDA environment sourced?); see build/regress/elaborate.log")
 endif()
 
 # --- run directory and digests -----------------------------------------------
@@ -280,9 +321,13 @@ string(TIMESTAMP FINISHED "%Y-%m-%dT%H:%M:%SZ" UTC)
 string(REPLACE ";" ",\n" TESTS_JSON "${TEST_ROWS}")
 
 if(NOT "${R_wp}" STREQUAL "")
-    set(WP_JSON "${R_wp}")
+    # The value is a string in results.json ("4b"), not a bare token: `wp: 4b`
+    # is not JSON and breaks every consumer that parses the file.
+    set(WP_JSON "\"${R_wp}\"")
+    set(WP_TEXT "${R_wp}")
 else()
     set(WP_JSON "null")
+    set(WP_TEXT "release")
 endif()
 
 file(WRITE "${OUT}/results.json" "{
@@ -308,7 +353,7 @@ file(WRITE "${OUT}/summary.md" "# Regression ${STARTED}
 |---|---|
 | Record | `${RECORD}` |
 | Runner | ctest |
-| Work package | ${WP_JSON} |
+| Work package | ${WP_TEXT} |
 | Config | `${CONFIG_NAME}` |
 | Seed | ${SEED} |
 | RTL digest | `${RTL_DIGEST}` |

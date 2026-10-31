@@ -14,6 +14,14 @@ class riscv_small_transaction extends uvm_sequence_item;
   int data_list [];
 
   /*
+   * Program item for the image/ISA path: the sequence owns the file and builds
+   * the memory image here, so the driver only loads words and answers the bus.
+   * `program_addr` is a byte address, `program_data` the 32-bit word.
+   */
+  int program_addr [];
+  int program_data [];
+
+  /*
    * For the monitor to capture what happened, we can capture a single cycle 
    * of transaction or memory operations.
    */
@@ -33,6 +41,8 @@ class riscv_small_transaction extends uvm_sequence_item;
     `uvm_field_array_int(instruction_list, UVM_ALL_ON)
     `uvm_field_array_int(data_addr, UVM_ALL_ON)
     `uvm_field_array_int(data_list, UVM_ALL_ON)
+    `uvm_field_array_int(program_addr, UVM_ALL_ON)
+    `uvm_field_array_int(program_data, UVM_ALL_ON)
     `uvm_field_int(op_is_inst, UVM_ALL_ON)
     `uvm_field_int(captured_inst_addr, UVM_ALL_ON)
     `uvm_field_int(captured_inst_data, UVM_ALL_ON)

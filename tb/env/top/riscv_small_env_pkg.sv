@@ -28,6 +28,7 @@ package riscv_small_env_pkg;
   `include "colored_report_server.sv"
   `include "riscv_small_coverage.sv"
   `include "riscv_small_scoreboard.sv"
+  `include "riscv_small_sanity_checker.sv"
   `include "riscv_small_env.sv"
 
 endpackage

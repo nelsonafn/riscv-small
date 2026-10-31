@@ -150,6 +150,9 @@ foreach(ENTRY IN LISTS SELECTED)
     file(COPY "${RESULT}" DESTINATION "${OUT}/${TID}")
     if(EXISTS "${SCRATCH}/build/regress/${TID}.log")
         file(COPY "${SCRATCH}/build/regress/${TID}.log" DESTINATION "${OUT}/${TID}")
+        # results.json's `log` field is relative to the scratch's build/red;
+        # keep a copy at that path too, or the published evidence points nowhere.
+        file(COPY "${SCRATCH}/build/regress/${TID}.log" DESTINATION "${OUT}")
     endif()
 
     math(EXPR N_DETECTED "${N_DETECTED} + 1")

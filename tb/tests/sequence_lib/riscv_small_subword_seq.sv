@@ -67,7 +67,6 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
             0, 2};
 
     req = riscv_small_transaction::type_id::create("req");
-    start_item(req);
 
     last = N_CASES * (1 + BUBBLE + 1);
     req.instruction_addr = new[last + TAIL];
@@ -116,8 +115,21 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
       idx++;
     end
 
+    // The program item is complete: publish it to the reference model, then
+    // hand the same item to the driver.
+    publish_program(req);
+    start_item(req);
     finish_item(req);
   endtask
+
+  // The reference model receives the program from here, never from the driver.
+  function void publish_program(riscv_small_transaction item);
+    uvm_analysis_port#(riscv_small_transaction) program_port;
+    if (uvm_config_db#(uvm_analysis_port#(riscv_small_transaction))::get(m_sequencer, "", "program_port", program_port))
+      program_port.write(item);
+    else
+      `uvm_warning("PROGRAM_PORT", "no program_port: the reference model will not see this program")
+  endfunction
 
   function automatic string load_name(bit [2:0] f3);
     case (f3)
