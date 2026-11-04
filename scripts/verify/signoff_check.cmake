@@ -418,7 +418,7 @@ else()
 endif()
 
 # --- 5. latest regression ----------------------------------------------------
-riscv_tree_digest(CURRENT_RTL "${ROOT}/rtl")
+riscv_tree_digests(CURRENT_RTL CURRENT_TB "${ROOT}")
 file(GLOB RUN_RESULTS "${BUILD}/regress/*/results.json")
 set(LATEST "")
 set(LATEST_TIME 0)
@@ -500,8 +500,7 @@ else()
         json_field(REASON "${SAN}" "reason")
         json_field(SAN_RTL "${SAN}" "rtl_digest")
         json_field(SAN_TB "${SAN}" "tb_digest")
-        riscv_tree_digest(SAN_TB_NOW "${ROOT}/tb")
-        if(NOT SAN_RTL STREQUAL CURRENT_RTL OR NOT SAN_TB STREQUAL SAN_TB_NOW)
+        if(NOT SAN_RTL STREQUAL CURRENT_RTL OR NOT SAN_TB STREQUAL CURRENT_TB)
             add_row("06::sanity images (NFR-05)::blocked::summary.json is stale (rtl/tb digest); re-run make sanity")
         elseif(ST STREQUAL "measured")
             json_field(SAN_FAIL "${SAN}" "fail")
@@ -689,7 +688,6 @@ else()
     set(VERDICT "signoff-ready")
 endif()
 
-riscv_tree_digest(CURRENT_TB "${ROOT}/tb")
 string(TIMESTAMP RECORDED "%Y-%m-%dT%H:%M:%SZ" UTC)
 
 set(REPORT "# Signoff report - ${MODE}

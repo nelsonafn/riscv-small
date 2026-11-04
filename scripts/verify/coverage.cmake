@@ -34,10 +34,6 @@
 # Exit codes: 0 measured, 1 measured but no coverpoint, 2 not measurable.
 # =============================================================================
 
-if(CMAKE_VERSION VERSION_LESS 3.21)
-    message(FATAL_ERROR "coverage.cmake needs CMake >= 3.21 for `ctest --output-junit` (found ${CMAKE_VERSION})")
-endif()
-
 set(DOLLAR "$")
 
 # manifest rows, JUnit rows and the content digest: the same implementation
@@ -74,28 +70,23 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
 
         # Optional 7th column: the same `sanity:<image>` contract as the
         # regression. Without it the sanity class has no +HEX and dies with a
-        # UVM_FATAL in the instrumented snapshot, so the coverage run would
-        # report a broken test instead of a measurement.
-        set(TEST_IMAGE "")
-        list(LENGTH FIELDS NFIELDS)
-        if(NFIELDS GREATER 6)
-            list(GET FIELDS 6 TEST_EXTRA)
-            if(TEST_EXTRA MATCHES "^sanity:(.+)$")
-                set(TEST_IMAGE "${CMAKE_MATCH_1}")
-            endif()
-        endif()
-
+        # UVM_FATAL in the instrumented snapshot.
+        riscv_manifest_extra(TEST_IMAGE "${ROW}")
+        set(TEST_LOG "${COV_REPORT}/${TID}.log")
         if(TEST_IMAGE STREQUAL "")
-            add_test(NAME COV-${TID}
-                COMMAND bash -c "test -n \"${DOLLAR}RISCV_COVERAGE\" || exit 77; xsim top_sim_cov --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} --cov_db_dir ${COV_DB} --cov_db_name cov_${TID} > ${COV_REPORT}/${TID}.log 2>&1 && grep -q '^UVM_RESULT: PASS' ${COV_REPORT}/${TID}.log"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+            riscv_xsim_command(TEST_CMD SNAPSHOT top_sim_cov TEST "${TEST_CLASS}"
+                LOG "${TEST_LOG}" SEED "${SEED}" SKIP_ENV RISCV_COVERAGE
+                COV_DB_DIR "${COV_DB}" COV_DB_NAME "cov_${TID}")
         else()
             set(TEST_HEX "${CMAKE_BINARY_DIR}/sanity_tests/hex/${TEST_IMAGE}.hex")
             set(TEST_TOHOST "${CMAKE_BINARY_DIR}/sanity_tests/tohost/${TEST_IMAGE}")
-            add_test(NAME COV-${TID}
-                COMMAND bash -c "test -n \"${DOLLAR}RISCV_COVERAGE\" || exit 77; test -f ${TEST_HEX} || { echo 'missing ${TEST_HEX}: run make compile_sanity_${TEST_IMAGE}'; exit 1; }; TOHOST=${DOLLAR}(cat ${TEST_TOHOST}); xsim top_sim_cov --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --testplusarg HEX=${TEST_HEX} --testplusarg TOHOST=${DOLLAR}TOHOST --sv_seed ${DOLLAR}{SEED:-${SEED}} --cov_db_dir ${COV_DB} --cov_db_name cov_${TID} > ${COV_REPORT}/${TID}.log 2>&1 && grep -q '^UVM_RESULT: PASS' ${COV_REPORT}/${TID}.log && grep -q '^SANITY: PASS' ${COV_REPORT}/${TID}.log"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+            riscv_xsim_command(TEST_CMD SNAPSHOT top_sim_cov TEST "${TEST_CLASS}"
+                LOG "${TEST_LOG}" SEED "${SEED}" SKIP_ENV RISCV_COVERAGE
+                COV_DB_DIR "${COV_DB}" COV_DB_NAME "cov_${TID}"
+                HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}" REQUIRE_SANITY)
         endif()
+        add_test(NAME COV-${TID} COMMAND bash -c "${TEST_CMD}"
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
         set_tests_properties(COV-${TID} PROPERTIES
             TIMEOUT ${TEST_TIMEOUT}
             SKIP_RETURN_CODE 77
@@ -164,33 +155,13 @@ endif()
 
 # --- chain: ./configure -> elaborate_cov ------------------------------------
 file(MAKE_DIRECTORY "${BUILD}/regress")
-if(NOT EXISTS "${BUILD}/Makefile")
-    message(STATUS "build/ is not configured; bootstrapping with ./configure")
-    execute_process(
-        COMMAND "${ROOT}/configure"
-        WORKING_DIRECTORY "${ROOT}"
-        RESULT_VARIABLE RC
-        OUTPUT_FILE "${BUILD}/regress/configure.log"
-        ERROR_FILE "${BUILD}/regress/configure.log")
-    if(NOT RC EQUAL 0)
-        message(FATAL_ERROR "bootstrap failed; see build/regress/configure.log")
-    endif()
-endif()
+riscv_bootstrap_build("${BUILD}/regress/configure.log")
 
 # The sanity test needs its image before CTest runs COV-T-08; build it next to
 # the instrumented snapshot, exactly like the regression does.
 set(BUILD_TARGETS elaborate_cov)
-riscv_manifest_rows(MANIFEST_ROWS "${ROOT}/scripts/verify/tests.tsv")
-foreach(MROW IN LISTS MANIFEST_ROWS)
-    string(REPLACE "|" ";" MF "${MROW}")
-    list(LENGTH MF NF)
-    if(NF GREATER 6)
-        list(GET MF 6 MF_EXTRA)
-        if(MF_EXTRA MATCHES "^sanity:(.+)$")
-            list(APPEND BUILD_TARGETS "compile_sanity_${CMAKE_MATCH_1}")
-        endif()
-    endif()
-endforeach()
+riscv_manifest_sanity_targets(SANITY_TARGETS "${ROOT}/scripts/verify/tests.tsv")
+list(APPEND BUILD_TARGETS ${SANITY_TARGETS})
 list(REMOVE_DUPLICATES BUILD_TARGETS)
 
 message(STATUS "building ${BUILD_TARGETS} through the build system")
@@ -211,13 +182,10 @@ file(MAKE_DIRECTORY "${COV_DB}" "${COV_REPORT}")
 
 # --- run the tests through CTest --------------------------------------------
 message(STATUS "running the coverage-labelled tests")
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env RISCV_COVERAGE=1 "SEED=${SEED}"
-            ${CMAKE_CTEST_COMMAND} --output-junit "${COV_REPORT}/junit.xml" ${CTEST_SELECT}
-    WORKING_DIRECTORY "${BUILD}"
-    RESULT_VARIABLE CTEST_RC
-    OUTPUT_FILE "${COV_REPORT}/ctest.log"
-    ERROR_FILE "${COV_REPORT}/ctest.log")
+riscv_ctest_run("${COV_REPORT}/junit.xml" "${BUILD}"
+    LOG "${COV_REPORT}/ctest.log"
+    ENV RISCV_COVERAGE=1 "SEED=${SEED}"
+    SELECT ${CTEST_SELECT})
 
 riscv_junit_rows(ROWS "${COV_REPORT}/junit.xml")
 if(NOT ROWS)
@@ -287,8 +255,7 @@ if(N_COVERPOINTS EQUAL 0)
     set(REASON "tb/env/top/riscv_small_coverage.sv has no coverpoint: functional coverage is not measured (NFR-06)")
 endif()
 
-riscv_tree_digest(RTL_DIGEST "${ROOT}/rtl")
-riscv_tree_digest(TB_DIGEST "${ROOT}/tb")
+riscv_tree_digests(RTL_DIGEST TB_DIGEST "${ROOT}")
 string(REPLACE ";" "\", \"" DB_JSON "${DB_NAMES}")
 string(TIMESTAMP STAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
 

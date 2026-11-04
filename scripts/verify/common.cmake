@@ -1,22 +1,37 @@
 # =============================================================================
-# scripts/verify/common.cmake - the three facts every gate must read the same way
+# scripts/verify/common.cmake - the one shared library of the verification gates
 #
-# Included by regress.cmake and coverage.cmake in both modes, and by
-# signoff_check.cmake. It only defines functions, so including it never declares
-# a target and it is safe in `cmake -P` as well as at configure time.
+# Included by regress.cmake, coverage.cmake, sanity.cmake, negative_control.cmake
+# and signoff_check.cmake, in configure mode and in `cmake -P` mode. It defines
+# functions and two path variables; it never declares a target.
 #
-#   riscv_manifest_rows(OUT <tests.tsv>)
-#       one row per test: `T-id|uvm_test|wp|requirements|timeout|red`
+#   riscv_manifest_rows(OUT <tests.tsv>)        one row: T-id|uvm_test|wp|frs|timeout|red|extra
+#   riscv_manifest_extra(OUT <row>)             the optional 7th column (`sanity:<image>`)
+#   riscv_manifest_sanity_images(OUT <manifest>) images named by the 7th column
+#   riscv_manifest_sanity_targets(OUT <manifest>) `compile_sanity_<image>` for each
+#   riscv_junit_rows(OUT <junit.xml>)           CTest verdicts: T-id|pass|fail|timeout|skip|class
+#   riscv_tree_digest(OUT <dir>)                sha256 over the .sv/.svh content
+#   riscv_tree_digests(OUT_RTL OUT_TB <root>)   the RTL/TB pair every gate records
+#   riscv_bootstrap_build(<log>)                ./configure when build/Makefile is absent
+#   riscv_ctest_run(<junit> <workdir> LOG <log> [ENV ...] [SELECT ...])
+#   riscv_xsim_command(OUT ...)                 the one `bash -c` xsim command string
 #
-#   riscv_junit_rows(OUT <junit.xml>)
-#       one row per executed test: `T-id|pass|fail|timeout|skip|class`
-#       (the class travels in the `class:<uvm_test>` label, not in a second
-#       read of the manifest)
-#
-#   riscv_tree_digest(OUT <dir>)
-#       `sha256:...` over the .sv/.svh content of a tree -- the evidence key,
-#       since the project forbids automatic commits
+# Everything that was copied once per gate lives here. A gate module declares
+# only what is its own: its selection, its artefacts and its verdict.
 # =============================================================================
+
+if(DEFINED RISCV_COMMON_INCLUDED)
+    return()
+endif()
+set(RISCV_COMMON_INCLUDED TRUE)
+
+# `ctest --output-junit` is the runner contract; one check for every gate.
+if(CMAKE_VERSION VERSION_LESS 3.21)
+    message(FATAL_ERROR "the verification gates need CMake >= 3.21 for `ctest --output-junit` (found ${CMAKE_VERSION})")
+endif()
+
+get_filename_component(RISCV_VERIFY_DIR "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
+get_filename_component(RISCV_ROOT "${RISCV_VERIFY_DIR}/../.." ABSOLUTE)
 
 # --- safe line reader --------------------------------------------------------
 # file(STRINGS) splits a line at every non-ASCII byte (measured: "emdash—tail"
@@ -47,6 +62,42 @@ function(riscv_manifest_rows OUT_VAR MANIFEST)
         list(APPEND ROWS "${ROW}")
     endforeach()
     set(${OUT_VAR} "${ROWS}" PARENT_SCOPE)
+endfunction()
+
+# The optional 7th column is `sanity:<image>`; anything else is no image.
+function(riscv_manifest_extra OUT_VAR ROW)
+    set(IMAGE "")
+    string(REPLACE "|" ";" FIELDS "${ROW}")
+    list(LENGTH FIELDS NF)
+    if(NF GREATER 6)
+        list(GET FIELDS 6 EXTRA)
+        if(EXTRA MATCHES "^sanity:(.+)$")
+            set(IMAGE "${CMAKE_MATCH_1}")
+        endif()
+    endif()
+    set(${OUT_VAR} "${IMAGE}" PARENT_SCOPE)
+endfunction()
+
+function(riscv_manifest_sanity_images OUT_VAR MANIFEST)
+    riscv_manifest_rows(ROWS "${MANIFEST}")
+    set(IMAGES "")
+    foreach(ROW IN LISTS ROWS)
+        riscv_manifest_extra(IMAGE "${ROW}")
+        if(IMAGE)
+            list(APPEND IMAGES "${IMAGE}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES IMAGES)
+    set(${OUT_VAR} "${IMAGES}" PARENT_SCOPE)
+endfunction()
+
+function(riscv_manifest_sanity_targets OUT_VAR MANIFEST)
+    riscv_manifest_sanity_images(IMAGES "${MANIFEST}")
+    set(TARGETS "")
+    foreach(IMAGE IN LISTS IMAGES)
+        list(APPEND TARGETS "compile_sanity_${IMAGE}")
+    endforeach()
+    set(${OUT_VAR} "${TARGETS}" PARENT_SCOPE)
 endfunction()
 
 # --- CTest's verdict ---------------------------------------------------------
@@ -90,7 +141,6 @@ function(riscv_junit_rows OUT_VAR XML_FILE)
         endforeach()
 
         # CMP0007: a row ending in an empty field makes `list(GET)` warn.
-        # The sanity CTest tests carry no `class:` label; use a placeholder.
         if(CLASS STREQUAL "")
             set(CLASS "-")
         endif()
@@ -110,4 +160,99 @@ function(riscv_tree_digest OUT_VAR DIR)
     endforeach()
     string(SHA256 H "${ACC}")
     set(${OUT_VAR} "sha256:${H}" PARENT_SCOPE)
+endfunction()
+
+function(riscv_tree_digests OUT_RTL OUT_TB ROOT)
+    riscv_tree_digest(RTL "${ROOT}/rtl")
+    riscv_tree_digest(TB "${ROOT}/tb")
+    set(${OUT_RTL} "${RTL}" PARENT_SCOPE)
+    set(${OUT_TB} "${TB}" PARENT_SCOPE)
+endfunction()
+
+# --- chain and runner --------------------------------------------------------
+function(riscv_bootstrap_build LOG)
+    if(NOT EXISTS "${RISCV_ROOT}/build/Makefile")
+        message(STATUS "build/ is not configured; bootstrapping with ./configure")
+        execute_process(
+            COMMAND "${RISCV_ROOT}/configure"
+            WORKING_DIRECTORY "${RISCV_ROOT}"
+            RESULT_VARIABLE RC
+            OUTPUT_FILE "${LOG}"
+            ERROR_FILE "${LOG}")
+        if(NOT RC EQUAL 0)
+            message(FATAL_ERROR "bootstrap failed; see ${LOG}")
+        endif()
+    endif()
+endfunction()
+
+function(riscv_ctest_run JUNIT WORKDIR)
+    cmake_parse_arguments(C "" "LOG" "ENV;SELECT" ${ARGN})
+    if(C_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "riscv_ctest_run: unknown ${C_UNPARSED_ARGUMENTS}")
+    endif()
+    if(NOT C_LOG)
+        message(FATAL_ERROR "riscv_ctest_run: LOG is required")
+    endif()
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env ${C_ENV}
+                ${CMAKE_CTEST_COMMAND} --output-junit "${JUNIT}" ${C_SELECT}
+        WORKING_DIRECTORY "${WORKDIR}"
+        RESULT_VARIABLE RC
+        OUTPUT_FILE "${C_LOG}"
+        ERROR_FILE "${C_LOG}")
+    set(RISCV_CTEST_RC "${RC}" PARENT_SCOPE)
+endfunction()
+
+# One command string for every CTest test. Options:
+#   SNAPSHOT <top_sim|top_sim_cov>  TEST <uvm class>  LOG <file>
+#   [SEED <n>] [SKIP_ENV RISCV_SANITY|RISCV_COVERAGE] [TRACE_ENV]
+#   [HEX <hex> TOHOST_FILE <tohost>] [COV_DB_DIR <dir> COV_DB_NAME <name>]
+#   [REQUIRE_SANITY]
+# The command always requires `^UVM_RESULT: PASS`; REQUIRE_SANITY adds the
+# `^SANITY: PASS` grep. The hex/tohost paths are read at run time (never
+# hardcoded), and a missing image fails with a clear message.
+function(riscv_xsim_command OUT_VAR)
+    set(DOLLAR "$")
+    cmake_parse_arguments(X "REQUIRE_SANITY;TRACE_ENV"
+        "SNAPSHOT;TEST;LOG;SEED;SKIP_ENV;HEX;TOHOST_FILE;COV_DB_DIR;COV_DB_NAME" "" ${ARGN})
+    if(X_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "riscv_xsim_command: unknown ${X_UNPARSED_ARGUMENTS}")
+    endif()
+    if(NOT X_SNAPSHOT OR NOT X_TEST OR NOT X_LOG)
+        message(FATAL_ERROR "riscv_xsim_command: SNAPSHOT, TEST and LOG are required")
+    endif()
+
+    set(CMD "")
+    if(X_TOHOST_FILE)
+        string(APPEND CMD "TOHOST=${DOLLAR}(cat ${X_TOHOST_FILE}); ")
+    endif()
+    if(X_HEX)
+        string(APPEND CMD "test -f ${X_HEX} || { echo 'missing ${X_HEX}: build the sanity image first'; exit 1; }; ")
+    endif()
+    if(X_TRACE_ENV)
+        string(APPEND CMD "TRACE=\"\"; if [ -n \"${DOLLAR}SANITY_TRACE\" ]; then TRACE=\"--testplusarg TRACE\"; fi; ")
+    endif()
+    if(X_SKIP_ENV)
+        string(APPEND CMD "test -n \"${DOLLAR}${X_SKIP_ENV}\" || exit 77; ")
+    endif()
+    string(APPEND CMD "xsim ${X_SNAPSHOT} --R --testplusarg UVM_TESTNAME=${X_TEST} --testplusarg NO_COLOR")
+    if(X_SEED)
+        # `SEED=42 make regress` sets the env at ctest time; fall back to the
+        # configure-time seed. Same contract as the old per-gate string.
+        string(APPEND CMD " --sv_seed ${DOLLAR}{SEED:-${X_SEED}}")
+    endif()
+    if(X_HEX)
+        string(APPEND CMD " --testplusarg HEX=${X_HEX} --testplusarg TOHOST=${DOLLAR}TOHOST")
+    endif()
+    if(X_COV_DB_DIR)
+        string(APPEND CMD " --cov_db_dir ${X_COV_DB_DIR} --cov_db_name ${X_COV_DB_NAME}")
+    endif()
+    if(X_TRACE_ENV)
+        string(APPEND CMD " ${DOLLAR}TRACE")
+    endif()
+    string(APPEND CMD " > ${X_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${X_LOG}")
+    if(X_REQUIRE_SANITY)
+        string(APPEND CMD " && grep -q '^SANITY: PASS' ${X_LOG}")
+    endif()
+    set(${OUT_VAR} "${CMD}" PARENT_SCOPE)
 endfunction()

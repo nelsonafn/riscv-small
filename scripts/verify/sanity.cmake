@@ -44,10 +44,6 @@
 #             failed, 2 the environment is missing.
 # =============================================================================
 
-if(CMAKE_VERSION VERSION_LESS 3.21)
-    message(FATAL_ERROR "sanity.cmake needs CMake >= 3.21 for `ctest --output-junit` (found ${CMAKE_VERSION})")
-endif()
-
 set(DOLLAR "$")
 
 # manifest-independent, but the digest is the same evidence key everywhere.
@@ -208,8 +204,13 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     # `ctest`/`make test` (they are skipped, never run by accident).
     if(EXISTS "${CMAKE_SOURCE_DIR}/tb/tests/${SANITY_TEST}.sv")
         foreach(SANITY_IMAGE IN LISTS SANITY_IMAGES)
-            add_test(NAME ${SANITY_IMAGE}
-                COMMAND bash -c "test -n \"${DOLLAR}RISCV_SANITY\" || exit 77; TRACE=\"\"; if [ -n \"${DOLLAR}SANITY_TRACE\" ]; then TRACE=\"--testplusarg TRACE\"; fi; xsim top_sim --R --testplusarg UVM_TESTNAME=${SANITY_TEST} --testplusarg HEX=${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex --testplusarg TOHOST=$(cat ${SANITY_TOHOST_DIR}/${SANITY_IMAGE}) --testplusarg NO_COLOR ${DOLLAR}TRACE > ${SANITY_OUT}/${SANITY_IMAGE}.log 2>&1 && grep -q '^SANITY: PASS' ${SANITY_OUT}/${SANITY_IMAGE}.log"
+            riscv_xsim_command(TEST_CMD SNAPSHOT top_sim TEST "${SANITY_TEST}"
+                LOG "${SANITY_OUT}/${SANITY_IMAGE}.log"
+                SKIP_ENV RISCV_SANITY TRACE_ENV
+                HEX "${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex"
+                TOHOST_FILE "${SANITY_TOHOST_DIR}/${SANITY_IMAGE}"
+                REQUIRE_SANITY)
+            add_test(NAME ${SANITY_IMAGE} COMMAND bash -c "${TEST_CMD}"
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
             set_tests_properties(${SANITY_IMAGE} PROPERTIES
                 LABELS "sanity"
@@ -294,16 +295,7 @@ endif()
 
 # --- chain: ./configure gives the image list --------------------------------
 file(MAKE_DIRECTORY "${OUT}")
-if(NOT EXISTS "${BUILD}/Makefile")
-    message(STATUS "build/ is not configured; bootstrapping with ./configure")
-    execute_process(COMMAND "${ROOT}/configure"
-        WORKING_DIRECTORY "${ROOT}"
-        RESULT_VARIABLE RC
-        OUTPUT_FILE "${OUT}/configure.log" ERROR_FILE "${OUT}/configure.log")
-    if(NOT RC EQUAL 0)
-        message(FATAL_ERROR "bootstrap failed; see build/sanity/configure.log")
-    endif()
-endif()
+riscv_bootstrap_build("${OUT}/configure.log")
 
 file(STRINGS "${SANITY_DIR}/images.txt" AVAILABLE)
 if(NOT AVAILABLE)
@@ -336,8 +328,7 @@ if(DO_LIST)
 endif()
 
 # --- the measurement can be answered before building anything ---------------
-riscv_tree_digest(RTL_DIGEST "${ROOT}/rtl")
-riscv_tree_digest(TB_DIGEST "${ROOT}/tb")
+riscv_tree_digests(RTL_DIGEST TB_DIGEST "${ROOT}")
 string(TIMESTAMP STAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
 
 function(write_summary STATUS REASON N_PASS N_FAIL N_IMAGES_JSON)
@@ -405,18 +396,14 @@ endforeach()
 # --- run through CTest -------------------------------------------------------
 message(STATUS "running ${N_IMAGES} image(s) through ctest (label 'sanity')")
 list(JOIN IMAGES "|" PATTERN)
-set(TRACE_ENV "")
+set(CTEST_ENV "RISCV_SANITY=1")
 if(DO_TRACE)
-    set(TRACE_ENV "SANITY_TRACE=1")
+    list(APPEND CTEST_ENV "SANITY_TRACE=1")
 endif()
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env RISCV_SANITY=1 ${TRACE_ENV}
-            ${CMAKE_CTEST_COMMAND} --output-junit "${OUT}/junit.xml"
-            -L "^sanity$" -R "^(${PATTERN})$"
-    WORKING_DIRECTORY "${BUILD}"
-    RESULT_VARIABLE CTEST_RC
-    OUTPUT_FILE "${OUT}/ctest.log"
-    ERROR_FILE "${OUT}/ctest.log")
+riscv_ctest_run("${OUT}/junit.xml" "${BUILD}"
+    LOG "${OUT}/ctest.log"
+    ENV ${CTEST_ENV}
+    SELECT -L "^sanity$" -R "^(${PATTERN})$")
 
 riscv_junit_rows(ROWS "${OUT}/junit.xml")
 if(NOT ROWS)

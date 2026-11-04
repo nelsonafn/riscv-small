@@ -27,10 +27,6 @@
 # Exit codes: 0 expectation met; 1 expectation not met or usage/build error.
 # =============================================================================
 
-if(CMAKE_VERSION VERSION_LESS 3.21)
-    message(FATAL_ERROR "regress.cmake needs CMake >= 3.21 for `ctest --output-junit` (found ${CMAKE_VERSION})")
-endif()
-
 set(DOLLAR "$")
 
 # Manifest rows, JUnit rows and the content digest are shared with
@@ -60,33 +56,22 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         list(GET FIELDS 4 TEST_TIMEOUT)
 
         # Optional 7th column: `sanity:<image>` runs the sanity test against a
-        # pre-built riscv-tests image. The image is built by the run mode (see
-        # the `compile_sanity_*` targets below) and its tohost address is read
-        # from the ELF artefact, never hardcoded.
-        set(TEST_IMAGE "")
-        list(LENGTH FIELDS NFIELDS)
-        if(NFIELDS GREATER 6)
-            list(GET FIELDS 6 TEST_EXTRA)
-            if(TEST_EXTRA MATCHES "^sanity:(.+)$")
-                set(TEST_IMAGE "${CMAKE_MATCH_1}")
-            endif()
-        endif()
-
-        # The verdict is the testbench's own `UVM_RESULT:` line, never xsim's
-        # exit code: xsim returns 0 even with UVM_ERRORs. The log stays on disk
-        # as evidence; CTest only sees the grep.
+        # pre-built riscv-tests image. The image is built by the run mode and
+        # its tohost address is read at run time, never hardcoded.
+        riscv_manifest_extra(TEST_IMAGE "${ROW}")
         set(TEST_LOG "${CMAKE_BINARY_DIR}/regress/${TID}.log")
         if(TEST_IMAGE STREQUAL "")
-            add_test(NAME ${TID}
-                COMMAND bash -c "xsim top_sim --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --sv_seed ${DOLLAR}{SEED:-${SEED}} > ${TEST_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${TEST_LOG}"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+            riscv_xsim_command(TEST_CMD SNAPSHOT top_sim TEST "${TEST_CLASS}"
+                LOG "${TEST_LOG}" SEED "${SEED}")
         else()
             set(TEST_HEX "${CMAKE_BINARY_DIR}/sanity_tests/hex/${TEST_IMAGE}.hex")
             set(TEST_TOHOST "${CMAKE_BINARY_DIR}/sanity_tests/tohost/${TEST_IMAGE}")
-            add_test(NAME ${TID}
-                COMMAND bash -c "test -f ${TEST_HEX} || { echo 'missing ${TEST_HEX}: run make compile_sanity_${TEST_IMAGE}'; exit 1; }; TOHOST=${DOLLAR}(cat ${TEST_TOHOST}); xsim top_sim --R --testplusarg UVM_TESTNAME=${TEST_CLASS} --testplusarg NO_COLOR --testplusarg HEX=${TEST_HEX} --testplusarg TOHOST=${DOLLAR}TOHOST --sv_seed ${DOLLAR}{SEED:-${SEED}} > ${TEST_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${TEST_LOG} && grep -q '^SANITY: PASS' ${TEST_LOG}"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+            riscv_xsim_command(TEST_CMD SNAPSHOT top_sim TEST "${TEST_CLASS}"
+                LOG "${TEST_LOG}" SEED "${SEED}"
+                HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}" REQUIRE_SANITY)
         endif()
+        add_test(NAME ${TID} COMMAND bash -c "${TEST_CMD}"
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
         # Labels are the selection keys and the class carrier: run mode filters
         # with -R (T-id) and -L (wp/class) and reads the class back from the
@@ -177,18 +162,7 @@ endif()
 
 # --- chain: ./configure -> elaborate ----------------------------------------
 file(MAKE_DIRECTORY "${BUILD}/regress")
-if(NOT EXISTS "${BUILD}/Makefile")
-    message(STATUS "build/ is not configured; bootstrapping with ./configure")
-    execute_process(
-        COMMAND "${ROOT}/configure"
-        WORKING_DIRECTORY "${ROOT}"
-        RESULT_VARIABLE RC
-        OUTPUT_FILE "${BUILD}/regress/configure.log"
-        ERROR_FILE "${BUILD}/regress/configure.log")
-    if(NOT RC EQUAL 0)
-        message(FATAL_ERROR "bootstrap failed; see build/regress/configure.log")
-    endif()
-endif()
+riscv_bootstrap_build("${BUILD}/regress/configure.log")
 
 if(R_list)
     execute_process(COMMAND ${CMAKE_CTEST_COMMAND} -N ${CTEST_SELECT}
@@ -203,17 +177,8 @@ endif()
 # the images named by the manifest's optional 7th column, next to `elaborate`,
 # so a direct `cmake -P` cannot simulate an image that was never produced.
 set(BUILD_TARGETS elaborate)
-riscv_manifest_rows(MANIFEST_ROWS "${ROOT}/scripts/verify/tests.tsv")
-foreach(MROW IN LISTS MANIFEST_ROWS)
-    string(REPLACE "|" ";" MF "${MROW}")
-    list(LENGTH MF NF)
-    if(NF GREATER 6)
-        list(GET MF 6 MF_EXTRA)
-        if(MF_EXTRA MATCHES "^sanity:(.+)$")
-            list(APPEND BUILD_TARGETS "compile_sanity_${CMAKE_MATCH_1}")
-        endif()
-    endif()
-endforeach()
+riscv_manifest_sanity_targets(SANITY_TARGETS "${ROOT}/scripts/verify/tests.tsv")
+list(APPEND BUILD_TARGETS ${SANITY_TARGETS})
 list(REMOVE_DUPLICATES BUILD_TARGETS)
 
 message(STATUS "building ${BUILD_TARGETS} through the build system")
@@ -238,19 +203,15 @@ file(RELATIVE_PATH OUT_REL "${ROOT}" "${OUT}")
 
 # A result is tied to the code it ran against by content, not by commit: the
 # project forbids automatic commits, so the digest is the evidence key.
-riscv_tree_digest(RTL_DIGEST "${ROOT}/rtl")
-riscv_tree_digest(TB_DIGEST "${ROOT}/tb")
+riscv_tree_digests(RTL_DIGEST TB_DIGEST "${ROOT}")
 string(TIMESTAMP STARTED "%Y-%m-%dT%H:%M:%SZ" UTC)
 
 # --- run: one ctest invocation, verdict from the JUnit report ---------------
 message(STATUS "running the selection through ctest")
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env "SEED=${SEED}"
-            ${CMAKE_CTEST_COMMAND} --output-junit "${OUT}/junit.xml" ${CTEST_SELECT}
-    WORKING_DIRECTORY "${BUILD}"
-    RESULT_VARIABLE CTEST_RC
-    OUTPUT_FILE "${OUT}/ctest.log"
-    ERROR_FILE "${OUT}/ctest.log")
+riscv_ctest_run("${OUT}/junit.xml" "${BUILD}"
+    LOG "${OUT}/ctest.log"
+    ENV "SEED=${SEED}"
+    SELECT ${CTEST_SELECT})
 
 if(NOT EXISTS "${OUT}/junit.xml")
     message(FATAL_ERROR "ctest produced no JUnit report; see ${OUT_REL}/ctest.log")
