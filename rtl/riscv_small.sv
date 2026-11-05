@@ -149,6 +149,8 @@ import riscv_definitions_pkg::*;
         .rd0_data_wb      (rd0_data_wb),//[in] Reg destination data
 	    .rd0_wr_en        (rd0_wr_en_wb),//[in] Reg destination (rd) write enable from Write Back stage
         .rd0_addr_wb      (rd0_addr_wb),//[in] Reg destination (rd) address from Write Back stage
+	    .jmp_src1         (jmp_src1),//[in] JUMP forward mux1 sel (EX alu_ex/MA alu_ma/WB rd0_data)
+	    .jmp_src2         (jmp_src2),//[in] JUMP forward mux2 sel (EX alu_ex/MA alu_ma/WB rd0_data)
 	    .flush            (id_ex_flush),// Insert NOP
 	    .rd0_wr_en_ex     (rd0_wr_en_ex),//[out] Reg destination (rd) write enable to pipeline
 	    .alu_src1_ex      (alu_src1_ex),//[out] ALU source one mux selection (possible values PC/RS1)

@@ -15,6 +15,7 @@
 #   riscv_bootstrap_build(<log>)                ./configure when build/Makefile is absent
 #   riscv_ctest_run(<junit> <workdir> LOG <log> [ENV ...] [SELECT ...])
 #   riscv_xsim_command(OUT ...)                 the one `bash -c` xsim command string
+#                                               (`SANITY_IMAGE` pins the verdict line)
 #
 # Everything that was copied once per gate lives here. A gate module declares
 # only what is its own: its selection, its artefacts and its verdict.
@@ -207,19 +208,26 @@ endfunction()
 #   SNAPSHOT <top_sim|top_sim_cov>  TEST <uvm class>  LOG <file>
 #   [SEED <n>] [SKIP_ENV RISCV_SANITY|RISCV_COVERAGE] [TRACE_ENV]
 #   [HEX <hex> TOHOST_FILE <tohost>] [COV_DB_DIR <dir> COV_DB_NAME <name>]
-#   [REQUIRE_SANITY]
+#   [REQUIRE_SANITY [SANITY_IMAGE <image>]]
 # The command always requires `^UVM_RESULT: PASS`; REQUIRE_SANITY adds the
-# `^SANITY: PASS` grep. The hex/tohost paths are read at run time (never
-# hardcoded), and a missing image fails with a clear message.
+# `^SANITY: PASS` grep. With SANITY_IMAGE that grep is pinned to the image under
+# test (`^SANITY: PASS image=<image>$`), so a log written by another image's run
+# -- the misattribution hazard of a shared build/ -- can never satisfy this
+# test. The hex/tohost paths are read at run time (never hardcoded), and a
+# missing image fails with a clear message.
 function(riscv_xsim_command OUT_VAR)
     set(DOLLAR "$")
     cmake_parse_arguments(X "REQUIRE_SANITY;TRACE_ENV"
-        "SNAPSHOT;TEST;LOG;SEED;SKIP_ENV;HEX;TOHOST_FILE;COV_DB_DIR;COV_DB_NAME" "" ${ARGN})
+        "SNAPSHOT;TEST;LOG;SEED;SKIP_ENV;HEX;TOHOST_FILE;COV_DB_DIR;COV_DB_NAME;SANITY_IMAGE" "" ${ARGN})
     if(X_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "riscv_xsim_command: unknown ${X_UNPARSED_ARGUMENTS}")
     endif()
     if(NOT X_SNAPSHOT OR NOT X_TEST OR NOT X_LOG)
         message(FATAL_ERROR "riscv_xsim_command: SNAPSHOT, TEST and LOG are required")
+    endif()
+    if(X_SANITY_IMAGE AND NOT X_REQUIRE_SANITY)
+        # Without the sanity grep the pin would be silently ignored.
+        message(FATAL_ERROR "riscv_xsim_command: SANITY_IMAGE needs REQUIRE_SANITY")
     endif()
 
     set(CMD "")
@@ -252,7 +260,12 @@ function(riscv_xsim_command OUT_VAR)
     endif()
     string(APPEND CMD " > ${X_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${X_LOG}")
     if(X_REQUIRE_SANITY)
-        string(APPEND CMD " && grep -q '^SANITY: PASS' ${X_LOG}")
+        if(X_SANITY_IMAGE)
+            # The verdict line must name the image under test, not just any image.
+            string(APPEND CMD " && grep -q '^SANITY: PASS image=${X_SANITY_IMAGE}${DOLLAR}' ${X_LOG}")
+        else()
+            string(APPEND CMD " && grep -q '^SANITY: PASS' ${X_LOG}")
+        endif()
     endif()
     set(${OUT_VAR} "${CMD}" PARENT_SCOPE)
 endfunction()

@@ -41,5 +41,5 @@ info
 | H2 | Debug, the timer and the interrupt controller are platform blocks; the core reaches each through one named interface | inline Mermaid | `uarch.md` §1 | `uarch.md` |
 | S1 | Debug mode is entered from running by run control, a breakpoint, a trigger or a step, and left only by resume or DRET | inline Mermaid (state diagram) | `uarch.md` §7.12 | `uarch.md` |
 | T1 | A load-use insertion is one cycle of `ex_ma_flush` with IF/ID and ID/EX held, and it suppresses the write of the instruction in WB | WaveDrom | `figs/wave/t1-load-use-stall.json5` | `uarch.md` §7.5 |
-| T2 | A taken branch clears IF/ID and redirects the PC in ID, at a cost of one fetch slot | WaveDrom | `figs/wave/t2-branch-flush.json5` | `uarch.md` §7.5 |
+| T2 | A taken branch clears IF/ID twice and redirects the PC in ID, at a cost of two fetch slots | WaveDrom | `figs/wave/t2-branch-flush.json5` | `uarch.md` §7.5 |
 | T3 | A withheld fetch grant deletes the fetch and the PC runs on; nothing is held | WaveDrom | `figs/wave/t3-fetch-stall.json5` | `uarch.md` §7.1 |

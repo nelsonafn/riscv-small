@@ -5,8 +5,9 @@
 // riscv_small_ref_model
 //
 // UVM Reference Model (ISS - Instruction Set Simulator).
-// Receives the complete subprogram (instructions + initial memory state) from 
-// the Driver via rm_export, executes an internal ISS, and publishes a 
+// Receives the complete subprogram (instructions + initial memory state) from
+// the sequence/test on program_port -> rm_export (never from the driver),
+// executes an internal ISS, and publishes a
 // "prediction" transaction for each found SW instruction, via rm2sb_port to 
 // the Scoreboard. The Scoreboard compares these predictions with the actual 
 // observations from the Monitor coming from the DUT.
@@ -18,7 +19,7 @@ class riscv_small_ref_model extends uvm_component;
   `uvm_component_utils(riscv_small_ref_model)
 
   // ---- TLM Ports -----------------------------------------------------------
-  // Input: subprogram sent by the Driver
+  // Input: subprogram sent by the sequence/test on program_port (never the driver)
   uvm_analysis_export #(riscv_small_transaction) rm_export;
   uvm_tlm_analysis_fifo #(riscv_small_transaction) rm_fifo;
   // Output: store predictions for the Scoreboard
@@ -44,10 +45,10 @@ class riscv_small_ref_model extends uvm_component;
 
   // ---- Run phase: Main ISS -------------------------------------------------
   virtual task run_phase(uvm_phase phase);
-    riscv_small_transaction subprog; // subprogram received from the Driver
+    riscv_small_transaction subprog; // subprogram received on program_port
 
     forever begin
-      // 1. Wait for subprogram from the Driver
+      // 1. Wait for subprogram from the sequence/test
       rm_fifo.get(subprog);
       `uvm_info(get_full_name(),
         $sformatf("ISS: Subprogram received — %0d instructions, %0d data positions",

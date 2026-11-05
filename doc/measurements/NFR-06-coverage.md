@@ -22,7 +22,8 @@ make coverage COVERAGE_ARGS="--test T-01 --seed 42"
 
 ## Result
 
-91.67 % over `T-01`, `T-02` and `T-06`, with one uncovered bin: `cg_mem.cp_width.word_w`. The width output carries
+91.67 % over all eight manifest tests (`T-01`, `T-02`, `T-06`, `T-08`, `T-09`, `T-10`, `T-11`, `T-12`), with
+one uncovered bin: `cg_mem.cp_width.word_w`. The width output carries
 `funct3[0]` (`logic'(rd_wr_ctrl)`, `rtl/riscv_small.sv:118`), so a word access reads `2'b00` and the word bin can
 never fill. That is an `FR-11` defect, not a coverage hole to waive. `cp_lane`, `cp_dir` and `cp_subword_lane` are
 at 100 %, and code coverage is instrumented with `--cc_type sbct --cc_libs` and merged with `xcrg`.
@@ -32,3 +33,4 @@ at 100 %, and code coverage is instrumented with `--cc_type sbct --cc_libs` and 
 | Date | RTL digest | Coverpoints | Functional % | Code % | Method |
 |---|---|---|---|---|---|
 | 2026-10-28 | `sha256:0418049b...` | 4 | 91.67 % (`word_w` open, `FR-11`) | merged | `xcrg` over T-01/T-02/T-06 |
+| 2026-11-04 | `sha256:d12dc1a2...` | 4 | 91.67 % (`word_w` open, `FR-11`) | merged | `xcrg` over the eight manifest tests (TB `f542affd...`) |

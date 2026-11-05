@@ -1,29 +1,44 @@
-// T2 - a conditional branch resolved in ID, as built.
+// T2 - a taken branch resolved in ID: two fetch slots, as built.
 //
 // Scenario: the taken branch BNE sits at 0x100 and targets 0x200.
 //
-// rtl/control.sv:229-232: branch_taken sets if_id_flush = 1 and pc_sel = JUMP.
-// rtl/instruction_fetch.sv:70-76: the flush clears IF/ID at the edge; the PC takes
-// jump_addr at the same edge (rtl/instruction_fetch.sv:92-94).
-// Nothing else is flushed: id_ex_flush stays 0 and no stage enable is cleared.
+// Fetch latency: inst_addr is the registered pc and the instruction memory answers one
+// cycle later, so ID in cycle N decodes the word addressed in cycle N-2
+// (rtl/instruction_fetch.sv:62-89: pc_fetch keeps pc_id aligned with inst_data).
 //
-// Cost: exactly one fetch slot. The word being fetched at 0x104 during cycle 3 never
-// enters IF/ID (the register is cleared instead), ID sees the zero word in cycle 4,
-// and the target is in ID in cycle 5. Matches doc/uarch.md section 9, "taken branch or
-// jump: 1 cycle".
+// Cycle 3 - the branch is in ID (pc_id = 0x100) and branch_taken is high. control raises
+// if_id_flush and selects pc_sel = JUMP in that same cycle (rtl/control.sv:246-249). The
+// edge that loads jump_addr into the PC (rtl/instruction_fetch.sv:104-106) also clears
+// IF/ID, so the fall-through answered this cycle (pc_fetch = 0x104) never enters it.
+//
+// Cycle 4 - branch_taken_q, registered on the previous edge (rtl/control.sv:92-99),
+// repeats if_id_flush (rtl/control.sv:251-254). The address presented in cycle 3
+// (pc_fetch = 0x108) is answered now and is discarded for the same reason. pc_sel is back
+// to PC_PLUS4, so the PC walks on from 0x200.
+//
+// Cycle 5 - no flush: IF/ID finally takes the target answered this cycle
+// (pc_fetch = 0x200), and ID decodes 0x200 in cycle 6.
+//
+// Cost: two fetch slots, not one. ID holds the zero word in cycles 4 and 5, the target
+// reaches ID two cycles after the branch, id_ex_flush never rises and every stage enable
+// stays 1 - the cost is a discard, not a stall. Matches doc/uarch.md section 7.5, T2.
+//
+// pc_id is drawn as 0, not x, while flushed: the RTL clears it to 'b0
+// (rtl/instruction_fetch.sv:81-83).
 {
   signal: [
-    { name: 'clk',          wave: 'p......' },
-    { name: 'pc',           wave: '=======', data: ['0x0FC', '0x100', '0x104', '0x200', '0x204', '0x208', '0x20C'] },
-    { name: 'pc_id',        wave: '=======', data: ['0x0F8', '0x0FC', '0x100', '0', '0x200', '0x204', '0x208'] },
-    { name: 'if_id_flush',  wave: '0.1....' },
-    { name: 'if_id_clk_en', wave: '1......' },
-    { name: 'branch_taken', wave: '0.1....' },
-    { name: 'pc_sel',       wave: '2.32...', data: ['PC_PLUS4', 'JUMP', 'PC_PLUS4'] },
-    { name: 'id_ex_flush',  wave: '0......' },
+    { name: 'clk',            wave: 'p.......' },
+    { name: 'branch_taken',   wave: '0.10....' },
+    { name: 'branch_taken_q', wave: '0..10...' },
+    { name: 'if_id_flush',    wave: '0.1.0...' },
+    { name: 'if_id_clk_en',   wave: '1.......' },
+    { name: 'pc_sel',         wave: '2.32....', data: ['PC_PLUS4', 'JUMP', 'PC_PLUS4'] },
+    { name: 'pc',             wave: '========', data: ['0x100', '0x104', '0x108', '0x200', '0x204', '0x208', '0x20C', '0x210'] },
+    { name: 'pc_fetch',       wave: '========', data: ['0x0FC', '0x100', '0x104', '0x108', '0x200', '0x204', '0x208', '0x20C'] },
+    { name: 'pc_id',          wave: '========', data: ['0x0F8', '0x0FC', '0x100', '0', '0', '0x200', '0x204', '0x208'] },
   ],
   head: {
-    text: 'T2 taken branch: IF/ID flushed and the PC redirected in ID, one fetch slot lost',
+    text: 'T2 taken branch: IF/ID cleared and the PC redirected in ID, then a second flush of the fetch in flight',
     tick: 1,
     every: 1,
   },

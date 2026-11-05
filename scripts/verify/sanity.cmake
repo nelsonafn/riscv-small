@@ -30,10 +30,13 @@
 #
 # What the run mode keeps, because nobody else can do it: `tohost` is read from
 # the ELF (never from a literal) and the verdict line is `SANITY: PASS|FAIL`.
-# No verdict line means `not_measurable`, never pass. CTest still owns the run
-# itself (timeout, log, verdict, JUnit), exactly like the regression and the
-# coverage runs; a plain `ctest` skips these tests (exit 77) because it never
-# built the images.
+# No verdict line means `not_measurable`, never pass -- and neither does a
+# verdict line that names another image: the CTest command pins
+# `^SANITY: PASS image=<image>$` (common.cmake SANITY_IMAGE) and the judge
+# cross-checks the image in the log, so a log written by another image's run is
+# never evidence for this one. CTest still owns the run itself (timeout, log,
+# verdict, JUnit), exactly like the regression and the coverage runs; a plain
+# `ctest` skips these tests (exit 77) because it never built the images.
 #
 # Scope: only isa/rv32ui. rv32mi needs CSR/trap (E6/E7), rv32um/rv32uc need
 # M/C (E8); rv32si is not in NFR-05. The glob is a one-line change when those
@@ -209,7 +212,7 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
                 SKIP_ENV RISCV_SANITY TRACE_ENV
                 HEX "${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex"
                 TOHOST_FILE "${SANITY_TOHOST_DIR}/${SANITY_IMAGE}"
-                REQUIRE_SANITY)
+                REQUIRE_SANITY SANITY_IMAGE "${SANITY_IMAGE}")
             add_test(NAME ${SANITY_IMAGE} COMMAND bash -c "${TEST_CMD}"
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
             set_tests_properties(${SANITY_IMAGE} PROPERTIES
@@ -440,8 +443,26 @@ foreach(ROW IN LISTS ROWS)
         endif()
     endif()
 
+    # Attribution: the verdict line must name this image. A log that carries
+    # another image's PASS -- the hazard of a build/ shared between runs or
+    # between parallel tests -- is not evidence for this image, so it is
+    # `not_measurable`, never `pass`.
+    set(LOG_IMAGE "")
+    if(LOG_TEXT MATCHES "SANITY: (PASS|FAIL|TIMEOUT)[^\r\n]*image=([^ \t\r\n]+)")
+        set(LOG_IMAGE "${CMAKE_MATCH_2}")
+    endif()
+    if(NOT LOG_IMAGE STREQUAL "" AND NOT LOG_IMAGE STREQUAL IMAGE)
+        set(NOT_MEASURABLE "log is ${LOG_IMAGE}, not ${IMAGE}: build/sanity/${IMAGE}.log carries another image's verdict line")
+        break()
+    endif()
+
     if(STATUS STREQUAL "pass")
-        set(STATUS "pass")
+        if(NOT LOG_IMAGE STREQUAL IMAGE)
+            # CTest said pass, yet the log has no `SANITY: PASS image=<image>`;
+            # only an unpinned command (an old build/) can get here. Not a pass.
+            set(NOT_MEASURABLE "build/sanity/${IMAGE}.log has no SANITY: PASS image=${IMAGE} line, so the run is not attributable; re-run the sweep")
+            break()
+        endif()
         math(EXPR N_PASS "${N_PASS} + 1")
     elseif(STATUS STREQUAL "timeout")
         # A hung DUT is a DUT failure, not a missing measurement.

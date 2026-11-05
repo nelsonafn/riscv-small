@@ -3,14 +3,14 @@
 | Field | Value |
 |---|---|
 | Status | draft |
-| Implements | [spec.md](spec.md) v0.7.3 |
-| Baseline | commit `bb789bb` (same baseline as the specification; the RTL was read at this commit) |
+| Implements | [spec.md](spec.md) v0.7.6 |
+| Baseline | the post-WP-4c tree the citations were read from: `rtl_digest` `sha256:d12dc1a2…027b2` and `tb_digest` `sha256:f542affd…a5aff6cab3a` (2026-11-04). The project forbids automatic commits, so the content digest is the evidence key; `spec.md` still names `bb789bb` as its v0.1 as-built baseline, with v0.2..v0.7 adding intent only |
 | Scope | as built: this document describes `rtl/*.sv`, not the target rows of `spec.md` §4 and §7.1; a v0.7 obligation that the RTL does not meet is written down as **target** and never as built |
 
 Everything below is read from the RTL. Where a `file:line` citation is missing, the sentence is a
 pointer to another section, not a behavioural claim. Where the target of `spec.md` differs from the
 code, the difference is named with its existing gap ID and the code is described as it is. The
-requirement table of `spec.md` v0.7.3 has 59 rows. The ten rows v0.7 added are target only: `FR-50`
+requirement table of `spec.md` v0.7.6 has 59 rows. The ten rows v0.7 added are target only: `FR-50`
 (the CSR file and its address map), `FR-51` (`mscratch`), `FR-52` (`mtval`), `FR-53` (debug mode with
 `dcsr`/`dpc`/`dscratch`), `FR-54` (run control), `FR-55` (abstract commands), `FR-56` (the program
 buffer), `FR-57` (`Sdtrig` triggers), `FR-58` (single step) and `FR-59` (`dbg_auth` strap). No module,
@@ -28,19 +28,20 @@ answer (`rtl/riscv_small.sv:45-57`). There is no cache, no memory, and no bus fa
 
 Three properties shape the rest of the document. First, **branches and jumps are resolved in ID**:
 `jump_decision` sits inside `instruction_decode` and drives `branch_taken` and `jump_addr` straight
-back to the fetch stage (`rtl/instruction_decode.sv:177-188`), so a taken branch costs one fetch slot
-rather than two. Second, **the pipeline has no valid bits**: a stage is empty when its `rd0_wr_en` is
+back to the fetch stage (`rtl/instruction_decode.sv:177-188`), so a taken branch costs two fetch
+slots: the fall-through and the fetch already in flight are both discarded (`rtl/control.sv:246-254`).
+Second, **the pipeline has no valid bits**: a stage is empty when its `rd0_wr_en` is
 zero, and every flush writes zeros into the pipeline register (for example
 `rtl/instruction_decode.sv:97-112`). Third, **stalls are expressed as clock enables, not as a single
 `stall` signal**: `control` drives four enables and three flushes independently
-(`rtl/control.sv:93-99`).
+(`rtl/control.sv:107-113`).
 
 Deliberately absent, and cited so that a reader does not look for them: no caches or line fills
 (`G-15`), no CSR file and no `Zicsr` instruction (`G-13`), no interrupt subsystem — the only trap
 request is the level-sensitive `exception` input (`G-14`, `rtl/riscv_small.sv:44`), no atomics and no
 second hart (`G-16`), no illegal-instruction trap (`G-06`), and no misaligned-access checking
-(`G-08`). The trap vector is the constant 1000 (`G-01`, `rtl/control.sv:258`) and the trap cause
-register is tied to zero (`G-02`, `rtl/control.sv:268`). The target for each of these is in
+(`G-08`). The trap vector is the constant 1000 (`G-01`, `rtl/control.sv:277`) and the trap cause
+register is tied to zero (`G-02`, `rtl/control.sv:287`). The target for each of these is in
 `spec.md` §4; none of it exists here. v0.7 adds ten further target obligations whose target statement
 is recorded in §7.10–§7.12: the machine-mode CSR file and its address map (`FR-50`), `mscratch`
 (`FR-51`) and `mtval` (`FR-52`), then debug mode with `dcsr`/`dpc`/`dscratch` (`FR-53`), the
@@ -131,7 +132,7 @@ boundary and therefore out of this figure. Source: inline, section 1.*
 | H2 | Debug, the timer and the interrupt controller are platform blocks; the core reaches each through one named interface | block | section 1 |
 | S1 | Debug mode is entered from running by run control, a breakpoint, a trigger or a step, and left only by resume or DRET | state | section 7.12 |
 | T1 | A load-use insertion is one cycle of `ex_ma_flush` with IF/ID and ID/EX held, and it suppresses the write of the instruction in WB | cycle | section 7.5 |
-| T2 | A taken branch clears IF/ID and redirects the PC in ID, at a cost of one fetch slot | cycle | section 7.5 |
+| T2 | A taken branch clears IF/ID and redirects the PC in ID, and a second flush discards the fetch in flight | cycle | section 7.5 |
 | T3 | A withheld fetch grant deletes the fetch and the PC runs on; nothing is held | cycle | section 7.1 |
 
 Seven figures exist. H0 and H1 are the as-built structure. H2 is target structure — the three
@@ -203,7 +204,7 @@ connection, and they carry a requirement cite instead of an RTL cite.
 | `csr_if` — target | `pipeline`, `control` | `csrfile` | a CSR address, an access qualifier and write data from the pipeline; the read value back (`FR-50`) | read-modify-write request and response | `clk`, `rst_n` | C14, C15 |
 
 > **`trap_req_if` — target, not as built.** The row above is the as-built contract: one level-sensitive
-> `exception` bit (`rtl/riscv_small.sv:44`) and a cause register tied to zero (`rtl/control.sv:268`,
+> `exception` bit (`rtl/riscv_small.sv:44`) and a cause register tied to zero (`rtl/control.sv:287`,
 > `G-02`). The target widens the same input to `exception[3:0]`, a cause bus that carries the reason of
 > a synchronous request; the core captures that value at entry and does not re-read the bus afterwards
 > (`FR-22`, `Q-35`). The as-built row is left unchanged because the one-bit input is what the RTL has.
@@ -217,7 +218,7 @@ connection, and they carry a requirement cite instead of an RTL cite.
 > `LR`, `SC` and `AMO` must be naturally aligned and otherwise take a misaligned or access-fault exception
 > rather than a second beat (`FR-42`, `FR-35`).
 
-`writeback` is not a module: it is the top-level mux at `rtl/riscv_small.sv:219`, which is why §4.3 has
+`writeback` is not a module: it is the top-level mux at `rtl/riscv_small.sv:221`, which is why §4.3 has
 one row for the pair `ma_wb_if`/`wb_if` and the H1 figure collapses both into a single `wb_if` edge.
 
 ### 4.2 Modport map
@@ -230,26 +231,26 @@ except in the rows marked **target**, which name signals the target adds and the
 | `clk_rst_if` | `integrator` | out | `clk`, `clk_en`, `rst_n` | free-running; `rst_n` asserts and releases asynchronously (`G-21`) | `rtl/riscv_small.sv:41-43` |
 | `clk_rst_if` | `core` | in | `clk`, `clk_en`, `rst_n` | every `always_ff` | `rtl/riscv_small.sv:41-43` |
 | `trap_req_if` | `integrator` | out | `exception` | level, at least one edge | `rtl/riscv_small.sv:44` |
-| `trap_req_if` | `control` | in | `exception` | overrides `branch_taken` | `rtl/control.sv:237` |
-| `imem_if` | `fetch` | out | `inst_addr`, `inst_rd_en` | `inst_addr` combinational from `pc` | `rtl/instruction_fetch.sv:63` |
-| `imem_if` | `memory` | out | `inst_data`, `inst_ready` | `inst_ready` low flushes IF/ID | `rtl/control.sv:244-246` |
+| `trap_req_if` | `control` | in | `exception` | overrides `branch_taken` | `rtl/control.sv:256` |
+| `imem_if` | `fetch` | out | `inst_addr`, `inst_rd_en` | `inst_addr` combinational from `pc` | `rtl/instruction_fetch.sv:67` |
+| `imem_if` | `memory` | out | `inst_data`, `inst_ready` | `inst_ready` low flushes IF/ID | `rtl/control.sv:262-265` |
 | `dmem_if` | `execute` | out | `data_addr`, `data_wr`, `data_rd_en_ma`, `data_wr_en_ma`, `data_rd_wr_ctrl` | registered strobes | `rtl/riscv_small.sv:118-119`, `:193-198` |
-| `dmem_if` | `memory` | out | `data_rd`, `data_ready` | `data_ready` low freezes on a load | `rtl/control.sv:249-254` |
-| `if_id_if` | `fetch` | out | `pc_id`, `inst_id` | registered, held while `if_id_clk_en` is low | `rtl/instruction_fetch.sv:69-77` |
+| `dmem_if` | `memory` | out | `data_rd`, `data_ready` | `data_ready` low freezes on a load | `rtl/control.sv:267-273` |
+| `if_id_if` | `fetch` | out | `pc_id`, `inst_id` | registered, held while `if_id_clk_en` is low | `rtl/instruction_fetch.sv:74-89` |
 | `if_id_if` | `decode` | in | `pc_id`, `inst_id` | combinationally in ID | `rtl/instruction_decode.sv:45-46`, `:247` |
 | `id_ex_if` | `decode` | out | see §4.1 | registered, cleared by `id_ex_flush` | `rtl/instruction_decode.sv:96-129` |
 | `id_ex_if` | `execute` | in | see §4.1 | sampled on an enabled edge | `rtl/execution.sv:89-98` |
 | `ex_ma_if` | `execute` | out | see §4.1 | registered, cleared by `ex_ma_flush` | `rtl/execution.sv:89-106` |
-| `ex_ma_if` | `memory` | in | see §4.1 | strobes pass to `dmem_if` | `rtl/riscv_small.sv:193-198` |
+| `ex_ma_if` | `memory` | in | see §4.1 | strobes pass to `dmem_if` | `rtl/riscv_small.sv:195-200` |
 | `ma_wb_if` | `memory` | out | see §4.1 | registered, never flushed | `rtl/memory_access.sv:62-77` |
-| `ma_wb_if` | `writeback` | in | see §4.1 | muxed by `wb_mux_sel_wb` | `rtl/riscv_small.sv:219` |
-| `wb_if` | `writeback` | out | see §4.1 | combinational | `rtl/riscv_small.sv:219` |
+| `ma_wb_if` | `writeback` | in | see §4.1 | muxed by `wb_mux_sel_wb` | `rtl/riscv_small.sv:221` |
+| `wb_if` | `writeback` | out | see §4.1 | combinational | `rtl/riscv_small.sv:221` |
 | `wb_if` | `decode` | in | see §4.1 | register-file write port | `rtl/reg_file.sv:94-105` |
-| `ctrl_if` | `control` | out | see §4.1 | one `always_comb` | `rtl/control.sv:87-256` |
-| `ctrl_if` | `stage` | in | see §4.1 | every stage | `rtl/riscv_small.sv:123-216` |
+| `ctrl_if` | `control` | out | see §4.1 | one `always_comb` | `rtl/control.sv:101-275` |
+| `ctrl_if` | `stage` | in | see §4.1 | every stage | `rtl/riscv_small.sv:123-218` |
 | `jump_if` | `decode` | out | `jump_addr`, `branch_taken`, `cond_jump` | combinational from `jump_decision` | `rtl/instruction_decode.sv:177-188` |
-| `jump_if` | `fetch` | in | `jump_addr` | selected as the next PC | `rtl/instruction_fetch.sv:88-101` |
-| `jump_if` | `control` | in | `branch_taken`, `cond_jump` | selects `JUMP`, flushes IF/ID | `rtl/control.sv:232-235` |
+| `jump_if` | `fetch` | in | `jump_addr` | selected as the next PC | `rtl/instruction_fetch.sv:100-113` |
+| `jump_if` | `control` | in | `branch_taken`, `cond_jump` | selects `JUMP`, flushes IF/ID | `rtl/control.sv:246-249` |
 | `irq_if` — target | `irqctrl` | out | `mtip`, `meip`, `msip` | level; target samples every enabled edge | `spec.md` §6 (`FR-39`, `FR-40`) |
 | `irq_if` — target | `core` | in | `mtip`, `meip`, `msip` | level; target feeds `mip` and the entry priority, never latched as an edge | `spec.md` §6 (`FR-48`) |
 | `mtime_if` — target | `platform` | out | `mtime[63:0]` | free-running; target reads it as `time`/`timeh` with no memory access | `spec.md` §6 (`FR-49`, `Q-42`) |
@@ -302,20 +303,20 @@ Direction is from the core's point of view.
 | Signal | Dir | Width | Producer | Consumer | Protocol / timing | Reset value |
 |---|---|---|---|---|---|---|
 | `clk` | in | 1 | integrator | every `always_ff` | rising edge; single domain (`C-01`) | — |
-| `clk_en` | in | 1 | integrator | `control` only (`rtl/riscv_small.sv:223`) | level; gates `sepc`/`scause` only (`G-12`) | — |
+| `clk_en` | in | 1 | integrator | `control` only (`rtl/riscv_small.sv:225`) | level; gates `sepc`/`scause` and `branch_taken_q` only (`G-12`) | — |
 | `rst_n` | in | 1 | integrator | every `always_ff` | active low; assertion and release both asynchronous as built — no de-assertion synchroniser and no reset-style macro (`G-21`); target: asynchronous assertion, synchronous release through `RESET_SYNC_STAGES`, default 2 (`C-01`, `FR-41`, `A-06`) | — |
 | `exception` | in | 1 | integrator | `control` | level; asserted for at least one `clk` edge redirects the PC to the trap constant | 0 |
 | `inst_ready` | in | 1 | instruction memory | `control` | level; low flushes IF/ID for that cycle; the PC is **not** held (`G-09`) | — |
 | `inst_data` | in | 32 | instruction memory | `instruction_fetch` | `instruction_u`; registered into `inst_id` on every enabled edge, regardless of `inst_ready` | — |
 | `inst_addr` | out | 32 | `instruction_fetch` | instruction memory | `dataBus_t`; combinational copy of `pc`; changes only when IF/ID advances | 0 |
-| `inst_rd_en` | out | 1 | `control` | instruction memory | combinational; tied to `1'b1`, never deasserted (`rtl/control.sv:101`) | 1 |
+| `inst_rd_en` | out | 1 | `control` | instruction memory | combinational; tied to `1'b1`, never deasserted (`rtl/control.sv:115`) | 1 |
 | `data_ready` | in | 1 | data memory | `control` | level; low freezes all four stages while the load indicator is set | — |
 | `data_rd` | in | 32 | data memory | `memory_access` | `dataBus_u`; must be valid in the cycle the load commits in WB | — |
 | `data_rd_en_ma` | out | 1 | `execution` (EX/MA register) | data memory | registered read strobe; one cycle per load unless a stall freezes MA | 0 |
 | `data_wr_en_ma` | out | 1 | `execution` (EX/MA register) | data memory | registered write strobe; one cycle per store unless a stall freezes MA; **not** qualified by `data_ready` (`G-18`) | 0 |
 | `data_wr` | out | 32 | `execution` (`rs2_ma`) | data memory | `dataBus_u`; store data after the `storage_src` mux; not lane-shifted (`G-08`, store half) | 0 |
 | `data_addr` | out | 32 | `execution` (`alu_ma`) | data memory | `dataBus_u`; byte address, equals the ALU result of EX (`rtl/riscv_small.sv:119`) | 0 |
-| `data_rd_wr_ctrl` | out | 2 | `execution` (`funct3_ma`), truncated | data memory | `logic [1:0]`; `funct3_ma[1:0]`, driven for every instruction (section 8) | 0 |
+| `data_rd_wr_ctrl` | out | 2 | `execution` (`funct3_ma`) through a one-bit cast | data memory | `logic [1:0]` driven by `logic'(rd_wr_ctrl)`, so it carries `funct3[0]` zero-extended and a word access reads `2'b00` (`rtl/riscv_small.sv:118`, `FR-11`); driven for every instruction (section 8) | 0 |
 
 > **Target, not as built.** The fifteen rows above are the as-built port set of `rtl/riscv_small.sv:41-57`,
 > and the as-built port count is therefore fifteen. Every addition below is target. The target adds
@@ -337,10 +338,12 @@ Direction is from the core's point of view.
 
 Two internal connections are part of this contract and are easy to miss:
 
-- `data_rd_wr_ctrl` is the low two bits of `funct3_ma` after a width cast, not a decoded field:
-  `assign data_rd_wr_ctrl = logic'(rd_wr_ctrl);` (`rtl/riscv_small.sv:118`).
-- `clk_en` reaches exactly one register pair in the whole core, `sepc`/`scause`
-  (`rtl/riscv_small.sv:223`, `rtl/control.sv:265`); the pipeline is gated by `control`'s own enables
+- `data_rd_wr_ctrl` is a one-bit width cast of `funct3_ma`, not a decoded field:
+  `assign data_rd_wr_ctrl = logic'(rd_wr_ctrl);` (`rtl/riscv_small.sv:118`). The cast keeps only
+  `funct3[0]`, which the two-bit port zero-extends, so a word access (`funct3 = 010`) reads `2'b00`
+  and is indistinguishable from a byte access; `FR-11` is the requirement that fixes the width.
+- `clk_en` reaches exactly two state elements in the whole core, `sepc`/`scause` and `branch_taken_q`
+  (`rtl/riscv_small.sv:225`, `rtl/control.sv:92-99`, `:284`); the pipeline is gated by `control`'s own enables
   (`G-12`).
 
 ## 5. Clocks and resets
@@ -351,7 +354,7 @@ Two internal connections are part of this contract and are easy to miss:
 
 | Reset | Kind | Polarity | Synchronization | Scope |
 |---|---|---|---|---|
-| `rst_n` | asynchronous as built — assertion **and** release (`G-21`); target: hybrid, asynchronous assertion with a synchronised release (`C-01`, `FR-41`, `A-06`, `D-09`) | active low | none in the code: every sequential block hardcodes `posedge clk or negedge rst_n` and there is no reset-style macro (`rtl/instruction_fetch.sv:69`, `rtl/control.sv:260`, `G-21`); target: `RESET_SYNC_STAGES` enabled edges, default 2 (`FR-41`) | every `always_ff`, listed below |
+| `rst_n` | asynchronous as built — assertion **and** release (`G-21`); target: hybrid, asynchronous assertion with a synchronised release (`C-01`, `FR-41`, `A-06`, `D-09`) | active low | none in the code: every sequential block hardcodes `posedge clk or negedge rst_n` and there is no reset-style macro (`rtl/instruction_fetch.sv:74`, `rtl/control.sv:279`, `G-21`); target: `RESET_SYNC_STAGES` enabled edges, default 2 (`FR-41`) | every `always_ff`, listed below |
 
 Reset de-assertion is the **core's** obligation, not the integrator's: `C-01` has the integrator drive
 `rst_n` directly and add no second synchroniser, and `FR-41` requires the core to release reset through
@@ -361,20 +364,21 @@ assertion, which is `G-21`. One further part of `FR-41` is target, not as built:
 address after reset is the build-time parameter `RESET_VECTOR`, default `0x8000_0000`, whose value is
 fixed by `Q-33` and which software cannot move because it is not a CSR (`FR-41`, `Q-33`, `spec.md`
 §5.2). As built there is no such parameter and `pc` resets to 0, so the first fetch leaves at address 0
-(`rtl/instruction_fetch.sv:84-87`).
+(`rtl/instruction_fetch.sv:96-99`).
 
-The asynchronous reset appears in seven `always_ff` blocks, all with the same sensitivity list
+The asynchronous reset appears in eight `always_ff` blocks, all with the same sensitivity list
 `posedge clk or negedge rst_n`:
 
 | Register(s) | Block | Reset value | Cite |
 |---|---|---|---|
-| `pc` | fetch program counter | 0 | `rtl/instruction_fetch.sv:84-87` |
-| `pc_id`, `inst_id` | IF/ID | 0, 0 | `rtl/instruction_fetch.sv:69-77` |
+| `pc` | fetch program counter | 0 | `rtl/instruction_fetch.sv:96-99` |
+| `pc_id`, `inst_id` | IF/ID | 0, 0 | `rtl/instruction_fetch.sv:74-89` |
 | `rd0_wr_en_ex` and the remaining ID/EX fields | ID/EX | all 0, except `alu_src1_ex = RS1`, `alu_src2_ex = RS2`, `alu_op_ex = ALU_ADD`, `funct3_ex = LB` | `rtl/instruction_decode.sv:96-112` |
 | `alu_ma`, `rd0_wr_en_ma`, `data_rd_en_ma`, `data_wr_en_ma`, `funct3_ma`, `rd0_addr_ma`, `rs2_ma` | EX/MA | all 0, except `funct3_ma = LB` | `rtl/execution.sv:89-98` |
-| `rd0_addr_wb`, `wb_mux_sel_wb`, `rd0_wr_en_wb`, `alu_wb` | MA/WB | all 0 | `rtl/memory_access.sv:62-69` |
+| `rd0_addr_wb`, `wb_mux_sel_wb`, `rd0_wr_en_wb`, `alu_wb` | MA/WB | all 0 | `rtl/memory_access.sv:71-78` |
 | `regs[1:31]` | register file | `'X` — deliberately unspecified (`A-04`) | `rtl/reg_file.sv:94-98` |
-| `sepc`, `scause` | trap state | 0 | `rtl/control.sv:260-264` |
+| `branch_taken_q` | branch-resolved flop | 0 | `rtl/control.sv:92-99` |
+| `sepc`, `scause` | trap state | 0 | `rtl/control.sv:279-283` |
 
 `MA/WB` has no flush input: once an instruction reaches MA it always reaches WB
 (`rtl/memory_access.sv:62-78`). That is why a trap cannot cancel the instruction already in EX or
@@ -428,17 +432,17 @@ Every solid edge is one interface from §4.1 and the dashed ones are `jump_if` a
 signal count per line is deliberately zero, because the payload lives in §4.2. The two thick memory
 edges point from the initiator to the memory, matching `C5` and `C6`; the data and the grant return
 inside the same interface. The `wb_if` edge collapses the write-back mux (`C4`): `memory_access`
-produces `ma_wb_if`, the top-level mux turns it into `wb_if` (`rtl/riscv_small.sv:219`), and
+produces `ma_wb_if`, the top-level mux turns it into `wb_if` (`rtl/riscv_small.sv:221`), and
 `instruction_decode` consumes it at its `rd0_data_wb`/`rd0_wr_en`/`rd0_addr_wb` ports
 (`rtl/riscv_small.sv:149-151`) and at the register-file write port
 (`rtl/instruction_decode.sv:50-52`, `:199-201`).
 
 **IF.** Holds `pc` and the IF/ID register. `inst_addr` is a combinational copy of `pc`
-(`rtl/instruction_fetch.sv:63`), so the address and `inst_rd_en` appear in the same cycle. On an
+(`rtl/instruction_fetch.sv:67`), so the address and `inst_rd_en` appear in the same cycle. On an
 enabled edge `pc` advances by four, or takes `jump_addr`, or takes `trap_addr`, as `pc_sel` says
-(`rtl/instruction_fetch.sv:88-101`); `inst_data` is registered into `inst_id` alongside `pc_id`
-(`rtl/instruction_fetch.sv:73-76`). `flush` clears IF/ID at the edge, regardless of `clk_en`
-(`rtl/instruction_fetch.sv:70`). Both the PC and IF/ID are gated by `if_id_clk_en`, which is how a
+(`rtl/instruction_fetch.sv:100-113`); `inst_data` is registered into `inst_id` alongside `pc_id`
+(`rtl/instruction_fetch.sv:81-87`). `flush` clears IF/ID at the edge, regardless of `clk_en`
+(`rtl/instruction_fetch.sv:74`). Both the PC and IF/ID are gated by `if_id_clk_en`, which is how a
 downstream stall freezes the fetch stream (`rtl/riscv_small.sv:125`).
 
 **ID.** Reads `rs1`/`rs2` from the register file, generates the immediate, decodes the opcode into
@@ -461,17 +465,17 @@ frozen EX/MA holds them asserted (section 8).
 
 **WB.** There is no WB module: `memory_access` registers the MA result into MA/WB
 (`rtl/memory_access.sv:70-77`), the top-level mux picks memory data or the ALU result
-(`assign rd0_data_wb = wb_mux_sel_wb? ld_data_wb : alu_wb;`, `rtl/riscv_small.sv:219`), and the
+(`assign rd0_data_wb = wb_mux_sel_wb? ld_data_wb : alu_wb;`, `rtl/riscv_small.sv:221`), and the
 register file inside ID commits it on the next enabled edge (`rtl/reg_file.sv:94-105`).
 
 **Control fan-out.** `control` is the only producer of `pc_sel`, `inst_rd_en`, the four stage enables
 (`{if_id,id_ex,ex_ma,ma_wb}_clk_en`), the three flushes (`{if_id,id_ex,ex_ma}_flush`), the two ALU
 selects, `storage_src`, the two jump selects and `trap_addr` (`rtl/control.sv:66-80`). Its defaults
 are "run": every enable 1, every flush 0, `pc_sel = PC_PLUS4`, `inst_rd_en = 1`
-(`rtl/control.sv:93-101`); every hazard is an override inside one `always_comb`
-(`rtl/control.sv:87-256`). Because the overrides are ordered assignments in one block, the later
-condition wins: `exception` (`rtl/control.sv:237`) overrides `branch_taken`
-(`rtl/control.sv:232`), and the data stall (`rtl/control.sv:249`) overrides any enable set to 1
+(`rtl/control.sv:102-115`); every hazard is an override inside one `always_comb`
+(`rtl/control.sv:101-275`). Because the overrides are ordered assignments in one block, the later
+condition wins: `exception` (`rtl/control.sv:256`) overrides `branch_taken`
+(`rtl/control.sv:246`), and the data stall (`rtl/control.sv:268`) overrides any enable set to 1
 earlier.
 
 ## 7. Block sections
@@ -485,14 +489,14 @@ instantiated inside `execution` (`rtl/execution.sv:179`).
 | BLK-TOP | `riscv_small` | `rtl/riscv_small.sv` | — (the boundary) | the integrator |
 | BLK-IF | `instruction_fetch` | `rtl/instruction_fetch.sv` | `u_instruction_fetch` | `riscv_small` (`rtl/riscv_small.sv:123`) |
 | BLK-ID | `instruction_decode` | `rtl/instruction_decode.sv` | `u_instruction_decode` | `riscv_small` (`rtl/riscv_small.sv:140`) |
-| BLK-EX | `execution` | `rtl/execution.sv` | `u_exection` | `riscv_small` (`rtl/riscv_small.sv:172`) |
-| BLK-MA | `memory_access` | `rtl/memory_access.sv` | `u_memory_access` | `riscv_small` (`rtl/riscv_small.sv:201`) |
-| BLK-CTL | `control` | `rtl/control.sv` | `u_control` | `riscv_small` (`rtl/riscv_small.sv:221`) |
+| BLK-EX | `execution` | `rtl/execution.sv` | `u_exection` | `riscv_small` (`rtl/riscv_small.sv:174`) |
+| BLK-MA | `memory_access` | `rtl/memory_access.sv` | `u_memory_access` | `riscv_small` (`rtl/riscv_small.sv:203`) |
+| BLK-CTL | `control` | `rtl/control.sv` | `u_control` | `riscv_small` (`rtl/riscv_small.sv:223`) |
 | BLK-REG | `reg_file` | `rtl/reg_file.sv` | `u_reg_file` | `instruction_decode` (`rtl/instruction_decode.sv:193`) |
 | BLK-ALU | `alu` | `rtl/alu.sv` | `u_alu` | `execution` (`rtl/execution.sv:179`) |
 | BLK-JMP | `jump_decision` | `rtl/jump_decision.sv` | `u_jump_decision` | `instruction_decode` (`rtl/instruction_decode.sv:177`) |
 
-The instance name `u_exection` is the spelling in the RTL (`rtl/riscv_small.sv:172`).
+The instance name `u_exection` is the spelling in the RTL (`rtl/riscv_small.sv:174`).
 
 Three further block IDs — `BLK-CSR`, `BLK-TRAP` and `BLK-DBG` — have no module, no file and no
 instance: they are target blocks of v0.7 and are described in §7.10–§7.12, which is why they are absent
@@ -515,13 +519,13 @@ omits. Internally it also crosses the module boundaries with `pc_id`, `inst_id`,
 `dataBus_*` and enum is driven by a port of a submodule or by one of the two continuous assignments.
 
 **Behaviour.** Five instantiations in pipeline order: `u_instruction_fetch` (`rtl/riscv_small.sv:123`),
-`u_instruction_decode` (`:140`), `u_exection` (`:172`), `u_memory_access` (`:201`),
-`u_control` (`:221`). Two continuous assignments complete the interface:
+`u_instruction_decode` (`:140`), `u_exection` (`:174`), `u_memory_access` (`:203`),
+`u_control` (`:223`). Two continuous assignments complete the interface:
 `data_rd_wr_ctrl = logic'(rd_wr_ctrl)` (`:118`) and `data_addr = alu_ma` (`:119`). The write-back mux
-is `rd0_data_wb = wb_mux_sel_wb ? ld_data_wb : alu_wb` (`:219`). Three nets are pass-throughs worth
-naming because they change stage on the way out: `data_wr` is driven directly by `rs2_ma` (`:193`),
-`inst_rd_en` comes from `control` (`:254`), and `clk_en` is wired to `control` and to nothing else
-(`:223`).
+is `rd0_data_wb = wb_mux_sel_wb ? ld_data_wb : alu_wb` (`:221`). Three nets are pass-throughs worth
+naming because they change stage on the way out: `data_wr` is driven directly by `rs2_ma` (`:195`),
+`inst_rd_en` comes from `control` (`:256`), and `clk_en` is wired to `control` and to nothing else
+(`:225`).
 
 **Corner cases.**
 
@@ -529,8 +533,8 @@ naming because they change stage on the way out: `data_wr` is driven directly by
   inside `instruction_decode` (`rtl/instruction_decode.sv:177`, `:193`) and `alu` inside `execution`
   (`rtl/execution.sv:179`). The H1 figure shows the five top-level modules for that reason.
 - The WB stage has no module: its register lives in `memory_access` and its mux lives in the top
-  (`:219`).
-- `clk_en` is passed to `control` (`:223`), not to the stage modules; the stage clock enables are all
+  (`:221`).
+- `clk_en` is passed to `control` (`:225`), not to the stage modules; the stage clock enables are all
   generated there (`G-12`).
 
 ### 7.1 BLK-IF — `instruction_fetch` (`rtl/instruction_fetch.sv`)
@@ -557,38 +561,47 @@ Interfaces: `clk_rst_if` (`core`), `imem_if` (`fetch`), `if_id_if` (`fetch`), `j
 | `trap_addr` | in | 32 | `dataBus_t` from `control` |
 | `pc_sel` | in | 2 | `nextPCType_e` |
 
-**State.** `pc` (32 bits, reset 0, `rtl/instruction_fetch.sv:84-87`) and the IF/ID pair `pc_id`,
-`inst_id` (reset 0, cleared by `flush`, `rtl/instruction_fetch.sv:69-77`). There is no valid bit: a
-flushed IF/ID holds `0`, which decodes as "no write" (section 7.2).
+**State.** `pc` (32 bits, reset 0, `rtl/instruction_fetch.sv:96-99`) and one `always_ff` holding
+`pc_fetch`, `pc_id` and `inst_id` (reset 0, `:74-89`). `pc_fetch` is the address of the fetch whose
+word is on `inst_data`; `pc_id`/`inst_id` are what ID decodes, and `flush` clears the pair but not
+`pc_fetch`. There is no valid bit: a flushed IF/ID holds `0`, which decodes as "no write" (section 7.2).
 
 **Behaviour.**
 
-- `inst_addr = pc`, combinationally (`rtl/instruction_fetch.sv:63`). The address for cycle *n* is
-  therefore visible for the whole of cycle *n*, and `inst_data` presented in that cycle is the
-  instruction at that address.
+- `inst_addr = pc`, combinationally (`rtl/instruction_fetch.sv:67`). The memory answers one cycle
+  after the address is presented, so the instruction on `inst_data` in cycle *n* belongs to the
+  address presented in cycle *n-1*. `pc_fetch` is that address: it registers `pc` on every enabled
+  edge (`:80`) and the IF/ID pair takes `pc_fetch` rather than `pc` (`:85`), which is what keeps
+  `pc_id` aligned with `inst_id` — without it the decoder saw the next instruction's PC, the
+  `branch target +4` of `G-27`.
 - Next PC: `PC_PLUS4` adds four, `JUMP` takes `jump_addr`, `TRAP` takes `trap_addr`; the `default`
-  arm also adds four (`rtl/instruction_fetch.sv:88-101`). `TRAP` is encoded as the wildcard `2'b1?`,
+  arm also adds four (`rtl/instruction_fetch.sv:100-113`). `TRAP` is encoded as the wildcard `2'b1?`,
   so both `2'b10` and `2'b11` select it (`rtl/riscv_definitions_pkg.sv:53`).
-- IF/ID is cleared when `!rst_n || flush`, otherwise loaded when `clk_en`
-  (`rtl/instruction_fetch.sv:70-76`). The clear is unconditional with respect to `clk_en`.
+- IF/ID is cleared by `flush` and loaded otherwise, both only when `clk_en`
+  (`rtl/instruction_fetch.sv:79-88`). Reset clears `pc_fetch` and the IF/ID pair independent of
+  `clk_en` (`:75-78`), and `pc` in its own block (`:96-99`).
 
 **Corner cases.**
 
+- `pc_fetch` is not cleared by `flush`: the flush path writes zero into `pc_id`/`inst_id` and still
+  advances `pc_fetch <= pc` (`rtl/instruction_fetch.sv:79-83`). That is deliberate — the fetched
+  address is a property of the bus, not of the decoded instruction — and it is why a second flush is
+  needed when a branch discards two fetches (section 7.5).
 - `inst_ready` is not an input of this block. When the memory withholds the grant, `control` flushes
   IF/ID but leaves `clk_en` high, so the PC advances and the pending instruction is dropped
-  (`rtl/control.sv:244-246`, `G-09`). A memory that deasserts `inst_ready` cannot extend a fetch;
+  (`rtl/control.sv:262-265`, `G-09`). A memory that deasserts `inst_ready` cannot extend a fetch;
   it can only make the core skip an instruction.
 - A `flush` in the same cycle as `jump_addr` changes nothing for IF/ID, which is cleared anyway; the
-  redirect lands in `pc` at the same edge.
+  redirect lands in `pc` at the same edge, and `pc_fetch` starts tracking it on the next enabled edge.
 - The PC is gated by `if_id_clk_en`, so any stall that freezes IF/ID also freezes the address. That
   is what makes the data-wait stall stop the fetch stream without a separate PC enable
-  (`rtl/control.sv:250`, `rtl/riscv_small.sv:125`).
+  (`rtl/control.sv:268-269`, `rtl/riscv_small.sv:125`).
 
 **Parcel alignment — target, not as built.** With `IALIGN=16` (`FR-44`) a 32-bit instruction may start
 on a 2-mod-4 address, so the fetch must hold the previous word's trailing halfword — two bytes, the
 minimum for a 2-mod-4 start, and buffering the line as `FR-27` asks removes the distinction — in order to
 assemble the two parcels into one instruction. The as-built fetch presents one 32-bit
-word per cycle (`rtl/instruction_fetch.sv:63`, `:73-76`) and the decoder picks its arm from that word's
+word per cycle (`rtl/instruction_fetch.sv:67`, `:81-87`) and the decoder picks its arm from that word's
 `opcode` field alone (`rtl/instruction_decode.sv:45`, `:247`), so the parcel alignment does not exist and
 a 32-bit instruction that begins at a 2-mod-4 address cannot be formed; `FR-20` is the per-word path that
 would have to carry both parcels, `FR-27` the line fill that replaces it, and the missing length handling
@@ -598,9 +611,9 @@ Withholding the grant neither holds the fetch nor pauses the pipeline (T3).
 
 ![T3 inst_ready withheld: only IF/ID is flushed, the PC keeps advancing and the fetch is dropped](figs/wave/t3-fetch-stall.svg)
 
-*T3 — `inst_ready` low in cycles 2 and 3: `if_id_flush` covers exactly those two cycles, all four stage
-enables stay 1, `inst_rd_en` stays 1, and `pc` advances through `0x104` and `0x108`, neither of which
-ever executes. This is what the RTL does (`rtl/control.sv:244-246`, `rtl/instruction_fetch.sv:84-103`);
+*T3 — `inst_ready` low in cycles 3 and 4: `if_id_flush` covers exactly those two cycles, all four stage
+enables stay 1, `inst_rd_en` stays 1, and `pc` runs on through `0x108` and `0x10C` while the fetches of
+`0x104` and `0x108` are dropped, so neither word ever executes. This is what the RTL does (`rtl/control.sv:262-265`, `rtl/instruction_fetch.sv:96-115`);
 the hold that `FR-28` specifies does not exist, which is `G-09` and the prerequisite for any cache in
 front of this port. Source: `doc/figs/wave/t3-fetch-stall.json5`.*
 
@@ -687,7 +700,10 @@ U-type `{imm1, 12'b0}`, J-type `{imm4, imm3, imm2, imm1, 1'b0}`; the default is 
 
 The branch path is `rs1`/`rs2` → forward mux → `jump_decision` (`rtl/instruction_decode.sv:134-188`).
 The forward mux selects `RD_ID` (the register-file value), `RD_EX` (`rd0_data_ex`), `RD_MA`
-(`rd0_data_ma`) or `RD_WB` (`rd0_data_wb`) independently for each operand.
+(`rd0_data_ma`) or `RD_WB` (`rd0_data_wb`) independently for each operand, under `jmp_src1`/`jmp_src2`
+from `control` (`rtl/riscv_small.sv:152-153`). `RD_EX` is the unregistered ALU result, `alu_ex`
+(`rtl/riscv_small.sv:147`, `rtl/execution.sv:190`), so a branch can compare against an operand the
+instruction in EX is producing in the same cycle.
 
 **Corner cases.**
 
@@ -696,11 +712,11 @@ The forward mux selects `RD_ID` (the register-file value), `RD_EX` (`rd0_data_ex
   operation selected by `funct7[5]` and `funct3` (`rtl/instruction_decode.sv:325`, `G-06`).
 - After a flush, `inst = 0` and `pc = 0`; opcode `0` misses every arm, so the stage produces a
   no-write `ALU_ADD` with `rs1_addr_ex = rs2_addr_ex = rd0_addr_ex = 0`. The `!= '0` guards in
-  `control` then suppress every forward (`rtl/control.sv:108`, `:144`, `:184`, `:205`).
+  `control` then suppress every forward (`rtl/control.sv:122`, `:158`, `:198`, `:219`).
 - `rs1_ex`/`rs2_ex` are captured from the register file in the same cycle the word is registered, so
   a write-back in that cycle is already visible through the register-file bypass
   (`rtl/reg_file.sv:71-73`); `control` forwards from WB as well ("belt and braces",
-  `rtl/control.sv:113-115`).
+  `rtl/control.sv:127-129`).
 - `funct3_ex` is `inst.i_type_load.funct3` for every opcode (`rtl/instruction_decode.sv:125`), i.e.
   bits `[14:12]` of the word, not a decoded load type. Consequence in section 8.
 - **Target, not as built.** The decoder is 32-bit-only and decodes only the RV32I base subset: `M`
@@ -759,7 +775,9 @@ Interfaces: `id_ex_if` (`execute`), `ex_ma_if` (`execute`), `dmem_if` (`execute`
 `alu_src2` selects `rs2`, `imm`, `alu_ma` or `rd0_data` (`rtl/execution.sv:135-152`); `storage_src`
 selects `rs2`, `alu_ma` or `rd0_data`, with `RS2_S2` as the default arm
 (`rtl/execution.sv:157-174`). The ALU result is registered into MA when `clk_en`
-(`rtl/execution.sv:100`).
+(`rtl/execution.sv:100`). `alu_ex` is the same combinational result before that register:
+`assign alu_ex = alu_result` (`rtl/execution.sv:186-190`), which is what makes the `RD_EX` arm of the
+branch forward mux a driven value rather than an `X`.
 
 The forwarding selectors themselves are not decoded here; they arrive from `control` as the encoded
 value of the table in section 7.5.
@@ -767,12 +785,12 @@ value of the table in section 7.5.
 **Corner cases.**
 
 - `alu_ex` is the unregistered result and is used only by the branch forward path in ID
-  (`rtl/riscv_small.sv:147`, `rtl/instruction_decode.sv:143-145`). It is labelled a critical path in
-  the RTL (`rtl/execution.sv:59`).
+  (`rtl/riscv_small.sv:147`, `rtl/instruction_decode.sv:143-145`, `rtl/execution.sv:190`). It is
+  labelled a critical path in the RTL (`rtl/execution.sv:59`).
 - `RS_MA_S1`/`RD_MA_S2` forward `alu_ma`, which is the ALU result of the instruction in MA. For a
   load in MA, `alu_ma` is the *address*, not the data; `control` forbids that select while
-  `data_rd_en_ma` is set (`rtl/control.sv:190-200`, `:214-226`).
-- `flush` clears EX/MA at the edge regardless of `clk_en`, so a flushes wins over a freeze in the
+  `data_rd_en_ma` is set (`rtl/control.sv:204-215`, `:228-243`).
+- `flush` clears EX/MA at the edge regardless of `clk_en`, so a flush wins over a freeze in the
   same cycle.
 
 ### 7.4 BLK-MA — `memory_access` (`rtl/memory_access.sv`)
@@ -806,8 +824,8 @@ Interfaces: `ex_ma_if` (`memory`), `ma_wb_if` (`memory`), `ctrl_if` (`stage`).
 (`rtl/memory_access.sv:62-78`). No flush input; reset writes zero to every field it assigns.
 
 **Behaviour.** `wb_mux_sel_wb` is simply the registered `data_rd_en` (`rtl/memory_access.sv:83`), so
-it marks a load for the WB mux (`rtl/riscv_small.sv:219`) and for the data-wait stall
-(`rtl/control.sv:249`). The extension is combinational and keyed on the registered `funct3`, and the
+it marks a load for the WB mux (`rtl/riscv_small.sv:221`) and for the data-wait stall
+(`rtl/control.sv:268`). The extension is combinational and keyed on the registered `funct3`, and the
 lane comes from `ld_lane = alu_wb[1:0]` (`rtl/memory_access.sv:68-69`): `alu_wb` is the effective
 address registered at the same edge as `rd_wr_ctrl_wb`, so it stays aligned with `data` while the
 load commits in WB. `dataBus_u` declares its byte array as `[0:3]`, where index 0 holds bits
@@ -827,7 +845,7 @@ index: offset 0 is `data[7:0]` and offset 3 is `data[31:24]`.
 
 - `data_addr` is a **byte address** — the registered ALU result, `assign data_addr = alu_ma`
   (`rtl/riscv_small.sv:119`) — and `data_wr` is always the value of `rs2`, wired straight out of
-  `rs2_ma` (`rtl/riscv_small.sv:193`). A **load** selects its lane from `data_addr[1:0]` (`T-06`),
+  `rs2_ma` (`rtl/riscv_small.sv:195`). A **load** selects its lane from `data_addr[1:0]` (`T-06`),
   while a **store** still drives one lane whatever `data_addr[1:0]` says, and an access crossing a
   word boundary is issued as a single transaction: neither the store lane shift nor the split exists
   as built (`G-08`, `G-22`, `A-05`). The target asserts `data_wr_strb[3:0]` in the
@@ -836,8 +854,8 @@ index: offset 0 is `data[7:0]` and offset 3 is `data[31:24]`.
   aligned or take a misaligned or access-fault exception (`FR-35`, `FR-42`).
 - `ld_data_wb` is not registered, so the load data must be present on `data_rd` in the cycle the
   write-back commits. While `data_ready` is low that commit is postponed, and the whole pipeline is
-  frozen (`rtl/control.sv:249-254`).
-- `rd_wr_ctrl_wb` is not assigned in the reset branch (`rtl/memory_access.sv:63-69`), so it is `X`
+  frozen (`rtl/control.sv:267-273`).
+- `rd_wr_ctrl_wb` is not assigned in the reset branch (`rtl/memory_access.sv:72-78`), so it is `X`
   until the first enabled edge; `rd0_wr_en_wb` is 0 until then, which suppresses any use.
 - Because there is no MA/WB flush, an instruction in MA always reaches WB and commits if
   `rd0_wr_en_wb` is set; neither a branch nor a trap can cancel it (`G-01`).
@@ -846,7 +864,8 @@ index: offset 0 is `data[7:0]` and offset 3 is `data[31:24]`.
 
 **Purpose.** Resolves forwarding, generates the four stage enables and the three flushes, selects the
 next PC, drives `inst_rd_en`, and holds the trap state. It is the only writer of every one of those
-signals. It is entirely combinational except for `sepc`/`scause`.
+signals. It is combinational except for three registers: `sepc`, `scause` and `branch_taken_q`
+(`rtl/control.sv:92-99`, `:279-290`).
 
 **Interface.** 40 ports, transcribed from `rtl/control.sv:41-80`.
 
@@ -855,9 +874,9 @@ Interfaces: `ctrl_if` (`control`), `jump_if` (`control`), `trap_req_if` (`contro
 | Signal | Dir | Width | Description |
 |---|---|---|---|
 | `clk` | in | 1 | clock |
-| `clk_en` | in | 1 | the top-level `clk_en`; gates `sepc`/`scause` only (`G-12`) |
+| `clk_en` | in | 1 | the top-level `clk_en`; gates `sepc`/`scause` and `branch_taken_q` only (`G-12`) |
 | `rst_n` | in | 1 | asynchronous, active low |
-| `rs1_addr_id` | in | 5 | `inst_id.r_type.rs1` (`rtl/riscv_small.sv:225`) |
+| `rs1_addr_id` | in | 5 | `inst_id.r_type.rs1` (`rtl/riscv_small.sv:227`) |
 | `rs2_addr_id` | in | 5 | `inst_id.r_type.rs2` |
 | `rs1_addr_ex` | in | 5 | `rs1_addr_ex` from ID |
 | `rs2_addr_ex` | in | 5 | `rs2_addr_ex` from ID |
@@ -895,52 +914,54 @@ Interfaces: `ctrl_if` (`control`), `jump_if` (`control`), `trap_req_if` (`contro
 | `id_ex_flush` | out | 1 | insert NOP into ID/EX |
 | `ex_ma_flush` | out | 1 | insert NOP into EX/MA |
 
-**State.** `sepc` (32 bits) and `scause` (32 bits), both reset to 0 (`rtl/control.sv:260-264`) and
-updated only when `clk_en` and `exception` are both true: `sepc <= pc_ex`, `scause <= 0`
-(`rtl/control.sv:265-269`). Neither is exported, so both are write-only state today (`G-02`,
-`G-13`).
+**State.** `sepc` (32 bits), `scause` (32 bits) and `branch_taken_q` (1 bit). `sepc`/`scause` reset to
+0 and update only when `clk_en` and `exception` are both true: `sepc <= pc_ex`, `scause <= 0`
+(`rtl/control.sv:279-290`). Neither is exported, so both are write-only state today (`G-02`, `G-13`).
+`branch_taken_q` resets to 0 and samples `branch_taken` on every `clk_en` edge
+(`rtl/control.sv:92-99`); it is the "a branch was taken last cycle" flag that drives the second
+`if_id_flush` at `:251-254`.
 
 **Trap entry — target, not as built.** There is no `mstatus`, no `mie` and no `mip` — the port list
-carries none of them and the only trap state is the pair above (`rtl/control.sv:41-80`, `:257-261`) —
+carries none of them and the only trap state is the pair above (`rtl/control.sv:41-80`, `:279-290`) —
 so no interrupt-entry stack of `MIE`/`MPIE`/`MPP` exists, no evaluation point between instructions
 exists, and no MEI-then-MSI-then-MTI priority exists; `MRET` does not exist either, because the system
 opcode is an empty case (`rtl/instruction_decode.sv:333-335`). As built the vector is the constant and
-the cause is tied to zero (`rtl/control.sv:258`, `:265`, `G-01`, `G-02`, `G-13`, `G-14`). The target is
+the cause is tied to zero (`rtl/control.sv:277`, `:287`, `G-01`, `G-02`, `G-13`, `G-14`). The target is
 `FR-45` for the return and `FR-48` for the entry state, the evaluation points and the priority, with the
 shape of the request and cause signals fixed by `Q-35`: the cause travels on `exception[3:0]` and the
 three interrupts are the level-sensitive `mtip`, `meip` and `msip` inputs.
 
-**Behaviour.** The defaults are set first (`rtl/control.sv:88-101`) and then overwritten in this
+**Behaviour.** The defaults are set first (`rtl/control.sv:102-115`) and then overwritten in this
 order, so a later condition wins over an earlier one.
 
 Forwarding, quoted from `rtl/control.sv`:
 
 | Consumer | Producer | Condition (verbatim) | Result | Cite |
 |---|---|---|---|---|
-| branch `rs1` (ID) | WB | `rs1_addr_id == rd0_addr_wb && rd0_wr_en_wb` | `jmp_src1 = RD_WB` | `:113-115` |
-| branch `rs1` (ID) | MA, not a load | `rs1_addr_id == rd0_addr_ma && rd0_wr_en_ma` and `!data_rd_en_ma` | `jmp_src1 = RD_MA` | `:117`, `:125-127` |
-| branch `rs1` (ID) | MA, load in flight | same match and `data_rd_en_ma` | `ex_ma_flush = 1`, `if_id_clk_en = 0`, `id_ex_clk_en = 0` | `:119-123` |
-| branch `rs1` (ID) | EX, not a load | `rs1_addr_id == rd0_addr_ex && rd0_wr_en_ex` and `!data_rd_en_ex` | `jmp_src1 = RD_EX` | `:130`, `:136-139` |
-| branch `rs1` (ID) | EX, load in flight | same match and `data_rd_en_ex` | `id_ex_flush = 1`, `if_id_clk_en = 0` | `:132-135` |
-| branch `rs2` (ID) | WB / MA / EX | mirror of `rs1` on `rs2_addr_id` | `jmp_src2`, same flushes | `:149-175` |
-| ALU `rs1` (EX) | WB | `rs1_addr_ex == rd0_addr_wb && rd0_wr_en_wb && alu_src1_ex == RS1` | `alu_src1 = RD_WB_S1` | `:186-188` |
-| ALU `rs1` (EX) | MA | `rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1`, and `!data_rd_en_ma` | `alu_src1 = RD_MA_S1` | `:190`, `:198-200` |
-| ALU `rs1` (EX) | MA, load in flight | same match and `data_rd_en_ma` | `ex_ma_flush = 1`, freeze IF/ID and ID/EX | `:192-196` |
-| ALU `rs2` / store data (EX) | WB | `rs2_addr_ex == rd0_addr_wb && rd0_wr_en_wb` | `storage_src = RD_WB_S2`, and `alu_src2 = RD_WB_S2` when `alu_src2_ex == RS2` | `:207-212` |
-| ALU `rs2` / store data (EX) | MA | `rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 \|\| data_wr_en_ex)`, and `!data_rd_en_ma` | `alu_src2 = RD_MA_S2`, `storage_src = RD_MA_S2` | `:214`, `:222-225` |
-| ALU `rs2` / store data (EX) | MA, load in flight | same match and `data_rd_en_ma` | `ex_ma_flush = 1`, freeze IF/ID and ID/EX | `:216-220` |
+| branch `rs1` (ID) | WB | `rs1_addr_id == rd0_addr_wb && rd0_wr_en_wb` | `jmp_src1 = RD_WB` | `:127-129` |
+| branch `rs1` (ID) | MA, not a load | `rs1_addr_id == rd0_addr_ma && rd0_wr_en_ma` and `!data_rd_en_ma` | `jmp_src1 = RD_MA` | `:131`, `:139-141` |
+| branch `rs1` (ID) | MA, load in flight | same match and `data_rd_en_ma` | `ex_ma_flush = 1`, `if_id_clk_en = 0`, `id_ex_clk_en = 0` | `:133-137` |
+| branch `rs1` (ID) | EX, not a load | `rs1_addr_id == rd0_addr_ex && rd0_wr_en_ex` and `!data_rd_en_ex` | `jmp_src1 = RD_EX` | `:144`, `:150-153` |
+| branch `rs1` (ID) | EX, load in flight | same match and `data_rd_en_ex` | `id_ex_flush = 1`, `if_id_clk_en = 0` | `:146-149` |
+| branch `rs2` (ID) | WB / MA / EX | mirror of `rs1` on `rs2_addr_id` | `jmp_src2`, same flushes | `:163-189` |
+| ALU `rs1` (EX) | WB | `rs1_addr_ex == rd0_addr_wb && rd0_wr_en_wb && alu_src1_ex == RS1` | `alu_src1 = RD_WB_S1` | `:200-202` |
+| ALU `rs1` (EX) | MA | `rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1`, and `!data_rd_en_ma` | `alu_src1 = RD_MA_S1` | `:204`, `:212-214` |
+| ALU `rs1` (EX) | MA, load in flight | same match and `data_rd_en_ma` | `ex_ma_flush = 1`, freeze IF/ID and ID/EX | `:206-210` |
+| ALU `rs2` / store data (EX) | WB | `rs2_addr_ex == rd0_addr_wb && rd0_wr_en_wb` | `storage_src = RD_WB_S2`, and `alu_src2 = RD_WB_S2` when `alu_src2_ex == RS2` | `:221-226` |
+| ALU `rs2` / store data (EX) | MA | `rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 \|\| data_wr_en_ex)`, and `!data_rd_en_ma` | `alu_src2 = RD_MA_S2`, `storage_src = RD_MA_S2` | `:228`, `:236-241` |
+| ALU `rs2` / store data (EX) | MA, load in flight | same match and `data_rd_en_ma` | `ex_ma_flush = 1`, freeze IF/ID and ID/EX | `:230-233` |
 
 Reading rules for this table:
 
 - `x0` never forwards: every address comparison is guarded by `!= '0` on that address
-  (`rtl/control.sv:108`, `:144`, `:184`, `:205`).
-- The branch rows also require `cond_jump` to be set (`rtl/control.sv:108`, `:144`); a `JAL`/`JALR`
+  (`rtl/control.sv:122`, `:158`, `:198`, `:219`).
+- The branch rows also require `cond_jump` to be set (`rtl/control.sv:122`, `:158`); a `JAL`/`JALR`
   takes `jump_addr` from `base_addr_sel` and `imm` without reading a register for the branch
   comparison, but it still uses `rs1` for the `JALR` base (`rtl/jump_decision.sv:99-111`).
 - The WB rows are redundant with the register-file bypass for the ID consumer
-  (`rtl/reg_file.sv:71-73`); the RTL keeps them and says so (`rtl/control.sv:109-111`).
+  (`rtl/reg_file.sv:71-73`); the RTL keeps them and says so (`rtl/control.sv:123-125`).
 - The ALU `rs2`/WB row sets `storage_src` even when the instruction does not store
-  (`rtl/control.sv:211`, marked `TODO:TBR` in the RTL); the value is unused unless
+  (`rtl/control.sv:225`, marked `TODO:TBR` in the RTL); the value is unused unless
   `data_wr_en_ex` is set.
 
 Stalls and flushes. Freezing is a clock enable of 0; flushing is a NOP inserted into a pipeline
@@ -948,17 +969,18 @@ register. They are different mechanisms and the table keeps them apart.
 
 | Cause | Condition (verbatim) | `if_id_clk_en` | `id_ex_clk_en` | `ex_ma_clk_en` | `ma_wb_clk_en` | Flush | `pc_sel` | Cite |
 |---|---|---|---|---|---|---|---|---|
-| load in EX, branch consumer in ID | `rs1_addr_id == rd0_addr_ex && rd0_wr_en_ex` and `data_rd_en_ex` | 0 | 1 | 1 | 1 | `id_ex_flush` | `PC_PLUS4` | `:130-135` |
-| load in MA, branch consumer in ID | `rs1_addr_id == rd0_addr_ma && rd0_wr_en_ma` and `data_rd_en_ma` | 0 | 0 | 1 | 1 | `ex_ma_flush` | `PC_PLUS4` | `:117-123` |
-| load in MA, ALU `rs1` consumer in EX | `rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1` and `data_rd_en_ma` | 0 | 0 | 1 | 1 | `ex_ma_flush` | `PC_PLUS4` | `:190-196` |
-| load in MA, ALU `rs2` or store-data consumer in EX | `rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 \|\| data_wr_en_ex)` and `data_rd_en_ma` | 0 | 0 | 1 | 1 | `ex_ma_flush` | `PC_PLUS4` | `:214-220` |
-| branch taken | `branch_taken` | 1 | 1 | 1 | 1 | `if_id_flush` | `JUMP` | `:229-232` |
-| trap | `exception` | 1 | 1 | 1 | 1 | `if_id_flush`, `id_ex_flush` | `TRAP` | `:234-238` |
-| fetch grant withheld | `!inst_ready` | 1 | 1 | 1 | 1 | `if_id_flush` | `PC_PLUS4` | `:241-243` |
-| data grant withheld | `!data_ready && mux_sel_rd_wb` | 0 | 0 | 0 | 0 | none | `PC_PLUS4` | `:246-251` |
+| load in EX, branch consumer in ID | `rs1_addr_id == rd0_addr_ex && rd0_wr_en_ex` and `data_rd_en_ex` | 0 | 1 | 1 | 1 | `id_ex_flush` | `PC_PLUS4` | `:144-149` |
+| load in MA, branch consumer in ID | `rs1_addr_id == rd0_addr_ma && rd0_wr_en_ma` and `data_rd_en_ma` | 0 | 0 | 1 | 1 | `ex_ma_flush` | `PC_PLUS4` | `:131-137` |
+| load in MA, ALU `rs1` consumer in EX | `rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1` and `data_rd_en_ma` | 0 | 0 | 1 | 1 | `ex_ma_flush` | `PC_PLUS4` | `:204-210` |
+| load in MA, ALU `rs2` or store-data consumer in EX | `rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 \|\| data_wr_en_ex)` and `data_rd_en_ma` | 0 | 0 | 1 | 1 | `ex_ma_flush` | `PC_PLUS4` | `:228-233` |
+| branch taken | `branch_taken` | 1 | 1 | 1 | 1 | `if_id_flush` | `JUMP` | `:246-249` |
+| branch taken in the previous cycle | `branch_taken_q` | 1 | 1 | 1 | 1 | `if_id_flush` | `PC_PLUS4` | `:251-254` |
+| trap | `exception` | 1 | 1 | 1 | 1 | `if_id_flush`, `id_ex_flush` | `TRAP` | `:256-260` |
+| fetch grant withheld | `!inst_ready` | 1 | 1 | 1 | 1 | `if_id_flush` | `PC_PLUS4` | `:262-265` |
+| data grant withheld | `!data_ready && mux_sel_rd_wb` | 0 | 0 | 0 | 0 | none | `PC_PLUS4` | `:267-273` |
 
-The `rs2` variants of the first and second rows are the same code at `rtl/control.sv:153-164` and
-`:166-176`; the table lists the `rs1` twin and names the `rs2` one by citation.
+The `rs2` variants of the first and second rows are the same code at `rtl/control.sv:167-178` and
+`:180-190`; the table lists the `rs1` twin and names the `rs2` one by citation.
 
 Three notes that the table cannot hold:
 
@@ -967,10 +989,9 @@ Three notes that the table cannot hold:
 - The data-grant row is evaluated in the WB stage (`mux_sel_rd_wb` is `wb_mux_sel_wb`), not in MA.
   A load therefore reaches WB before it can wait, and the strobe was already issued in MA
   (section 8).
-- The forward rows are a transcription of the conditions in `control.sv`, not a measured result: the
-  sanity run does not see a value arrive for an operand produced by the immediately preceding
-  instruction (`G-26`, `doc/measurements/NFR-05-riscv-tests.md:114`, the `G-26` triage row). Read them
-  as the intent of the code.
+- The second branch row is the one the fetch unit forces: `control` cannot know that a fetch is in
+  flight, so it repeats `if_id_flush` for one cycle after `branch_taken` and lets
+  `instruction_fetch` discard the stale `pc_fetch`/`inst_data` pair (section 7.1).
 
 The load-use row is the one a reader is most likely to mis-remember: it is not a four-enable freeze.
 One insertion clears two enables and flushes EX/MA, and it has a side effect on the register file (T1).
@@ -980,43 +1001,47 @@ One insertion clears two enables and flushes EX/MA, and it has a side effect on 
 *T1 — Load-use insertion, trace for `addi x5,x5,1; addi x7,x7,1; lw x1,0(x2); add x3,x1,x4;
 sub x8,x9,x10; addi …`. In cycle 3 the load is in MA and `add` in EX, so `control` raises `ex_ma_flush`
 and clears `if_id_clk_en` and `id_ex_clk_en` only: `ex_ma_clk_en` and `ma_wb_clk_en` stay 1
-(`rtl/control.sv:190-196`). `add` is held in EX, EX/MA takes the bubble, and in cycle 4 the load is in
-WB while `alu_src1` becomes `RD_WB_S1` (`rtl/control.sv:186-188`), so the value arrives by forward and
+(`rtl/control.sv:204-210`). `add` is held in EX, EX/MA takes the bubble, and in cycle 4 the load is in
+WB while `alu_src1` becomes `RD_WB_S1` (`rtl/control.sv:200-202`), so the value arrives by forward and
 not from the register file. Because `id_ex_clk_en` is also `reg_file.clk_en`
 (`rtl/riscv_small.sv:142`), the `addi x7` resident in WB in cycle 3 is never written even though
-`rd0_wr_en_wb` is high: that is `G-19`, drawn as built rather than as intended.
+`rd0_wr_en_wb` is high: that is `G-19`, drawn as built rather than as intended, and the sanity run
+exposes it through `rv32ui-p-lb`/`lbu` (section 11).
 Source: `doc/figs/wave/t1-load-use-stall.json5`.*
 
-A taken branch costs one fetch slot rather than two: it resolves in ID, so the cycle that clears IF/ID
-is the cycle that loads `jump_addr` into the PC (T2). Nothing behind the branch is flushed, because
-nothing behind it has entered a pipeline register yet.
+A taken branch costs two fetch slots. It resolves in ID, so the cycle that clears IF/ID is the cycle
+that loads `jump_addr` into the PC; one cycle later `branch_taken_q` clears IF/ID again, which
+discards the `pc_fetch`/`inst_data` pair the memory was already returning for the abandoned fetch
+(`rtl/control.sv:246-254`, `rtl/instruction_fetch.sv:74-89`). The target therefore reaches ID two
+cycles after the branch (T2).
 
-![T2 taken branch: IF/ID cleared and the PC redirected in ID, one fetch slot lost](figs/wave/t2-branch-flush.svg)
+![T2 taken branch: IF/ID cleared and the PC redirected in ID, then a second flush of the fetch in flight](figs/wave/t2-branch-flush.svg)
 
 *T2 — Taken branch with no operand hazard in the trace: in cycle 3 `branch_taken` raises `if_id_flush`
-and `pc_sel = JUMP`, so the word fetched at `0x104` never enters IF/ID, ID holds the zero word in
-cycle 4 and the target `0x200` is in ID in cycle 5. `id_ex_flush` never rises and no stage enable
-drops — one cycle lost, which is the `branch taken` row of the table above.
+and `pc_sel = JUMP`, so the word fetched at `0x104` never enters IF/ID; the second `if_id_flush`, from
+`branch_taken_q` in cycle 4, discards the fetch already in flight. ID holds the zero word in cycles 4
+and 5 and the target `0x200` is in ID in cycle 6. `id_ex_flush` never rises and no stage enable
+drops: two cycles lost, the two `branch taken` rows of the table above.
 Source: `doc/figs/wave/t2-branch-flush.json5`.*
 
 **Corner cases.**
 
-- `trap_addr` is the decimal constant 1000 (`assign trap_addr = 1000;`, `rtl/control.sv:258`), so the
+- `trap_addr` is the decimal constant 1000 (`assign trap_addr = 1000;`, `rtl/control.sv:277`), so the
   handler entry is `0x0000_03E8` for every trap (`G-01`).
 - `sepc` captures `pc_ex`, the PC of whatever instruction is in EX in the trap cycle, not the PC of a
   specific faulting instruction; the core has no notion of which instruction faulted, because
   `exception` is a bare input (`G-01`, `G-14`).
 - A trap does not flush EX/MA or MA/WB, so the instruction in EX and the instruction in MA both
-  complete and may write the register file (`rtl/control.sv:237-241`, `rtl/memory_access.sv:62-78`).
+  complete and may write the register file (`rtl/control.sv:256-260`, `rtl/memory_access.sv:62-78`).
   The acceptance criterion of `FR-22` states it in the same words ("an instruction already past
   decode still completes") and `G-01` is the gap that governs the trap path.
 - If `branch_taken` and `exception` are asserted together, `pc_sel` ends as `TRAP` because the
-  exception block is later in the same `always_comb` (`rtl/control.sv:232`, `:234`); both flushes are
+  exception block is later in the same `always_comb` (`rtl/control.sv:246`, `:248`); both flushes are
   asserted.
 - Holding `exception` high for *n* cycles re-enters the trap *n* times and rewrites `sepc` each
   cycle; nothing latches the request.
-- `clk_en` is used by this block only for `sepc`/`scause` (`rtl/control.sv:265`). Deasserting it does
-  not stop the core (`G-12`).
+- `clk_en` is used by this block only for `sepc`/`scause` and `branch_taken_q`
+  (`rtl/control.sv:92-99`, `:284`). Deasserting it does not stop the core (`G-12`).
 
 ### 7.6 BLK-REG — `reg_file` (`rtl/reg_file.sv`)
 
@@ -1058,13 +1083,15 @@ if the write port targets the same register in this cycle, the read returns `rd0
 - **The write is gated by `id_ex_clk_en`**, the ID/EX enable, because the top wires the register
   file's clock enable from `instruction_decode`'s `clk_en`, which is `id_ex_clk_en`
   (`rtl/riscv_small.sv:142`, `rtl/instruction_decode.sv:195`, `rtl/reg_file.sv:99`). All four
-  insertions that flush EX/MA clear exactly that enable (`rtl/control.sv:122`, `:158`, `:195`, `:219`);
-  the two branch cases where the load is still in EX clear only `if_id_clk_en` (`:132-135`,
-  `:168-171`) and so leave the write alone. In each of those four cycles the write-back instruction
+  insertions that flush EX/MA clear exactly that enable (`rtl/control.sv:136`, `:172`, `:209`, `:233`);
+  the two branch cases where the load is still in EX clear only `if_id_clk_en` (`:146-149`,
+  `:182-185`) and so leave the write alone. In each of those four cycles the write-back instruction
   resident in WB loses its architectural write, and the
   MA/WB register advances at the same edge because `ma_wb_clk_en` stays 1. The data-wait stall is
-  safe because it clears all four enables, including `ma_wb_clk_en` (`rtl/control.sv:249-254`).
-  No registered test creates a back-to-back dependency that would expose this: `T-01` separates the
+  safe because it clears all four enables, including `ma_wb_clk_en` (`rtl/control.sv:267-273`).
+  The gap is no longer only a derivation: `rv32ui-p-lb` and `rv32ui-p-lbu` time out at `pc=0x204`
+  in the sanity run and are attributed to `G-19` as a load-use/data-stall fetch effect, not to the
+  `G-08` store-lane defect (section 11). `T-01` does not see it because the sequence separates the
   load phase from the store phase with five NOPs "to drain the 5-stage pipeline"
   (`tb/tests/sequence_lib/riscv_small_basic_load_store_seq.sv:10-13`), and `T-02` repeats `T-01`
   (`G-11`). Flagged in section 11.1.
@@ -1143,7 +1170,9 @@ Interfaces: produces `jump_if` (`decode`); internal to `instruction_decode`.
 
 **Behaviour.** The comparison block computes `equal`, `less_u` and `less_s` from `rs1` and `rs2`
 (`rtl/jump_decision.sv:67-91`). The address block selects `pc` or `rs1` as the base and adds the
-immediate (`rtl/jump_decision.sv:98-112`). The decision block evaluates the six `funct3` values when
+immediate (`rtl/jump_decision.sv:98-112`). `imm` arrives already sign-extended to 32 bits
+(`rtl/instruction_decode.sv:218-226`), so the sum is a full 32-bit add and a negative offset lands
+below the base. The decision block evaluates the six `funct3` values when
 `cond_jump` is set, and asserts `branch_taken` unconditionally when `uncond_jump` is set
 (`rtl/jump_decision.sv:117-164`):
 
@@ -1162,16 +1191,13 @@ immediate (`rtl/jump_decision.sv:98-112`). The decision block evaluates the six 
 - `funct3` `010` and `011` on opcode `1100011` are not a branch of RV32I; they select the default
   arm and the branch is never taken, while `cond_jump` is still 1 (`rtl/instruction_decode.sv:279`).
   `control` may then forward operands for a branch that cannot be taken.
-- `JALR` does not clear bit 0 of the target. The address is `rs1 + imm[20:0]` with no mask
-  (`rtl/jump_decision.sv:111`, `G-07`).
-- The target is `base_addr + imm[20:0]` (`rtl/jump_decision.sv:111`). `imm[20:0]` is a 21-bit
-  unsigned slice of the 32-bit union, so the sum is formed with the slice zero-extended into 32 bits;
-  the sign extension produced by the immediate generator (`rtl/instruction_decode.sv:218-226`) is not
-  part of this expression. A forward offset (up to +1 MiB for `JAL`) is exact; a backward one is not,
-  because its offset appears as a large positive number. `T-08` executes branches and jumps in the
-  `rv32ui` images and the negative-offset consequence is measured (`G-20`,
-  `doc/measurements/NFR-05-riscv-tests.md:117`, the `G-20` triage row), but no test isolates the
-  expression itself. Flagged in section 11.1.
+- `JALR` does not clear bit 0 of the target. The address is `rs1 + imm` with no mask
+  (`rtl/jump_decision.sv:104`, `:111`, `G-07`).
+- The target is `base_addr + imm` (`rtl/jump_decision.sv:111`) with the full sign-extended
+  immediate, so forward and backward offsets are both exact within the ±1 MiB the `J`/`B` encodings
+  can express. Until WP-4c the line added `imm[20:0]`, a 21-bit unsigned slice, and every negative
+  offset was taken as a large positive one: that was `G-20`, closed 2026-11-04 and measured by
+  `T-12` (`rv32ui-p-beq`) and the negative loop offsets in the `rv32ui` images.
 
 ### 7.9 Modules present in `rtl/` but not in the DUT
 
@@ -1198,7 +1224,7 @@ owns every machine-mode address the map lists, answers the six `Zicsr` instructi
 holds the software-visible trap and status state that §7.11 reads and writes. No such module exists in
 `rtl/`: the system opcode is an empty arm (`rtl/instruction_decode.sv:333-335`) and the only trap
 registers the core keeps, `sepc` and `scause`, are private to `control` and unreadable
-(`rtl/control.sv:260-271`), which is `G-13`.
+(`rtl/control.sv:279-290`), which is `G-13`.
 
 **Interface.** Target interfaces: `csr_if` (`pipeline` and `control` as initiators, `csrfile` as
 target; `C14`, `C15`), `mtime_if` (`core`) for the two timer views, and `irq_if` (`core`) for the
@@ -1223,7 +1249,7 @@ fix are `mscratch` = 0 (`FR-51`, a project choice for determinism), `mtval` = 0 
 the maximal set of the build (`FR-37`), and `dcsr` = 0 with `dpc` = `RESET_VECTOR` while
 `dbg_dmactive` is low (`FR-54`). As built there is no CSR state at all; the pair that does exist,
 `sepc` and `scause`, resets to 0 and updates only when `clk_en` and `exception` are both true
-(`rtl/control.sv:260-269`).
+(`rtl/control.sv:284-288`).
 
 **Behaviour.**
 
@@ -1243,10 +1269,10 @@ the maximal set of the build (`FR-37`), and `dcsr` = 0 with `dpc` = `RESET_VECTO
   (`rtl/riscv_small.sv:41-57`).
 - **Interaction with forwarding and hazards, target.** Because the target read returns in WB, a
   consumer of a `CSR*` destination is served by the same paths the as-built core already uses for an
-  ALU or memory result — the WB forward in `control` (`rtl/control.sv:186-188`) and the register-file
+  ALU or memory result — the WB forward in `control` (`rtl/control.sv:200-202`) and the register-file
   bypass (`rtl/reg_file.sv:71-73`). A `CSR*` that is followed by a read of the same CSR needs a hazard
   the as-built `control` does not compute, because its `always_comb` compares register addresses and no
-  CSR address (`rtl/control.sv:87-256`); the target adds that comparison, and `G-13` is the gap that
+  CSR address (`rtl/control.sv:101-275`); the target adds that comparison, and `G-13` is the gap that
   records its absence.
 
 **Corner cases.**
@@ -1261,7 +1287,7 @@ the maximal set of the build (`FR-37`), and `dcsr` = 0 with `dpc` = `RESET_VECTO
 - Target: `x0` as the destination of a `CSR*` discards the read value and still performs the write,
   exactly as the register file discards a write to `x0` today (`rtl/reg_file.sv:100-103`, `FR-14`).
 - As built: none of the above exists, which is `G-13`; the trap state the core does keep is
-  unreachable from software (`rtl/control.sv:260-271`).
+  unreachable from software (`rtl/control.sv:279-290`).
 
 ### 7.11 BLK-TRAP — trap entry and exit (target)
 
@@ -1269,12 +1295,12 @@ the maximal set of the build (`FR-37`), and `dcsr` = 0 with `dpc` = `RESET_VECTO
 `FR-48`: it writes the target entry state, picks the target entry address from `mtvec`, honours the
 target mask and priority of the three machine interrupts, and restores state on `MRET`. As built the
 same job is done by two registers inside `control` with a constant vector and a zeroed cause
-(`rtl/control.sv:258-269`), which `G-01`, `G-02` and `G-14` record.
+(`rtl/control.sv:277-288`), which `G-01`, `G-02` and `G-14` record.
 
 **Interface.** Target interfaces: `trap_req_if` (`integrator` → `control`, widened to
 `exception[3:0]`; `C10`), `irq_if` (`irqctrl` → `core`; `C11`) and `csr_if` (`control` → `csrfile`;
 `C15`). As built the whole trap boundary is the one level-sensitive `exception` bit
-(`rtl/riscv_small.sv:44`) and the internal constant `trap_addr` (`rtl/control.sv:258`).
+(`rtl/riscv_small.sv:44`) and the internal constant `trap_addr` (`rtl/control.sv:277`).
 
 | Target register | Address | Written by the target on | Target value |
 |---|---|---|---|
@@ -1289,7 +1315,7 @@ same job is done by two registers inside `control` with a constant vector and a 
 **State.** **Target, not as built.** The target state is the seven registers above plus the target
 entry stack they form. As built the state is `sepc` and `scause` only: both reset to 0, `sepc`
 captures `pc_ex` and `scause` is tied to zero whenever `clk_en` and `exception` are both true
-(`rtl/control.sv:260-269`), and neither is exported (`G-02`).
+(`rtl/control.sv:284-288`), and neither is exported (`G-02`).
 
 **Behaviour.**
 
@@ -1298,7 +1324,7 @@ captures `pc_ex` and `scause` is tied to zero whenever `clk_en` and `exception` 
   (`FR-48`).
 - **Target entry address.** The target takes `mtvec.BASE` in direct mode, and `BASE + 4 × cause` for
   an interrupt in vectored mode while an exception still enters at `BASE` (`FR-29`, `FR-30`). As
-  built the entry address is the decimal constant 1000 (`rtl/control.sv:258`, `G-01`).
+  built the entry address is the decimal constant 1000 (`rtl/control.sv:277`, `G-01`).
 - **Target priority.** With the three requests asserted together the target serves MEI, then MSI, then
   MTI, so the observed causes are 11, then 3, then 7 with bit 31 set (`FR-48`).
 - **Target evaluation points.** The target evaluates pending interrupts between instructions,
@@ -1313,13 +1339,13 @@ captures `pc_ex` and `scause` is tied to zero whenever `clk_en` and `exception` 
   target captures it at entry (`FR-39`, `FR-40`, `FR-48`, `Q-35`).
 - **Target precision.** The target keeps the as-built imprecision that `FR-22` accepts: an instruction
   already past decode still completes, because the target flushes only IF/ID and ID/EX
-  (`rtl/control.sv:237-241`, `G-01`).
+  (`rtl/control.sv:256-260`, `G-01`).
 
 **Corner cases.**
 
 - Target: a request held high re-enters the handler after every `MRET` until the level drops, because
   `mtip`, `msip` and `meip` are levels and not edges (`FR-39`, `FR-40`); as built the same is true of
-  `exception` (`rtl/control.sv:265-269`).
+  `exception` (`rtl/control.sv:284-288`).
 - Target: an interrupt raised while the hart is in debug mode stays pending and is taken only after
   `DRET`, and then only while `MIE` and the matching `mie` bit are both set (`FR-48`, §7.12).
 - Target: a synchronous request withdrawn between assertion and entry still reports the cause it
@@ -1448,10 +1474,11 @@ The contract is one word per port per cycle, with a level grant. There is no bur
 no last-beat signal and no write response (`G-15`, `A-10`).
 
 **Instruction side.** `inst_addr` is `pc` and `inst_rd_en` is always 1
-(`rtl/instruction_fetch.sv:63`, `rtl/control.sv:101`). The memory presents `inst_data` for that
-address in the same cycle; the core registers it into IF/ID on every enabled edge regardless of
-`inst_ready` (`rtl/instruction_fetch.sv:73-76`). `inst_ready` low flushes IF/ID for that cycle and
-does not hold the PC (`rtl/control.sv:244-246`). A memory that needs more than zero cycles of latency
+(`rtl/instruction_fetch.sv:67`, `rtl/control.sv:115`). The core samples `inst_data` one cycle after
+the address is presented: `pc_fetch` holds that address and IF/ID takes it together with the word
+(`rtl/instruction_fetch.sv:62-65`, `:74-89`), so the memory is assumed to answer with one cycle of
+latency. `inst_ready` low flushes IF/ID for that cycle and
+does not hold the PC (`rtl/control.sv:262-265`). A memory that needs more than one cycle of latency
 therefore cannot use `inst_ready` to extend a fetch: the instruction is dropped and the core
 continues at the next address. That is `G-09`, and it is the reason a cache cannot be added without
 changing this port.
@@ -1467,23 +1494,27 @@ registered `rs2` after the store-data mux; it is not rotated to the lane implied
 | `data_rd_en_ma` | the MA cycle of a load | one cycle, longer if a data-wait stall freezes EX/MA |
 | `data_wr_en_ma` | the MA cycle of a store | one cycle, longer if a data-wait stall freezes EX/MA |
 | `data_wr` | with `data_wr_en_ma` | same as the strobe |
-| `data_rd_wr_ctrl` | every cycle; only meaningful with a strobe | follows `funct3_ma[1:0]` |
+| `data_rd_wr_ctrl` | every cycle; only meaningful with a strobe | follows `funct3_ma[0]`, zero-extended |
 
-`data_rd_wr_ctrl` encoding, from the width cast at `rtl/riscv_small.sv:118` applied to the low two
-bits of `funct3`:
+`data_rd_wr_ctrl` encoding, from the one-bit cast at `rtl/riscv_small.sv:118` applied to `funct3_ma`:
 
 | `data_rd_wr_ctrl` | Access | Produced by | Cite |
 |---|---|---|---|
-| `2'b00` | byte | `SB` (`000`), `LB` (`000`), `LBU` (`100`) | `rtl/riscv_definitions_pkg.sv:255`, `:212`, `:215` |
+| `2'b00` | byte, **and word** (indistinguishable) | `SB` (`000`), `LB` (`000`), `LBU` (`100`), `SW` (`010`), `LW` (`010`) | `rtl/riscv_definitions_pkg.sv:255`, `:212`, `:215`, `:257`, `:214` |
 | `2'b01` | halfword | `SH` (`001`), `LH` (`001`), `LHU` (`101`) | `:256`, `:213`, `:216` |
-| `2'b10` | word | `SW` (`010`), `LW` (`010`) | `:257`, `:214` |
+| `2'b10`, `2'b11` | unreachable | — | the cast keeps `funct3[0]` only |
 
-The two upper bits of `funct3` are discarded, so `LBU` and `LB` are indistinguishable on this port;
-the load extension inside the core is what separates them (section 7.4).
+The port is declared two bits wide (`rtl/riscv_small.sv:57`) but `logic'(rd_wr_ctrl)` is a one-bit
+cast of the three-bit `funct3` enum, so only `funct3[0]` reaches the port and the upper bit is always
+zero. A word access therefore reports `2'b00`, byte width, so a memory that decodes this field
+performs a byte access for a word; `LBU` and `LB` are likewise indistinguishable on the port, and the
+load extension inside the core is what separates them (section 7.4). The `cp_width.word_w` coverage
+bin cannot fill for this reason, and `FR-11` is the requirement that fixes the width; the store-lane
+defect is the separate gap `G-08`.
 
 Loads and the grant: the read strobe is issued in MA and the core latches nothing from `data_rd`
 until WB. The wait is implemented in WB: while `!data_ready && mux_sel_rd_wb` all four enables are
-cleared, so the MA/WB register, the register file and the PC hold (`rtl/control.sv:249-254`). The
+cleared, so the MA/WB register, the register file and the PC hold (`rtl/control.sv:267-273`). The
 data must therefore be valid in the cycle in which the load commits, and the core can wait there
 indefinitely. This is why a load whose grant is withheld consumes no extra strobe cycle beyond the
 held one, but also why the strobe is issued before the memory has said it is ready.
@@ -1512,21 +1543,21 @@ select a lane on either port (`G-08`, `A-05`). Misaligned accesses are passed th
 Every number below is counted from the enable and flush expressions in `control.sv`, not measured.
 No CPI, frequency or area exists for this core (`G-05`, `A-08`), and the timing figures T1–T3 are
 hand-derived from those same expressions rather than captured from a simulation, so the claims here
-are derived from the RTL rather than observed. Two of those derivations are contradicted by the
-`T-08` run: operand forwarding (`G-26`) and the first instruction at a taken branch target (`G-27`),
-so the forwarding and branch rows below state the intent of `control.sv`, not a measured cost.
+are derived from the RTL rather than observed. Two of those derivations were contradicted by the
+`T-08` run before WP-4c — operand forwarding (`G-26`) and the first instruction at a taken branch
+target (`G-27`); both are fixed, and the cycles below are re-counted from the new expressions.
 
 | Event | Cycles added | Where it comes from | Cite |
 |---|---|---|---|
-| straight line, no hazard | 0 | one instruction per stage per enabled edge; `inst_rd_en` is always 1 | `rtl/control.sv:93-101` |
-| taken branch or jump | 1 | `branch_taken` clears IF/ID and redirects the PC in the same cycle, so the instruction fetched at the fall-through address is discarded | `rtl/control.sv:232-235`, `rtl/instruction_fetch.sv:92-94` |
+| straight line, no hazard | 0 | one instruction per stage per enabled edge; `inst_rd_en` is always 1 | `rtl/control.sv:107-115` |
+| taken branch or jump | 2 | `branch_taken` clears IF/ID and redirects the PC in the same cycle; `branch_taken_q` clears IF/ID on the next one, so the fetch already in flight is discarded too | `rtl/control.sv:246-254`, `rtl/instruction_fetch.sv:74-89` |
 | not-taken branch | 0 | `pc_sel` stays `PC_PLUS4`; the branch is decoded in ID and writes nothing | `rtl/jump_decision.sv:155-157`, `rtl/instruction_decode.sv:279-282` |
-| trap | 2 | `if_id_flush` and `id_ex_flush` discard the two instructions behind the trap; anything in MA or WB completes | `rtl/control.sv:237-241`, `rtl/memory_access.sv:62-78` |
-| load-use, ALU or store-data consumer one instruction behind | 1 | consumer held in EX, `ex_ma_flush` inserts the bubble, value arrives by the WB forward on the next cycle | `rtl/control.sv:190-196`, `:214-220`, `:186-188` |
-| load-use, branch consumer one instruction behind | 2 | one `id_ex_flush` while the load is in EX, then one `ex_ma_flush` while it is in MA, then the WB forward | `rtl/control.sv:130-135`, `:117-123` |
-| load-use, consumer two instructions behind | 0 | the consumer reaches EX in the load's WB cycle and forwards from WB | `rtl/control.sv:186-188`, `:207-212` |
-| load data grant withheld | as long as `data_ready` is low | WB is frozen with the rest of the pipeline; the load commits on the first granted cycle | `rtl/control.sv:249-254` |
-| fetch grant withheld | not a stall — one instruction lost per withheld cycle | only IF/ID is flushed; the PC keeps advancing | `rtl/control.sv:244-246`, `G-09` |
+| trap | 2 | `if_id_flush` and `id_ex_flush` discard the two instructions behind the trap; anything in MA or WB completes | `rtl/control.sv:256-260`, `rtl/memory_access.sv:62-78` |
+| load-use, ALU or store-data consumer one instruction behind | 1 | consumer held in EX, `ex_ma_flush` inserts the bubble, value arrives by the WB forward on the next cycle | `rtl/control.sv:204-210`, `:228-233`, `:200-202` |
+| load-use, branch consumer one instruction behind | 2 | one `id_ex_flush` while the load is in EX, then one `ex_ma_flush` while it is in MA, then the WB forward | `rtl/control.sv:144-149`, `:131-137` |
+| load-use, consumer two instructions behind | 0 | the consumer reaches EX in the load's WB cycle and forwards from WB | `rtl/control.sv:200-202`, `:221-226` |
+| load data grant withheld | as long as `data_ready` is low | WB is frozen with the rest of the pipeline; the load commits on the first granted cycle | `rtl/control.sv:267-273` |
+| fetch grant withheld | not a stall — one instruction lost per withheld cycle | only IF/ID is flushed; the PC keeps advancing | `rtl/control.sv:262-265`, `G-09` |
 
 Two consequences worth stating explicitly:
 
@@ -1536,8 +1567,8 @@ Two consequences worth stating explicitly:
 - A store never waits for the data grant (`G-18`), so a data memory with variable latency is not
   back-pressured by a store, and the core will issue the next access regardless.
 
-No workload CPI is quoted: the only registered test withdraws 31 loads, 5 NOPs, 31 stores and 5 NOPs
-with an immediately granting memory, and no cycle count is recorded for it (`T-01`, `G-05`).
+No workload CPI is quoted: the only directed test (`T-01`) withdraws 31 loads, 5 NOPs, 31 stores and
+5 NOPs with an immediately granting memory, and no cycle count is recorded for it (`T-01`, `G-05`).
 
 ## 10. Verification hooks
 
@@ -1551,7 +1582,7 @@ Observability is the port list of section 4 plus two simulation-only artefacts:
 | `$display("RTL REG_WRITE: x%0d = 0x%0h", ...)` | one line per architectural register write | `rtl/reg_file.sv:101` |
 
 There is no trap output: `trap_addr` is an internal constant and `sepc`/`scause` are never exported
-(`rtl/control.sv:258-271`, `G-01`, `G-02`). A test can observe a trap only by watching the fetch
+(`rtl/control.sv:277-290`, `G-01`, `G-02`). A test can observe a trap only by watching the fetch
 address jump to 1000.
 
 The sanity harness is the one testbench path that does not come from a sequence of directed
@@ -1586,12 +1617,29 @@ and no scoreboard — only in sanity mode, and owns `program_port`
 (`tb/env/agents/riscv_small_agent/riscv_small_agent.sv:44-53`), which `T-09` proves
 (`tb/tests/riscv_small_passive_test.sv:32-48`) while `T-08` runs the active sanity topology. None of
 this is RTL: the program item and the memory model live in the testbench, so every block description
-of section 7 is unchanged. The harness, the image build and the 1-of-42 measurement are in
+of section 7 is unchanged. The harness, the image build and the measurement history are in
 [verification.md](verification.md) and `doc/measurements/NFR-05-riscv-tests.md`.
 
+The WP-4c run measured **34 pass / 8 fail of 42** at RTL `sha256:d12dc1a2…`, TB `sha256:f542affd…`
+(`build/sanity/summary.json`, 2026-11-04). Three of the images are tests in their own right, listed in
+`scripts/verify/tests.tsv` with a `sanity:<image>` column: `T-10` (`rv32ui-p-and`, the branch redirect
+of `G-27`), `T-11` (`rv32ui-p-addi`, the operand forwarding of `G-26`) and `T-12` (`rv32ui-p-beq`, the
+negative branch offset of `G-20`); all three pass and are the closure evidence for those gaps. The
+eight failures are `rv32ui-p-fence_i` (timeout, `G-15`), `rv32ui-p-jalr` (timeout, `G-07`),
+`rv32ui-p-lb` and `rv32ui-p-lbu` (timeout at `pc=0x204`, `G-19`), `rv32ui-p-ma_data` (`testnum=1`,
+`FR-42`/`G-22`), `rv32ui-p-sb` (`testnum=4`) and `rv32ui-p-sh` (`testnum=3`) (`G-08`), and
+`rv32ui-p-st_ld` (`testnum=2`, `G-08`).
+
+One pass is not evidence: **`rv32ui-p-ld_st` passes, and that pass is a false positive of the
+harness.** The memory model is word-granular — a store writes the whole word — so a `sb`/`sh` followed
+by a `lb`/`lh` at the same address reads the expected value back out of that word whatever lane the
+DUT drove, and the model cannot observe the `G-08` lane defect. Only the standalone `sb`/`sh` images
+exercise it, and they fail.
+
 Three further tests are target and none of them exists; the registered set is `T-01`, `T-02`, `T-06`
-(sub-word loads, `FR-12`), `T-08` (the sanity harness above) and `T-09`
-(`riscv_small_passive_test`, the passive-agent topology); `T-03`..`T-05` are registered as
+(sub-word loads, `FR-12`), `T-08` (the sanity harness above), `T-09` (`riscv_small_passive_test`, the
+passive-agent topology) and `T-10`/`T-11`/`T-12` (the same sanity test against `rv32ui-p-and`,
+`rv32ui-p-addi` and `rv32ui-p-beq`); `T-03`..`T-05` are registered as
 `deferred` in `doc/verification.md` and none of the three is implemented, and every row below is absent with the gap that keeps it absent.
 
 | ID | Scope | Status |
@@ -1609,24 +1657,30 @@ either.
 RTL-behaviour gaps, summarised from the canonical table in [verification.md](verification.md#gaps);
 owner and target are the commitments of `A-09`, confirmed by the designer on 2026-10-28 under `Q-12`,
 not proposals. The release blockers are `G-03`, `G-04` and `G-11`, because the `Q-11` signoff bar
-cannot be met without them; `G-07` and `G-08`, because `Q-06` fixed the ISA deviations; and `G-26` and
-`G-27`, because they block the `rv32ui` leg of `NFR-05`. Every other gap is a dated commitment. All
-twenty-seven rows are canonical in `doc/verification.md`; this summary mirrors them. `G-10` and `G-25`
-are closed 2026-10-30 by WP-4; `G-26` and `G-27` are the two defects the same work package found in
-the sanity run. `G-23` and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem
-of `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of `FR-57`.
+cannot be met without them, and `G-07` and `G-08`, because `Q-06` fixed the ISA deviations — the
+`release-blocker gaps: G-03 G-04 G-07 G-08 G-11` line of `make signoff-check`. `G-19` is not one of
+them: it is a dated commitment that keeps the `lb`/`lbu` leg of `NFR-05` red. Every other gap is a
+dated commitment too. All twenty-seven rows are canonical in `doc/verification.md`; this summary
+mirrors them. `G-10` and `G-25` are closed 2026-10-30 by WP-4; `G-26`, `G-27` and `G-20` are closed
+2026-11-04 by WP-4c, the work package that also found `G-19` in the open. `G-23` and `G-24` are the
+v0.7 debug gaps: the first covers the target debug subsystem of `FR-53`..`FR-56`, `FR-58` and
+`FR-59`, the second the target trigger unit of `FR-57`.
 
-- **G-01** — `trap_addr` is hardcoded to 1000 (`rtl/control.sv:258`); the target is the `mtvec` CSR with
+- **G-01** — `trap_addr` is hardcoded to 1000 (`rtl/control.sv:277`); the target is the `mtvec` CSR with
   direct and vectored modes (`FR-29`, `FR-30`). Consequence as built: every trap lands at the same
   address and the vector cannot be changed by software. Owner: designer. Target: 2026-12-31.
-- **G-02** — `scause` is tied to zero (`rtl/control.sv:268`); the target is `mcause` per the ratified
+- **G-02** — `scause` is tied to zero (`rtl/control.sv:287`); the target is `mcause` per the ratified
   privileged specification (`FR-23`). Consequence as built: no trap cause is reported, so a handler
   cannot tell a timer tick from an illegal instruction. Owner: designer. Target: 2026-12-31.
-- **G-03** — the `cg_sum` covergroup is empty (`tb/env/top/riscv_small_coverage.sv`). Consequence: no
-  functional coverage, so `NFR-06` cannot be measured; a **release blocker** since `Q-11` fixed the
-  signoff bar (`A-09`). Owner: designer. Target: 2026-12-31.
+- **G-03** — coverage is not per instruction: `cg_mem`
+  (`tb/env/top/riscv_small_coverage.sv:23`) has four coverpoints (`cp_width`, `cp_lane`, `cp_dir`,
+  `cp_subword_lane`) and merges at 91.67 %, but `cp_width.word_w` cannot fill while the width port
+  carries `funct3[0]` (`rtl/riscv_small.sv:118`, `FR-11`) and there is no bin per decoded instruction.
+  Consequence: `NFR-06` stays `partial`, and because the `Q-11` closure bar needs a coverpoint per
+  instruction class this stays a **release blocker** (`A-09`). Owner: verification lead. Target:
+  2026-12-31.
 - **G-04** — the reference model and the scoreboard cover only `LW`/`SW`. Consequence: other opcodes are
-  not checked, so the twenty as-built requirements outside `LW`/`SW` cannot become `verified`. Owner:
+  not checked, so the fifteen as-built requirements outside `LW`/`SW` cannot become `verified`. Owner:
   verification lead. Target: 2026-12-31.
 - **G-05** — no timing, area or power measurement exists. Consequence: `NFR-01` to `NFR-04` and `NFR-07`
   cannot be verified, and no frequency or part is recorded (`A-08`, `Q-08`). Owner: designer. Target:
@@ -1643,13 +1697,13 @@ of `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of 
   Consequence: a non-conformant indirect jump for odd targets; a **release blocker** since `Q-06`
   (2026-10-28), decided by `FR-07`'s acceptance. Owner: designer. Target: 2026-12-31.
 - **G-08** — sub-word **stores** always drive the same lane, whatever `data_addr[1:0]` says
-  (`rtl/execution.sv:157-174`, `rtl/riscv_small.sv:193`). The load half closed in v0.7.4: `LB`, `LBU`,
+  (`rtl/execution.sv:157-174`, `rtl/riscv_small.sv:195`). The load half closed in v0.7.4: `LB`, `LBU`,
   `LH` and `LHU` select the addressed lane (`rtl/memory_access.sv:68-69`, `:91-105`, `T-06`).
   Consequence: `SB`/`SH` behaviour still depends on an unspecified memory model; a **release blocker**
   since `Q-06` (2026-10-28), decided by the acceptance of `FR-11`. Owner: designer. Target: 2026-12-31.
 - **G-09** — no fetch stall exists: while the fetch grant is withheld only the IF/ID registers are
-  flushed (`rtl/control.sv:244-246`) and the program counter keeps advancing unless IF/ID is held
-  (`rtl/instruction_fetch.sv:84-103`). Consequence: a cache miss cannot hold the program counter, which
+  flushed (`rtl/control.sv:262-265`) and the program counter keeps advancing unless IF/ID is held
+  (`rtl/instruction_fetch.sv:96-115`). Consequence: a cache miss cannot hold the program counter, which
   makes this the prerequisite for the instruction cache; `FR-28` is the requirement that closes it.
   Owner: designer. Target: 2026-12-31.
 - **G-10** — **closed 2026-10-30 by WP-4**: the sanity flow compiles each `rv32ui-p-*` with the
@@ -1660,19 +1714,20 @@ of `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of 
   memory and answers the ports (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:184-192`), and
   the sanity checker decides the verdict from the monitor
   (`tb/env/top/riscv_small_sanity_checker.sv:66-128`). Consequence: `NFR-05` (RISC-V suite
-  conformance) is **measured**, at 1 pass in 42 images; the remaining failures are `G-26`, `G-27`,
-  `G-07`, `G-20`, `G-08`, `G-15` and `FR-42`. Owner: verification lead. Target: closed 2026-10-30.
+  conformance) is **measured**, at 34 passes in 42 images (WP-4c); the remaining failures are `G-07`,
+  `G-08`, `G-15`, `G-19` and `FR-42`. Owner: verification lead. Target: closed 2026-10-30.
 - **G-11** — `T-02` adds no stimulus: `riscv_small_corner_seq::body()` only calls `super.body()`
   (`tb/tests/sequence_lib/riscv_small_corner_seq.sv:31`), so it repeats `T-01`. Consequence: no
   requirement can cite `T-02`, and boundary values are untested. Owner: verification lead. Target:
   2026-12-31.
-- **G-12** — the top-level `clk_en` reaches only the trap-state registers (`rtl/riscv_small.sv:223`),
-  while the stage enables are generated inside `rtl/control.sv` (`rtl/control.sv:265` is its only use).
-  Consequence: `C-02` is a description of the port, not a promise, and integrators cannot pause the core
-  with `clk_en`. Owner: designer. Target: 2026-12-31.
+- **G-12** — the top-level `clk_en` has only two uses, the trap-state registers (`rtl/control.sv:284`)
+  and `branch_taken_q` (`rtl/control.sv:96`), and it reaches `control` alone
+  (`rtl/riscv_small.sv:225`); the stage enables are generated inside `rtl/control.sv`. Consequence:
+  `C-02` is a description of the port, not a promise, and integrators cannot pause the core with
+  `clk_en`. Owner: designer. Target: 2026-12-31.
 - **G-13** — no CSR file and no CSR instruction: `CSR*` is decoded as a no-operation
   (`rtl/instruction_decode.sv:333-335`) and the trap state registers are unreadable
-  (`rtl/control.sv:260-271`). Consequence: `FR-23`, `FR-24`, `FR-25`, `FR-29`, `FR-30`, `FR-32`,
+  (`rtl/control.sv:279-290`). Consequence: `FR-23`, `FR-24`, `FR-25`, `FR-29`, `FR-30`, `FR-32`,
   `FR-37`, `FR-50`, `FR-51`, `FR-52`, and `Zicsr`/`Zicntr` in §7.1 of the specification, stay
   `deferred`, and this gap also blocks
   `FR-45` (the `mstatus` restoration has no register to restore), `FR-46` (`mstatus.TW` has no
@@ -1683,7 +1738,7 @@ of `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of 
   interface. Consequence: `FR-36`, `FR-39`, `FR-40`, `FR-48` and the vectored mode of `FR-30` stay
   `deferred`, `FR-48` has no request to enter on and no `mip`/`mie` to mask with, and `D-01`'s
   preemption cannot be demonstrated. Owner: designer. Target: 2026-12-31.
-- **G-15** — no instruction cache and no line-based fetch: `rtl/instruction_fetch.sv:63-77` drives one
+- **G-15** — no instruction cache and no line-based fetch: `rtl/instruction_fetch.sv:67-89` drives one
   word address per cycle with no burst and no last-beat signal, and neither `ICACHE_BYTES` nor
   `ICACHE_LINE` exists. Consequence: `FR-27`, `FR-28`, `FR-31` and `FR-34` stay `deferred`, §5.2 of the
   specification is a target rather than a description of the RTL, and `NFR-02`'s condition cannot be
@@ -1695,31 +1750,35 @@ of `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of 
 - **G-17** — no decision log: `doc/decisions.md` does not exist, so `D-01` to `D-11` live in
   `doc/spec.md` §0.1. Consequence: decisions are not indexed beside the requirements they justify, and
   a superseded decision has nowhere to be retired. Owner: designer. Target: 2026-12-31.
-- **G-18** — stores do not wait for the data grant: the stall condition at `rtl/control.sv:249` also
+- **G-18** — stores do not wait for the data grant: the stall condition at `rtl/control.sv:268` also
   requires a load destination, so a store asserts its strobe for one cycle whatever `data_ready` does.
   Consequence: `FR-38` stays `deferred`; the store contract is the testbench's, which grants every
   access immediately, so the difference is invisible today. Owner: designer. Target: 2026-12-31.
 - **G-19** — a load-use insertion clears `id_ex_clk_en`, which is also the register file's clock enable
-  (`rtl/instruction_decode.sv:195`, `rtl/riscv_small.sv:142`, `rtl/reg_file.sv:99`), while
-  `ma_wb_clk_en` stays high (`rtl/control.sv:122`, `:158`, `:195`, `:219`). Consequence: an instruction
+  (`rtl/instruction_decode.sv:195`, `rtl/riscv_small.sv:142`, `rtl/reg_file.sv:99`), at all four EX/MA
+  insertion sites (`rtl/control.sv:136`, `:172`, `:209`, `:233`), while `ma_wb_clk_en` is cleared only by
+  the `data_ready` stall (`rtl/control.sv:110`, `:272`). Consequence: an instruction
   in WB during that cycle is not written and is then dropped from MA/WB, so its architectural write is
-  lost; not observed by `T-01` because the sequence spaces instructions. Derivation in §11.1. Owner:
-  designer. Target: 2026-12-31.
-- **G-20** — branch and jump targets add `imm[20:0]` as an unsigned slice
-  (`rtl/jump_decision.sv:111`). Consequence: negative offsets land at `base + (imm mod 2^21)`, so
-  backward `JAL`, `JALR` and `B<cond>` targets are wrong while forward offsets within +2^20 work, and
-  `FR-06` to `FR-08` are implemented for forward offsets only. Derivation in §11.1. Owner: designer.
-  Target: 2026-12-31.
+  lost; `T-01` does not see it because the sequence spaces instructions. The sanity run does:
+  `rv32ui-p-lb` and `rv32ui-p-lbu` time out at `pc=0x204`, and the triage puts them on this gap as a
+  load-use/data-stall fetch effect rather than on the `G-08` store-lane defect. Derivation in §11.1.
+  Owner: designer. Target: 2026-12-31.
+- **G-20** — **closed 2026-11-04 by WP-4c**: the branch and jump target added `imm[20:0]`, a 21-bit
+  unsigned slice, so every negative offset landed at `base + (imm mod 2^21)`. The fix is
+  `jump_addr = base_addr + imm` (`rtl/jump_decision.sv:111`), the full sign-extended immediate the
+  generator already produces (`rtl/instruction_decode.sv:218-226`). Consequence: closed; `T-12`
+  (`rv32ui-p-beq`) and the backward loops of the `rv32ui` images pass. Owner: designer. Target: closed
+  2026-11-04.
 - **G-21** — reset is asynchronous on both edges: every DUT module hardcodes `or negedge rst_n`
-  (`rtl/instruction_fetch.sv:69`, `rtl/control.sv:260`) and there is no de-assertion synchroniser and no
+  (`rtl/instruction_fetch.sv:74`, `rtl/control.sv:279`) and there is no de-assertion synchroniser and no
   `ASYNC_RESET`-style macro selection, while `D-09` and `FR-41` require async assertion with a
   synchronised release. Consequence: the release edge is asynchronous, so a de-assertion that arrives
   close to a clock edge can release different registers on different edges, and the FPGA
   synchronous-reset variant cannot be built at all. Owner: designer. Target: 2026-12-31.
 - **G-22** — no byte strobes and no split, taken from the RTL: `data_addr` is the registered ALU result
-  (`rtl/riscv_small.sv:119`), `data_wr` is always `rs2` (`rtl/riscv_small.sv:193`), the data ports of
+  (`rtl/riscv_small.sv:119`), `data_wr` is always `rs2` (`rtl/riscv_small.sv:195`), the data ports of
   `rtl/riscv_small.sv:51-57` carry no `data_wr_strb`, and no second-beat logic exists — `control` holds
-  no beat counter (`rtl/control.sv:87-256`).
+  no beat counter (`rtl/control.sv:101-275`).
   Consequence: a byte or halfword store cannot say which bytes of `data_wr` are valid, and an access
   crossing a word boundary cannot complete on a one-word port; the target is `data_wr_strb[3:0]` with
   the core driving the addressed lane plus the two-beat split (`FR-42`, `Q-28`, `Q-29`). Owner:
@@ -1735,41 +1794,42 @@ of `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of 
   cannot be observed in any configuration. Owner: designer. Target: 2026-12-31.
 - **G-25** — **closed 2026-10-30 by WP-4**: the MA forward block forced `alu_src2` to the store data,
   so a store's address became `rs1 + rs2` instead of `rs1 + imm` and `sw gp,tohost` went to `0x1`
-  (`rtl/control.sv:214`, `:223-227`). Consequence: closed; `T-08` and `rv32ui-p-simple` pass. Owner:
+  (`rtl/control.sv:228`, `:237-241`). Consequence: closed; `T-08` and `rv32ui-p-simple` pass. Owner:
   verification lead. Target: closed 2026-10-30.
-- **G-26** — operand forwarding: a value produced by the immediately preceding instruction does not
-  reach the next ALU operation, and because the suite's `li` expands to `lui` + `addi` almost every
-  image's operand setup is affected (`rv32ui-p-addi` case 3 yields 1 instead of 2,
-  `doc/measurements/NFR-05-riscv-tests.md:114`); the forward table of §7.2 is the intent of the code,
-  not an observed result. Consequence: `FR-16`, `FR-18` and `FR-19` stay `partial`, and this is a
-  **release blocker** for the `rv32ui` leg of `NFR-05`. Owner: verification lead. Target: 2026-12-31.
-- **G-27** — branch redirect: the first instruction at a taken branch target is neither fetched nor
-  executed (`rv32ui-p-and` branches to `0x538` and the fetch history resumes at `0x53c`,
-  `doc/measurements/NFR-05-riscv-tests.md:115`), so the `RVTEST_FAIL` path's `slli gp,gp,1` is skipped
-  and the reported `testnum` is a corrupted value. Consequence: the `FR-06` and `FR-08` evidence is
-  wrong, and this is a **release blocker** for the `rv32ui` leg of `NFR-05`. Owner: designer. Target:
-  2026-12-31.
+- **G-26** — **closed 2026-11-04 by WP-4c**: the branch comparison read the register file whatever the
+  producer's stage, because `instruction_decode`'s `jmp_src1`/`jmp_src2` inputs were unconnected and the
+  mux stayed on its `RD_ID` arm. The fix wires them from `control` (`rtl/riscv_small.sv:152-153`) into
+  the forward mux (`rtl/instruction_decode.sv:134-173`) and drives the `RD_EX` source with
+  `assign alu_ex = alu_result` (`rtl/execution.sv:190`). Consequence: closed; `T-11` (`rv32ui-p-addi`)
+  passes, and the `li`-expanded operand setup that failed on almost every image now works. Owner:
+  verification lead. Target: closed 2026-11-04.
+- **G-27** — **closed 2026-11-04 by WP-4c**: the decoder's PC was the *next* fetch's address, so the
+  word fetched at a taken branch target was decoded under `target + 4` and the instruction the branch
+  targeted was dropped. The fix registers `pc_fetch` and has IF/ID take `pc_fetch` with `inst_data`
+  (`rtl/instruction_fetch.sv:74-89`), and adds the `branch_taken_q` flush that discards the fetch in
+  flight (`rtl/control.sv:251-254`). Consequence: closed; `T-10` (`rv32ui-p-and`) passes and the
+  `RVTEST_FAIL` path reports the true `testnum` again. Owner: designer. Target: closed 2026-11-04.
 
 ### 11.1 Observed while writing this document
 
 Two behaviours below follow mechanically from the cited lines. They were found while writing this
-document and are now recorded as `G-19` and `G-20` in the canonical gap table; `G-20` is measured
-through `T-08` (`doc/measurements/NFR-05-riscv-tests.md:117`), while `G-19` has no registered test
+document and are now recorded as `G-19` and `G-20` in the canonical gap table. `G-20` closed on
+2026-11-04 with the WP-4c signed-immediate fix; `G-19` remains open and the sanity run now hits it
 (`G-04`, `G-11`).
 
 1. **G-19 — a write-back can be suppressed by a load-use insertion.** The register file's clock enable is
    `id_ex_clk_en` (`rtl/riscv_small.sv:142`, `rtl/instruction_decode.sv:195`,
    `rtl/reg_file.sv:99`), and all four insertions that flush EX/MA clear exactly that enable while
-   leaving `ma_wb_clk_en` high (`rtl/control.sv:122`, `:158`, `:195`, `:219`); the two branch cases
-   where the load is still in EX clear only `if_id_clk_en` (`:132-135`, `:168-171`) and do not lose
+   leaving `ma_wb_clk_en` high (`rtl/control.sv:136`, `:172`, `:209`, `:233`); the two branch cases
+   where the load is still in EX clear only `if_id_clk_en` (`:146-149`, `:182-185`) and do not lose
    the write. In each of those four cycles the instruction resident in WB is not written and is then
    dropped from MA/WB, so its architectural
    write is lost. The data-wait stall is not affected because it clears all four enables
-   (`rtl/control.sv:249-254`).
-2. **G-20 — the branch/jump target uses an unsigned 21-bit slice of the immediate.** `jump_addr = base_addr
-   + imm[20:0]` (`rtl/jump_decision.sv:111`) drops the sign extension of a negative offset, so a
-   backward `JAL`/`JALR`/`B<cond>` would not reach `pc + offset`, and `JALR` additionally lacks the
-   bit-0 clear of `G-07`.
+   (`rtl/control.sv:267-273`).
+2. **G-20 — the branch/jump target used an unsigned 21-bit slice of the immediate (closed).**
+   `jump_addr = base_addr + imm[20:0]` (`rtl/jump_decision.sv:111` before WP-4c) dropped the sign
+   extension of a negative offset, so a backward `JAL`/`JALR`/`B<cond>` did not reach `pc + offset`;
+   the line now reads `+ imm` and `JALR` still lacks the bit-0 clear of `G-07`.
 
 ## 12. References
 

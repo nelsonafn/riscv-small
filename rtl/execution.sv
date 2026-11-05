@@ -182,5 +182,11 @@ import riscv_definitions_pkg::*;
         .alu_data2     (alu_data2), //[in] Registered alu result to memory access (ma) 
         .alu_result    (alu_result)  //[out] ALU result to pipeline 
     );
-    
+
+    /*
+     * ALU result before the EX/MA register, used by the jump comparison in ID
+     * to forward the value produced by the instruction currently in EX.
+     */
+    assign alu_ex = alu_result;
+
 endmodule: execution

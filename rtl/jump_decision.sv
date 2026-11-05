@@ -92,8 +92,8 @@ import riscv_definitions_pkg::*;
 
 	/* 
      * Calculate the address of the branch.
-	 * It uses only the less 20 significative bits of the immediate since J-type 
-	 * and B-type immediate is maximum 20 bit long.
+	 * imm is already sign-extended to 32 bits by imm_gen, so the full value
+	 * must be added; slicing imm[20:0] zero-extends a negative offset.
      */
 	always_comb begin: addr_calc
 		case (base_addr_sel)
@@ -108,7 +108,7 @@ import riscv_definitions_pkg::*;
 			end
 		endcase
 
-		jump_addr = base_addr + imm[20:0];
+		jump_addr = base_addr + imm;
 	end: addr_calc
 
 	/* 

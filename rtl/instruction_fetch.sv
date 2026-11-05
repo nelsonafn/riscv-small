@@ -59,20 +59,32 @@ import riscv_definitions_pkg::*;
 );
 
     dataBus_t pc;
+    /* Address of the fetch whose instruction is returning now. The instruction
+     * memory answers one cycle after inst_addr is presented, so the PC that
+     * belongs to inst_data is the previous cycle's PC, not the current one. */
+    dataBus_t pc_fetch;
 
     assign inst_addr = pc;
 
     /* 
      * Register PC (pc_id) and instruction (inst_id) for instruction decode (id)
-     * stage.
+     * stage. pc_fetch keeps pc_id aligned with inst_data; without it the
+     * decoder sees the PC of the next instruction (branch target +4).
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_if_id
-        if(~rst_n || flush) begin
+        if(~rst_n) begin
             pc_id <= 'b0;
             inst_id <= 'b0;
+            pc_fetch <= 'b0;
         end else if(clk_en) begin
-            pc_id <= pc;
-            inst_id <= inst_data;
+            pc_fetch <= pc;
+            if(flush) begin
+                pc_id <= 'b0;
+                inst_id <= 'b0;
+            end else begin
+                pc_id <= pc_fetch;
+                inst_id <= inst_data;
+            end
         end
     end: proc_if_id
 

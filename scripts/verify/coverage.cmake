@@ -83,7 +83,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
             riscv_xsim_command(TEST_CMD SNAPSHOT top_sim_cov TEST "${TEST_CLASS}"
                 LOG "${TEST_LOG}" SEED "${SEED}" SKIP_ENV RISCV_COVERAGE
                 COV_DB_DIR "${COV_DB}" COV_DB_NAME "cov_${TID}"
-                HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}" REQUIRE_SANITY)
+                HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}"
+                REQUIRE_SANITY SANITY_IMAGE "${TEST_IMAGE}")
         endif()
         add_test(NAME COV-${TID} COMMAND bash -c "${TEST_CMD}"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")

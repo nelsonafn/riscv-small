@@ -7,9 +7,9 @@
 // Verdict for the image/ISA path. It subscribes to the MONITOR (never to the
 // driver) and decides from what the DUT actually did:
 //
-//   data write to `tohost` == 1        -> SANITY: PASS
+//   data write to `tohost` == 1        -> SANITY: PASS image=<name>
 //   data write to `tohost` == n<<1|1   -> SANITY: FAIL testnum=n, uvm_error
-//   no such write before +MAX_CYCLES    -> SANITY: TIMEOUT, uvm_error
+//   no such write before +MAX_CYCLES    -> SANITY: TIMEOUT image=<name>, uvm_error
 //
 // Every verdict prints the last events (fetch and data) and triggers `done`;
 // the test owns the objection and waits for that event. The checker never
@@ -121,7 +121,7 @@ class riscv_small_sanity_checker extends uvm_component;
   function void report_timeout();
     if (finished) return;
     finished = 1;
-    $display("SANITY: TIMEOUT pc=0x%08h", last_pc);
+    $display("SANITY: TIMEOUT pc=0x%08h image=%s", last_pc, image_name);
     print_history(HISTORY_PRINT);
     `uvm_error("SANITY", $sformatf("timeout waiting for tohost=0x%08h", tohost))
     done.trigger();

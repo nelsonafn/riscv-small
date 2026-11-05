@@ -155,45 +155,51 @@ These are not questions to the designer; they are findings a designer should loo
 doing something nobody meant.
 
 1. **Fetch pairing.** The program counter advances on every cycle in which the IF/ID registers are not held,
-   and only those registers are flushed while the fetch grant is withheld (`rtl/control.sv:241-243`,
-   `rtl/instruction_fetch.sv:69-103`). Read literally, a fetch that is not granted is lost and the next fetch
+   and only those registers are flushed while the fetch grant is withheld (`rtl/control.sv:262-265`,
+   `rtl/instruction_fetch.sv:96-115`). Read literally, a fetch that is not granted is lost and the next fetch
    is accepted with the following address. Nothing in `tb/` observes the instruction/address pairing for a
    PC-relative instruction, so `AUIPC`, `JAL` and every branch are unchecked in exactly the place where this
    would show. Round 1 settled the contract (a line fill, and a stall that keeps the address) but not the
    defect: `FR-28` is the requirement, `G-09` is the finding, and the RTL still has the behaviour.
 2. **Dead trap state.** The interrupted address and cause are registered but no path reads them back
-   (`rtl/control.sv:257-268`) and no CSR instruction is decoded. Round 1 decided where the trap goes, so this
+   (`rtl/control.sv:279-289`) and no CSR instruction is decoded. Round 1 decided where the trap goes, so this
    is unfinished work rather than leftover scaffolding: `FR-23` is the requirement and `G-13` the blocker.
    The cause set `Q-04` left open is fixed by vol. II Table 6/7, and how the request carries the cause is
    settled by `Q-35` (a cause bus beside the request); what is still missing is the CSR file itself.
-3. **Store grant.** The stall at `rtl/control.sv:246` needs a load destination, so a store pulses its strobe
+3. **Store grant.** The stall at `rtl/control.sv:268` needs a load destination, so a store pulses its strobe
    for one cycle whatever the memory does. Under the new grant contract the core must hold the store until it
    is granted; the difference is silent with the current testbench, which grants every access immediately
    (`G-18`).
 4. **`x0` write discard versus register reset.** Writes to `x0` are dropped (`rtl/reg_file.sv:100-103`) while
    the whole file resets to `X` (`rtl/reg_file.sv:97`). Both are consistent, but the reset value is a choice,
    not a constraint; `A-04` records it and no question tests it.
-5. **Width encoding has four values, three are used.** The width output is the low two bits of the
-   instruction's `funct3` field (`rtl/riscv_small.sv:118`), so `011` and the encodings the decoder does not
-   support can still reach the port. Whether the port should saturate or those encodings should trap is part
-   of `Q-05`.
+5. **Width encoding has four values, two are used.** The width output is the one-bit cast
+   `logic'(rd_wr_ctrl)` (`rtl/riscv_small.sv:118`), which carries `funct3[0]` zero-extended, so `00` is byte
+   **and word** — a word access reads `00` — `01` is halfword, and `10`/`11` are unreachable. Whether the
+   port should saturate or those encodings should trap is part of `Q-05`.
 6. **`T-02` has no corner stimulus.** It is a factory override onto `T-01`'s sequence
    (`tb/tests/sequence_lib/riscv_small_corner_seq.sv:31`). It cannot be cited as evidence for anything until
    it generates boundary values (`G-11`).
-7. **The clock enable does not enable the clock.** `clk_en` is documented as global, but it reaches only the
-   trap-state register update (`rtl/riscv_small.sv:223`, `rtl/control.sv:262`). Legitimate for a core that
-   never needs pausing; misleading for an integrator who expects to stop it (`G-12`).
+7. **The clock enable does not enable the clock.** `clk_en` is documented as global, but it reaches only two
+   register updates inside the control block — `branch_taken_q` (`rtl/control.sv:96`) and the trap state
+   `sepc`/`scause` (`rtl/control.sv:284`) — through its single connection
+   (`rtl/riscv_small.sv:225`). Legitimate for a core that never needs pausing; misleading for an integrator
+   who expects to stop it (`G-12`).
 8. **Provenance of round item 5.** The handover lists answers 1, 2, 3, 4, 6 and 7. Item 5 is absent from both
    the answer list and the list of remaining questions, so it is either lost or was never asked. `Q-19` asks.
 9. **A load-use freeze also disables the register-file write.** The register file's clock enable is
    `id_ex_clk_en` (`rtl/instruction_decode.sv:195`, `rtl/riscv_small.sv:142`, `rtl/reg_file.sv:99`), and the
-   load-use insertions clear it while leaving `ma_wb_clk_en` high (`rtl/control.sv:122`, `:158`, `:195`, `:219`).
+   load-use insertions clear it while leaving `ma_wb_clk_en` high (`rtl/control.sv:136`, `:172`, `:209`,
+   `:233`).
    An instruction in WB during that cycle is not written and is then dropped from MA/WB. Not observed by `T-01`
    because the sequence spaces instructions. Recorded as `G-19`; found while writing `doc/uarch.md` §11.1.
-10. **The branch/jump target adds an unsigned 21-bit immediate slice.** `jump_addr = base_addr + imm[20:0]`
-    (`rtl/jump_decision.sv:111`) drops the sign extension, so a backward `JAL`, `JALR` or `B<cond>` lands at
-    `base + (imm mod 2^21)`. Forward offsets within +2^20 work, which is why no test sees it. Recorded as
-    `G-20`; found while writing `doc/uarch.md` §11.1.
+10. **The branch/jump target added an unsigned 21-bit immediate slice — resolved 2026-11-04.** As first
+    observed, `jump_addr = base_addr + imm[20:0]` (`rtl/jump_decision.sv:111` before WP-4c) dropped the sign
+    extension, so a backward `JAL`, `JALR` or `B<cond>` landed at `base + (imm mod 2^21)`; forward offsets
+    within +2^20 worked, which is why no test of that revision saw it. The line now reads `base_addr + imm`,
+    adding the whole immediate the generator already sign-extended (`rtl/jump_decision.sv:111`), so `G-20` is
+    closed and a backward offset is observed by `T-12` (`rv32ui-p-beq`). Recorded as `G-20`; found while
+    writing `doc/uarch.md` §11.1.
 
 ## Stop rule
 

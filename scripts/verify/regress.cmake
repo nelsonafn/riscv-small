@@ -68,7 +68,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
             set(TEST_TOHOST "${CMAKE_BINARY_DIR}/sanity_tests/tohost/${TEST_IMAGE}")
             riscv_xsim_command(TEST_CMD SNAPSHOT top_sim TEST "${TEST_CLASS}"
                 LOG "${TEST_LOG}" SEED "${SEED}"
-                HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}" REQUIRE_SANITY)
+                HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}"
+                REQUIRE_SANITY SANITY_IMAGE "${TEST_IMAGE}")
         endif()
         add_test(NAME ${TID} COMMAND bash -c "${TEST_CMD}"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")

@@ -84,6 +84,20 @@ import riscv_definitions_pkg::*; // import package into $unit space
     dataBus_u sepc;
     dataBus_u scause;
 
+    /* Branch resolved in the previous cycle. The instruction memory answers one
+     * cycle after the address is presented, so the fetch already in flight when
+     * the branch resolved must be discarded too. */
+    logic branch_taken_q;
+
+    always_ff @(posedge clk or negedge rst_n) begin: proc_branch_flush
+        if (!rst_n) begin: proc_branch_flush_rst
+            branch_taken_q <= 1'b0;
+        end: proc_branch_flush_rst
+        else if (clk_en) begin
+            branch_taken_q <= branch_taken;
+        end
+    end: proc_branch_flush
+
     always_comb begin: proc_forward_ctrl
         jmp_src1 = RD_ID;
         jmp_src2 = RD_ID;
@@ -232,6 +246,11 @@ import riscv_definitions_pkg::*; // import package into $unit space
         if (branch_taken) begin
             if_id_flush =  '1;
             pc_sel = JUMP;
+        end
+
+        // Discard the fetch that was already in flight when the branch resolved
+        if (branch_taken_q) begin
+            if_id_flush =  '1;
         end
 
         if (exception) begin
