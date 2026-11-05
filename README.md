@@ -126,10 +126,12 @@ Test-first is a process rule: the test must fail before the fix exists. A *store
 with `rm -rf build`, cannot be regenerated once the RTL is fixed, and does not exist on a fresh machine. So the gate
 does not trust it. Instead, every test that covers a defect carries the defect it must catch:
 
-`scripts/verify/mutants/<name>.cmake` reintroduces the defect as a one-line change. `make negative-control` copies the
-tree into `build/mutants/<T-id>/`, applies the mutant there, runs the test and requires a UVM failure, then publishes
-`build/red/<T-id>/results.json`; check 11 reads that result. The repository is never edited, nothing depends on stored
-history, and `rm -rf build` is always safe — the next gate reintroduces the defect and proves the test again.
+`scripts/verify/mutants.tsv` is the catalogue: one row per mutant with the file, the exact text to replace, the
+replacement and why. `make negative-control` copies the tree into `build/mutants/<T-id>/`, applies that row there with
+`riscv_patch_once()` — a single-occurrence text replacement that knows nothing about SystemVerilog —, runs the test and
+requires a UVM failure, then publishes `build/red/<T-id>/results.json`; check 11 reads that result. The repository is
+never edited, nothing depends on stored history, and `rm -rf build` is always safe — the next gate reintroduces the
+defect and proves the test again.
 
 If a test passes on its mutant, the gate fails with `the test does not catch this defect`: that is a test without
 teeth, not a tooling problem.

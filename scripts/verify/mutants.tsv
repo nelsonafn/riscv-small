@@ -1,0 +1,49 @@
+# scripts/verify/mutants.tsv - the mutant catalogue
+#
+# One row per mutant: the source change that reintroduces the defect a test
+# claims to cover. `tests.tsv` selects a mutant by name (`red = mutant:<name>`);
+# this file says what that name does. Nothing here is executed: the engine is
+# riscv_mutant_apply() in common.cmake, and it treats the file as text -- it
+# knows nothing about SystemVerilog.
+#
+#   name <TAB> file <TAB> find <TAB> replace <TAB> why
+#
+# name      the string tests.tsv names as `mutant:<name>`
+# file      path relative to the repository root
+# find      the exact text to replace; it must occur EXACTLY once in file,
+#           otherwise the mutant is stale and the gate aborts
+# replace   the text that reintroduces the defect
+# why       one line, printed when the mutant is applied and by --list
+#
+# '#' starts a comment line; a comment block above a row is that mutant's
+# rationale. `;` is escaped by riscv_tsv_rows()/riscv_tsv_cell(), so SV
+# statements with a semicolon are fine in a cell. The root-cause narrative
+# stays in doc/verification.md (G-20/G-26/G-27, FR-12); this file only says
+# what the mutation does.
+#
+# T-06 (FR-12): the pre-fix core ignored the address low bits and always
+# extended the byte at the highest address, so 8 of the 12 T-06 cases stored
+# the wrong value. Pinning the lane to 3 reproduces exactly that.
+T-06	rtl/memory_access.sv	assign ld_lane = alu_wb.u_data[1:0];	assign ld_lane = 2'b11; // negative control: lane never selected	the sub-word lane is not selected from the address (pre-fix FR-12)
+#
+# T-08 (NFR-05): rv32ui-p-simple has no test case; the verdict rests on ADDI
+# producing 1 and the store reaching tohost. Ignoring the second operand turns
+# `li gp,1` into `li gp,0` and breaks `la t5,tohost`, so the harness must
+# report SANITY: TIMEOUT plus a UVM error.
+sanity-addi	rtl/alu.sv	alu_result = alu_data1.s_data + alu_data2.s_data;	alu_result = alu_data1.s_data; // negative control: ADD ignores the second operand	ADDI/ADD ignore their second operand, so `li gp,1` writes 0 and the pass store writes 0
+#
+# T-09 (WP-4b): T-09 sets is_active=UVM_PASSIVE and requires the monitor only.
+# Removing the guard builds the driver/sequencer in passive mode.
+passive-agent-always-active	tb/env/agents/riscv_small_agent/riscv_small_agent.sv	    if (is_active == UVM_ACTIVE) begin	    if (1'b1) begin // negative control: UVM_PASSIVE ignored	the agent builds the driver/sequencer even when is_active=UVM_PASSIVE
+#
+# T-10 (G-27): reverting pc_id to the current `pc` misaligns the decoder PC by
+# one instruction: a branch at 0xa0 targets 0x53c instead of 0x538.
+branch-redirect	rtl/instruction_fetch.sv	pc_id <= pc_fetch;	pc_id <= pc; // negative control: one-instruction PC misalignment	the decoder sees the next instruction's PC, so a branch target is +4 (G-27)
+#
+# T-11 (G-26): alu_ex is the EX source of the ALU/jump forwarding; leaving it
+# unknown loses the predecessor's value.
+forward-rs1	rtl/execution.sv	assign alu_ex = alu_result;	assign alu_ex = 'x; // negative control: EX forward source missing	the EX-stage forward source is unknown, so the predecessor's value is lost (G-26)
+#
+# T-12 (G-20): slicing imm[20:0] zero-extends a negative offset and sends the
+# branch to the 0x200000-family; rv32ui-p-beq times out.
+negative-branch	rtl/jump_decision.sv	jump_addr = base_addr + imm;	jump_addr = base_addr + imm[20:0]; // negative control: zero-extended offset	a negative branch/jump offset is zero-extended (G-20)

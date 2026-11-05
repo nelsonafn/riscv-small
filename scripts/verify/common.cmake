@@ -5,6 +5,8 @@
 # and signoff_check.cmake, in configure mode and in `cmake -P` mode. It defines
 # functions and two path variables; it never declares a target.
 #
+#   riscv_tsv_rows(OUT <file>)                  rows of a tab-separated table, `|`-joined
+#   riscv_tsv_cell(OUT <row> <index>)           one cell; `;` restored, spaces kept
 #   riscv_manifest_rows(OUT <tests.tsv>)        one row: T-id|uvm_test|wp|frs|timeout|red|extra
 #   riscv_manifest_extra(OUT <row>)             the optional 7th column (`sanity:<image>`)
 #   riscv_manifest_sanity_images(OUT <manifest>) images named by the 7th column
@@ -16,6 +18,9 @@
 #   riscv_ctest_run(<junit> <workdir> LOG <log> [ENV ...] [SELECT ...])
 #   riscv_xsim_command(OUT ...)                 the one `bash -c` xsim command string
 #                                               (`SANITY_IMAGE` pins the verdict line)
+#   riscv_mutant_names(OUT <mutants.tsv>)       the `name` column of the catalogue
+#   riscv_patch_once(<file> <find> <replace> <why>) exact single-occurrence text patch
+#   riscv_mutant_apply(<tree> <name> <tsv>)     every row named <name>, in table order
 #
 # Everything that was copied once per gate lives here. A gate module declares
 # only what is its own: its selection, its artefacts and its verdict.
@@ -46,22 +51,47 @@ function(riscv_read_lines OUT_VAR FILE)
     set(${OUT_VAR} "${LINES}" PARENT_SCOPE)
 endfunction()
 
-# --- manifest ----------------------------------------------------------------
-function(riscv_manifest_rows OUT_VAR MANIFEST)
-    if(NOT EXISTS "${MANIFEST}")
-        message(FATAL_ERROR "manifest not found: ${MANIFEST}")
+# --- tab-separated tables ----------------------------------------------------
+# One reader for every data file the gates own (tests.tsv, mutants.tsv). A row
+# comes back as `field|field|...` because `;` is CMake's list separator;
+# riscv_tsv_cell() is the only accessor and it restores the `;`, so a cell may
+# contain a SystemVerilog statement. It reads through riscv_read_lines, not
+# file(STRINGS), which splits a line at every non-ASCII byte.
+function(riscv_tsv_rows OUT_VAR FILE)
+    if(NOT EXISTS "${FILE}")
+        message(FATAL_ERROR "table not found: ${FILE}")
     endif()
-    file(STRINGS "${MANIFEST}" LINES)
+    riscv_read_lines(LINES "${FILE}")
     set(ROWS "")
     foreach(LINE IN LISTS LINES)
-        if(LINE MATCHES "^#" OR LINE STREQUAL "")
+        string(REGEX REPLACE "\r$" "" LINE "${LINE}")
+        if(LINE MATCHES "^[ \t]*(#|$)")
             continue()
         endif()
-        # `|` because `;` is CMake's list separator and the fields are already a
-        # list by the time a caller splits them.
+        # Leading spaces are data (a mutated SV line carries its indentation).
         string(REPLACE "\t" "|" ROW "${LINE}")
         list(APPEND ROWS "${ROW}")
     endforeach()
+    set(${OUT_VAR} "${ROWS}" PARENT_SCOPE)
+endfunction()
+
+# 0-based cell. An absent column is ""; spaces are never stripped.
+function(riscv_tsv_cell OUT_VAR ROW INDEX)
+    string(REPLACE "|" ";" CELLS "${ROW}")
+    list(LENGTH CELLS N)
+    if(N LESS_EQUAL ${INDEX})
+        set(${OUT_VAR} "" PARENT_SCOPE)
+        return()
+    endif()
+    list(GET CELLS ${INDEX} CELL)
+    string(REPLACE "@SEMI@" ";" CELL "${CELL}")
+    set(${OUT_VAR} "${CELL}" PARENT_SCOPE)
+endfunction()
+
+# --- manifest ----------------------------------------------------------------
+# tests.tsv keeps its contract: T-id|uvm_test|wp|requirements|timeout|red|extra
+function(riscv_manifest_rows OUT_VAR MANIFEST)
+    riscv_tsv_rows(ROWS "${MANIFEST}")
     set(${OUT_VAR} "${ROWS}" PARENT_SCOPE)
 endfunction()
 
@@ -268,4 +298,69 @@ function(riscv_xsim_command OUT_VAR)
         endif()
     endif()
     set(${OUT_VAR} "${CMD}" PARENT_SCOPE)
+endfunction()
+
+# --- mutant catalogue --------------------------------------------------------
+function(riscv_mutant_names OUT_VAR TABLE)
+    riscv_tsv_rows(ROWS "${TABLE}")
+    set(NAMES "")
+    foreach(ROW IN LISTS ROWS)
+        riscv_tsv_cell(N "${ROW}" 0)
+        # `if(N)` would be false: N is a named false constant (NO), not a value.
+        if(NOT N STREQUAL "")
+            list(APPEND NAMES "${N}")
+        endif()
+    endforeach()
+    set(${OUT_VAR} "${NAMES}" PARENT_SCOPE)
+endfunction()
+
+# The one mutation mechanism: an exact single-occurrence text replacement. It
+# knows nothing about RTL, UVM or tests -- a file and two strings. `find` must
+# occur exactly once, or the mutant is stale and the gate aborts (a silent 0- or
+# 2-replacement would prove nothing).
+function(riscv_patch_once FILE FIND REPLACE_TEXT WHY)
+    if(NOT EXISTS "${FILE}")
+        message(FATAL_ERROR "mutant: ${FILE} does not exist")
+    endif()
+    if(FIND STREQUAL "" OR FIND STREQUAL REPLACE_TEXT)
+        message(FATAL_ERROR "mutant: empty or no-op find in ${FILE}; the mutant proves nothing")
+    endif()
+    file(READ "${FILE}" TEXT)
+    string(REPLACE "${FIND}" "" STRIPPED "${TEXT}")
+    string(LENGTH "${TEXT}" LEN_FULL)
+    string(LENGTH "${STRIPPED}" LEN_STRIPPED)
+    string(LENGTH "${FIND}" LEN_NEEDLE)
+    math(EXPR COUNT "(${LEN_FULL} - ${LEN_STRIPPED}) / ${LEN_NEEDLE}")
+    if(NOT COUNT EQUAL 1)
+        message(FATAL_ERROR "mutant: '${FIND}' occurs ${COUNT} time(s) in ${FILE}; the mutant is stale")
+    endif()
+    string(REPLACE "${FIND}" "${REPLACE_TEXT}" MUTATED "${TEXT}")
+    file(WRITE "${FILE}" "${MUTATED}")
+    message(STATUS "mutant: ${FILE} <- ${WHY}")
+endfunction()
+
+# Apply every row of <table> named <name>, in table order, under <tree>.
+function(riscv_mutant_apply TREE NAME TABLE)
+    riscv_tsv_rows(ROWS "${TABLE}")
+    set(INDEX 0)
+    set(HITS 0)
+    foreach(ROW IN LISTS ROWS)
+        math(EXPR INDEX "${INDEX} + 1")
+        riscv_tsv_cell(N "${ROW}" 0)
+        if(NOT N STREQUAL NAME)
+            continue()
+        endif()
+        riscv_tsv_cell(F "${ROW}" 1)
+        riscv_tsv_cell(S "${ROW}" 2)
+        riscv_tsv_cell(R "${ROW}" 3)
+        riscv_tsv_cell(W "${ROW}" 4)
+        if(F STREQUAL "" OR S STREQUAL "" OR W STREQUAL "")
+            message(FATAL_ERROR "${TABLE} row ${INDEX} (${NAME}): file, find and why are required")
+        endif()
+        riscv_patch_once("${TREE}/${F}" "${S}" "${R}" "${W}")
+        math(EXPR HITS "${HITS} + 1")
+    endforeach()
+    if(HITS EQUAL 0)
+        message(FATAL_ERROR "mutant '${NAME}' has no row in ${TABLE}")
+    endif()
 endfunction()

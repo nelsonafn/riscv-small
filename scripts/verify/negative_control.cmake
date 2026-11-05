@@ -7,8 +7,8 @@
 #
 # A "red" run recorded in the past cannot be trusted: it lives in build/, so
 # `rm -rf build` erases it, and it cannot be regenerated once the RTL is fixed.
-# Instead, every test that claims to cover a defect carries its mutant in
-# scripts/verify/mutants/<name>.cmake: the one-line source change that
+# Instead, every test that claims to cover a defect names its mutant in
+# scripts/verify/mutants.tsv: the row holds the one-line source change that
 # reintroduces the defect. This runner copies the tree into
 # build/mutants/<T-id>/, applies the mutant there, runs the test and requires a
 # UVM failure. The repository is never edited and nothing depends on history.
@@ -24,7 +24,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/common.cmake)
 get_filename_component(ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(BUILD "${ROOT}/build")
 set(MANIFEST "${ROOT}/scripts/verify/tests.tsv")
-set(MUTANT_DIR "${ROOT}/scripts/verify/mutants")
+set(MUTANT_TABLE "${ROOT}/scripts/verify/mutants.tsv")
 set(OUT "${BUILD}/red")
 
 # --- arguments ---------------------------------------------------------------
@@ -48,8 +48,14 @@ if(CMAKE_ARGC GREATER 3)
 endif()
 
 # --- selection: every manifest row whose red column names a mutant -----------
+# The catalogue is read once. A name no row defines must fail here, before any
+# tree is copied: otherwise the gate would run the unmutated RTL and report a
+# typo as a test without teeth.
+riscv_mutant_names(CATALOGUE "${MUTANT_TABLE}")
+
 riscv_manifest_rows(ROWS "${MANIFEST}")
 set(SELECTED "")
+set(REFERENCED "")
 foreach(ROW IN LISTS ROWS)
     string(REPLACE "|" ";" FIELDS "${ROW}")
     list(LENGTH FIELDS NF)
@@ -62,6 +68,10 @@ foreach(ROW IN LISTS ROWS)
         continue()
     endif()
     set(NAME "${CMAKE_MATCH_1}")
+    if(NOT NAME IN_LIST CATALOGUE)
+        message(FATAL_ERROR "${TID} names mutant '${NAME}', but ${MUTANT_TABLE} has no such row")
+    endif()
+    list(APPEND REFERENCED "${NAME}")
     if(REQUESTED AND NOT TID IN_LIST REQUESTED)
         continue()
     endif()
@@ -69,11 +79,27 @@ foreach(ROW IN LISTS ROWS)
 endforeach()
 
 if(DO_LIST)
+    riscv_tsv_rows(MUTANT_ROWS "${MUTANT_TABLE}")
     foreach(ENTRY IN LISTS SELECTED)
         string(REPLACE "|" ";" CELL "${ENTRY}")
         list(GET CELL 0 TID)
         list(GET CELL 1 NAME)
-        message("${TID}  mutant=${NAME}")
+        set(FILE "")
+        set(WHY "")
+        foreach(MROW IN LISTS MUTANT_ROWS)
+            riscv_tsv_cell(MNAME "${MROW}" 0)
+            if(MNAME STREQUAL NAME)
+                riscv_tsv_cell(FILE "${MROW}" 1)
+                riscv_tsv_cell(WHY "${MROW}" 4)
+            endif()
+        endforeach()
+        message("${TID}  mutant=${NAME}  ${FILE}  ${WHY}")
+    endforeach()
+    # A row nothing selects is dead weight or a test that lost its red run.
+    foreach(NAME IN LISTS CATALOGUE)
+        if(NOT NAME IN_LIST REFERENCED)
+            message(STATUS "negative control: ${NAME} is in the catalogue but no test names it")
+        endif()
     endforeach()
     return()
 endif()
@@ -97,11 +123,6 @@ foreach(ENTRY IN LISTS SELECTED)
     list(GET CELL 0 TID)
     list(GET CELL 1 NAME)
 
-    set(MUTANT "${MUTANT_DIR}/${NAME}.cmake")
-    if(NOT EXISTS "${MUTANT}")
-        message(FATAL_ERROR "${TID} names mutant '${NAME}', but ${MUTANT} does not exist")
-    endif()
-
     set(SCRATCH "${BUILD}/mutants/${TID}")
     file(REMOVE_RECURSE "${SCRATCH}")
     file(MAKE_DIRECTORY "${SCRATCH}")
@@ -113,12 +134,10 @@ foreach(ENTRY IN LISTS SELECTED)
               "${ROOT}/CMakeLists.txt" "${ROOT}/configure" DESTINATION "${SCRATCH}")
     file(CREATE_LINK "${ROOT}/src" "${SCRATCH}/src" SYMBOLIC)
 
-    execute_process(
-        COMMAND ${CMAKE_COMMAND} "-DSCRATCH=${SCRATCH}" -P "${MUTANT}"
-        RESULT_VARIABLE RC OUTPUT_FILE "${SCRATCH}/mutant.log" ERROR_FILE "${SCRATCH}/mutant.log")
-    if(NOT RC EQUAL 0)
-        message(FATAL_ERROR "${TID}: mutant '${NAME}' could not be applied; see build/mutants/${TID}/mutant.log")
-    endif()
+    # One mechanism for every mutant: an exact single-occurrence text patch on
+    # the copy, which aborts if the row no longer matches the tree. Its `why` is
+    # a STATUS line, so the gate output says which defect was rebuilt.
+    riscv_mutant_apply("${SCRATCH}" "${NAME}" "${MUTANT_TABLE}")
 
     message(STATUS "negative control: running ${TID} against mutant '${NAME}'")
     execute_process(

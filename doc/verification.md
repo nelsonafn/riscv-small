@@ -111,8 +111,8 @@ itself make a row `deferred`: `deferred` is about the capability, not about the 
 in `CMakeLists.txt` §12, so `make signoff-check` and `make -C build signoff-check` are the same command. It writes
 `build/signoff/report.md`; `make signoff-check SIGNOFF_ARGS="--wp <n>"` runs the work-package subset (checks 1-5,
 7 and 11). Check 11 is what makes the work-package gate test-first rather than pass-only, and it is reproducible: every
-test with `red = mutant:<name>` is rebuilt against the defect in `scripts/verify/mutants/<name>.cmake` (a disposable
-copy under `build/mutants/<T-id>/`) and must fail there. A stored red log is never used, so `rm -rf build` does not
+test with `red = mutant:<name>` is rebuilt against the defect named by the `<name>` row of `scripts/verify/mutants.tsv`
+(a disposable copy under `build/mutants/<T-id>/`, patched once by `riscv_patch_once()`) and must fail there. A stored red log is never used, so `rm -rf build` does not
 destroy the evidence.
 
 The tests run under CTest: `CMakeLists.txt` §12 declares one CTest test per line of `scripts/verify/tests.tsv`, with

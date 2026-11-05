@@ -10,7 +10,7 @@
 # wp            the work package that owns the test (0 = baseline / pilot)
 # requirements  comma-separated FR-NN ids the test is evidence for, '-' if none
 # timeout_s     hard wall-clock limit for one xsim run, in seconds
-# red           mutant:<name>: scripts/verify/mutants/<name>.cmake reintroduces the defect
+# red           mutant:<name>: the <name> row of scripts/verify/mutants.tsv reintroduces the defect
 #               this test covers; the negative control rebuilds it and requires the test to fail
 #               no: the test predates the flow; there is no mutant yet
 #
