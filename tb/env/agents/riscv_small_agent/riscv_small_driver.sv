@@ -34,10 +34,10 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
   // Image memory model (riscv_small_sanity_test)
   //
   // mem_mode is 0 unless the test publishes sanity_mode=1, so the directed
-  // memory behaviour below is untouched. The model is word-granular: a store
-  // writes the whole word, so LB/LH/LBU/LHU/SB/SH are NOT modelled. That is the
-  // documented limit until FR-11/G-22 add byte strobes to the DUT
-  // (`data_rd_wr_ctrl` is effectively one bit today).
+  // memory behaviour below is untouched. The model applies the DUT's byte
+  // strobes: `data_wr_strb[b]` selects the byte lanes of `data_wr` that the core
+  // drives, so SB/SH/SW write exactly the bytes the contract names and the
+  // memory never shifts or justifies (FR-11, Q-28).
   // ---------------------------------------------------------------------------
   bit          mem_mode;
   bit          trace;
@@ -45,6 +45,7 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
 
   bit warned_imem_range;
   bit warned_dmem_range;
+  bit warned_zero_strb;
 
   function new (string name, uvm_component parent);
     super.new(name, parent);
@@ -68,6 +69,26 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     foreach (vec[i]) 
         s = {s, $sformatf("%0h%s", vec[i], (i == vec.size()-1) ? "" : ",")};
     return {s,"}"};
+  endfunction
+
+  // Apply the DUT's byte strobes to one word. This is the memory's job and the
+  // only thing the driver does with `data_wr_strb`: it neither judges the
+  // pattern nor derives it. A zero strobe with `data_wr_en` writes nothing --
+  // the grant still completes -- and is logged once, not per access.
+  function automatic logic [31:0] apply_strobes(logic [31:0] word,
+                                                logic [31:0] data,
+                                                logic [3:0]  strb,
+                                                logic [31:0] addr);
+    if (strb == 4'b0000) begin
+      if (!warned_zero_strb) begin
+        warned_zero_strb = 1;
+        `uvm_info("STRB_ZERO_DRV", $sformatf("STRB_ZERO: data_wr_en with data_wr_strb=4'b0000 at addr='h%0h; no byte written, further zero-strobe writes are silent", addr), UVM_LOW)
+      end
+      return word;
+    end
+    for (int b = 0; b < 4; b++)
+      if (strb[b]) word[8*b +: 8] = data[8*b +: 8];
+    return word;
   endfunction
 
   virtual task run_phase(uvm_phase phase);
@@ -132,8 +153,11 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
                 vif.data_rd.u_data <= #INPUT_DELAY req.data_list[i];
                 `uvm_info("DFETCH_DRV", $sformatf("ADDR='h%0h DATA='h%0h", vif.data_addr.u_data, req.data_list[i]), UVM_LOW);
               end else begin
-                req.data_list[i] = vif.data_wr.u_data;
-                `uvm_info("DSTORE_DRV", $sformatf("ADDR='h%0h DATA='h%0h", vif.data_addr.u_data, vif.data_wr.u_data), UVM_LOW);
+                req.data_list[i] = apply_strobes(req.data_list[i],
+                                                  vif.data_wr.u_data,
+                                                  vif.data_wr_strb,
+                                                  vif.data_addr.u_data);
+                `uvm_info("DSTORE_DRV", $sformatf("ADDR='h%0h DATA='h%0h STRB=0b%04b", vif.data_addr.u_data, vif.data_wr.u_data, vif.data_wr_strb), UVM_LOW);
               end
               vif.data_ready <= #INPUT_DELAY 1;
               found = 1;
@@ -199,6 +223,7 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     cycles = 0;
     warned_imem_range = 0;
     warned_dmem_range = 0;
+    warned_zero_strb = 0;
 
     forever begin
       @(posedge vif.clk);
@@ -245,11 +270,14 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
           $display("TRACE[%0d] DREAD  addr=0x%08h data=0x%08h", cycles, vif.data_addr.u_data, word);
       end else if (vif.data_wr_en) begin
         idx = vif.data_addr.u_data >> 2;
-        // Word-granular on purpose: the DUT exposes no byte strobes yet
-        // (FR-11/G-22). SB/SH therefore write the whole word here and are
-        // measured as failures elsewhere, not silently emulated.
+        // Byte strobes are the DUT's contract: only the lanes it drives change,
+        // so a byte or halfword store is a read-modify-write here exactly as it
+        // is in a real memory (FR-11, Q-28).
         if (idx <= 32'h0000_FFFF) begin
-          mem[idx] = vif.data_wr.u_data;
+          mem[idx] = apply_strobes(mem[idx],
+                                   vif.data_wr.u_data,
+                                   vif.data_wr_strb,
+                                   vif.data_addr.u_data);
         end else begin
           if (!warned_dmem_range) begin
             warned_dmem_range = 1;
@@ -258,7 +286,7 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
         end
         vif.data_ready <= #INPUT_DELAY 1;
         if (trace)
-          $display("TRACE[%0d] DWRITE addr=0x%08h data=0x%08h", cycles, vif.data_addr.u_data, vif.data_wr.u_data);
+          $display("TRACE[%0d] DWRITE addr=0x%08h data=0x%08h strb=0b%04b", cycles, vif.data_addr.u_data, vif.data_wr.u_data, vif.data_wr_strb);
       end
     end
   endtask

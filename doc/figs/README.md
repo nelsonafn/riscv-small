@@ -22,10 +22,13 @@ figure by ID, and this file records how each **non-Mermaid** figure is produced 
 | `wave/t3-fetch-stall.json5` | `wave/t3-fetch-stall.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.1 |
 
 The three timing figures are **as-built**: each draws the behaviour of `rtl/`, and where the RTL
-diverges from `spec.md` the caption names the gap (`G-09` for T3, `G-19` for T1). They are
-hand-derived from the enable and flush expressions in `rtl/control.sv`, not captured from a
-simulation trace. The `wavedrom-timing` skill fixes no colour configuration, so they use the
-documented WaveDrom default skin and differ only in `hscale`.
+diverges from `spec.md` the caption names the gap. T3 names the open `G-09`, the fetch stall that
+does not exist; T1 names `G-19` only as history, because WP-6 closed it on 2026-11-05, and then
+states the as-built behaviour that closed it: the register file is clocked by `clk_en_wb`, so the
+write in WB commits through a load-use insertion. They are hand-derived from the enable and flush
+expressions in `rtl/control.sv`, not captured from a simulation trace. The `wavedrom-timing` skill
+fixes no colour configuration, so they use the documented WaveDrom default skin and differ only in
+`hscale`.
 
 ## Frozen figures
 

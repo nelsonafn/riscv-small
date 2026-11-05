@@ -60,6 +60,7 @@ import riscv_definitions_pkg::*;
     output dataBus_u alu_ex, //[out] ALU result from execution not registered to jump forward (ex)
     output dataBus_u alu_ma, //[out] ALU result to memory access (ma)
     output dataBus_u rs2_ma, //[out] Reg source two (rs2) data
+    output logic [3:0] data_wr_strb_ma, //[out] Byte write strobe to memory access (ma)
 	output logic rd0_wr_en_ma,//[out] Reg destination (rd) write enable to pipeline to memory access
     output logic data_rd_en_ma, //[out] Data memory read enable (wb_mux_sel) to be used with funct3 
 	output logic data_wr_en_ma, //[out] Data memory write enable to be used together with funct3
@@ -84,6 +85,12 @@ import riscv_definitions_pkg::*;
     dataBus_u rs2_pipeline;
 
     /* 
+     * Store data placed in the addressed lane and its byte write strobe. 
+     */
+    dataBus_u rs2_lane;
+    logic [3:0] data_wr_strb_ex;
+
+    /* 
      * Register signals to be used in memory access (ma) stage. 
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_ex_ma
@@ -95,6 +102,7 @@ import riscv_definitions_pkg::*;
             funct3_ma <= LB;
             rd0_addr_ma <= '0;
             rs2_ma <= '0;
+            data_wr_strb_ma <= 4'b0000;
         end: proc_ex_ma_rst
         else if (clk_en) begin
             alu_ma <= alu_result;
@@ -103,7 +111,8 @@ import riscv_definitions_pkg::*;
             data_wr_en_ma <= data_wr_en;
             funct3_ma <= funct3;
             rd0_addr_ma <= rd0_addr;
-            rs2_ma <= rs2_pipeline;
+            rs2_ma <= rs2_lane;
+            data_wr_strb_ma <= data_wr_strb_ex;
         end        
     end: proc_ex_ma
 
@@ -172,6 +181,37 @@ import riscv_definitions_pkg::*;
             end
         endcase
     end: proc_rs2_mux
+
+    /* 
+     * Store lane and byte write strobe.
+     * The EX address (alu_result) selects the lane; the width comes from the
+     * single package decode (access_size), the same function that drives
+     * data_rd_wr_ctrl in the top level. With no write the strobe is zero.
+     */
+    always_comb begin: proc_store_lane
+        rs2_lane = rs2_pipeline;
+        data_wr_strb_ex = 4'b0000;
+        if (data_wr_en) begin
+            case (access_size(funct3))
+                ACCESS_BYTE: begin
+                    rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1:0], 3'b000};
+                    data_wr_strb_ex = 4'b0001 << alu_result.u_data[1:0];
+                end
+                ACCESS_HALF: begin
+                    rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1], 4'b0000};
+                    data_wr_strb_ex = 4'b0011 << {alu_result.u_data[1], 1'b0};
+                end
+                ACCESS_WORD: begin
+                    rs2_lane = rs2_pipeline;
+                    data_wr_strb_ex = 4'b1111;
+                end
+                default: begin
+                    rs2_lane = rs2_pipeline;
+                    data_wr_strb_ex = 4'b0000;
+                end
+            endcase
+        end
+    end: proc_store_lane
 
     /* 
      * ALU calculation

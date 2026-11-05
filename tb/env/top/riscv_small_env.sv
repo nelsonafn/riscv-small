@@ -6,7 +6,9 @@
 // The sequence publishes the program item on `program_port`; the reference
 // model subscribes to it in the directed mode. The driver never feeds the
 // reference. In sanity mode there is no reference model and no scoreboard: the
-// sanity checker component watches the monitor and owns the verdict.
+// sanity checker component watches the monitor and owns the verdict. The
+// coverage collector and the FR-11 strobe checker subscribe to the monitor in
+// both modes, so the store contract is watched by the image path too.
 //
 // Author: Nelson Alves nelsonafn@gmail.com
 // Date  : October 2023
@@ -24,6 +26,7 @@ class riscv_small_environment extends uvm_env;
   riscv_small_ref_model      ref_model;
   riscv_small_coverage       coverage;
   riscv_small_scoreboard     sb;
+  riscv_small_strb_checker   strb_checker;
   riscv_small_sanity_checker sanity_checker;
 
   /*
@@ -58,6 +61,9 @@ class riscv_small_environment extends uvm_env;
     program_port = new("program_port", this);
     riscv_small_agnt = riscv_small_agent::type_id::create("riscv_small_agent", this);
     coverage = riscv_small_coverage::type_id::create("coverage", this);
+    // FR-11 strobe/width invariant: no reference model needed, so it runs in
+    // both modes and the image path witnesses the byte/halfword arms.
+    strb_checker = riscv_small_strb_checker::type_id::create("strb_checker", this);
     if (!sanity_mode) begin
       ref_model = riscv_small_ref_model::type_id::create("ref_model", this);
       sb = riscv_small_scoreboard::type_id::create("sb", this);
@@ -73,6 +79,8 @@ class riscv_small_environment extends uvm_env;
     super.connect_phase(phase);
     // Coverage is sampled from what the DUT did, never from what the model predicted.
     riscv_small_agnt.monitor.mon2sb_port.connect(coverage.analysis_export);
+    // The strobe invariant is a property of one observation, not of a prediction.
+    riscv_small_agnt.monitor.mon2sb_port.connect(strb_checker.analysis_export);
     if (!sanity_mode) begin
       // The reference model is fed by the sequence, not by the driver.
       program_port.connect(ref_model.rm_export);

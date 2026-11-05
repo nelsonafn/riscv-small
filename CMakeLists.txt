@@ -451,7 +451,7 @@ add_custom_target(docs-check
 #   make regress REGRESS_ARGS="--test T-01 --wp 0"
 #   make regress REGRESS_ARGS="--record red --wp 0"   test-first evidence
 #   make sanity    [SANITY_ARGS="rv32ui-p-add"]
-#   make coverage  [COVERAGE_ARGS="--test T-01"]
+#   make coverage  [COVERAGE_ARGS="--test T-01 | --require-bins <cp.bin,...>"]
 #   make signoff-check [SIGNOFF_ARGS="--wp 0"]
 
 # --- regression: included, not duplicated ------------------------------------

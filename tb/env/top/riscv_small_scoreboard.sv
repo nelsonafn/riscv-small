@@ -13,6 +13,9 @@
 // For each STORE observed by the Monitor, the Scoreboard retrieves the next 
 // prediction from the RM queue and compares the address + data.
 //
+// The FR-11 store strobe <-> width invariant is NOT here: it lives in
+// riscv_small_strb_checker, which is built with or without a reference model.
+//
 // Author: Nelson Alves nelsonafn@gmail.com
 // ============================================================================
 class riscv_small_scoreboard extends uvm_scoreboard;

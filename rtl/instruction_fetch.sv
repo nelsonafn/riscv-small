@@ -64,7 +64,11 @@ import riscv_definitions_pkg::*;
      * belongs to inst_data is the previous cycle's PC, not the current one. */
     dataBus_t pc_fetch;
 
-    assign inst_addr = pc;
+    /* While IF/ID runs the request is the current PC. While IF/ID is paused
+     * the request follows pc_fetch, because pc_fetch is the address whose word
+     * is on the bus: re-requesting it keeps inst_data aligned with pc_id on the
+     * release cycle. */
+    assign inst_addr = clk_en ? pc : pc_fetch;
 
     /* 
      * Register PC (pc_id) and instruction (inst_id) for instruction decode (id)

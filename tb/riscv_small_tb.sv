@@ -47,6 +47,7 @@ module riscv_small_tb;
     .data_rd_en_ma(intf.data_rd_en),
     .data_wr_en_ma(intf.data_wr_en),
     .data_wr(intf.data_wr),
+    .data_wr_strb(intf.data_wr_strb),
     .data_addr(intf.data_addr),
     .data_rd_wr_ctrl(intf.data_rd_wr_ctrl)
   );

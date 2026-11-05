@@ -19,6 +19,7 @@ interface riscv_small_interface(input logic clk, rst_n);
   logic data_rd_en;
   logic data_wr_en;
   dataBus_u data_wr;
+  logic [3:0] data_wr_strb;
   dataBus_u data_addr;
   logic [1:0] data_rd_wr_ctrl;
 
@@ -42,6 +43,7 @@ interface riscv_small_interface(input logic clk, rst_n);
     input  data_rd_en,
     input  data_wr_en,
     input  data_wr,
+    input  data_wr_strb,
     input  data_addr,
     input  data_rd_wr_ctrl
   );
@@ -69,6 +71,7 @@ interface riscv_small_interface(input logic clk, rst_n);
     input data_rd_en,
     input data_wr_en,
     input data_wr,
+    input data_wr_strb,
     input data_addr,
     input data_rd_wr_ctrl
   );
@@ -96,6 +99,7 @@ interface riscv_small_interface(input logic clk, rst_n);
     output data_rd_en, //[out] Data memory read enable to be used with data_rd_wr_ctrl 
 	  output data_wr_en, //[out] Data memory write enable to be used with data_rd_wr_ctrl
     output data_wr, //[out] Data to data_memory
+    output data_wr_strb, //[out] Byte write strobe of data_wr, one bit per lane
     output data_addr,//[out] Address of next data
     output data_rd_wr_ctrl //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
   );

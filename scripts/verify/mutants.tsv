@@ -47,3 +47,19 @@ forward-rs1	rtl/execution.sv	assign alu_ex = alu_result;	assign alu_ex = 'x; // 
 # T-12 (G-20): slicing imm[20:0] zero-extends a negative offset and sends the
 # branch to the 0x200000-family; rv32ui-p-beq times out.
 negative-branch	rtl/jump_decision.sv	jump_addr = base_addr + imm;	jump_addr = base_addr + imm[20:0]; // negative control: zero-extended offset	a negative branch/jump offset is zero-extended (G-20)
+#
+# T-13 (FR-11 / G-08): rv32ui-p-sb walks every byte lane. Dropping the lane
+# shift leaves the stored byte at lane 0 while the strobe selects the addressed
+# byte, so every SB above lane 0 writes a zero.
+store-lane-offset	rtl/execution.sv	rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1:0], 3'b000};	rs2_lane.u_data = rs2_pipeline.u_data; // negative control: byte store ignores the lane	the byte value is not placed in the addressed lane (G-08)
+#
+# T-14 (FR-11 / G-22): rv32ui-p-sh stores at offsets 0 and 2. A halfword
+# strobe of 4'b1111 contradicts the halfword width and claims two bytes the
+# store did not drive.
+store-strb-all	rtl/execution.sv	data_wr_strb_ex = 4'b0011 << {alu_result.u_data[1], 1'b0};	data_wr_strb_ex = 4'b1111; // negative control: halfword strobe drives all four bytes	a halfword store announces four bytes (G-22)
+#
+# T-15 (FR-11 / G-08, G-22): rv32ui-p-st_ld mixes byte, half and word. Forcing
+# the width port to byte makes every halfword/word store report 2'b00 next to a
+# 2- or 4-bit strobe, which the strb_checker rejects even when the image's own
+# software verdict would pass.
+store-width-cast	rtl/riscv_small.sv	assign data_rd_wr_ctrl = access_size(rd_wr_ctrl);	assign data_rd_wr_ctrl = 2'b00; // negative control: width port forced to byte	the width port reports byte for every access (FR-11, the old one-bit cast)

@@ -35,6 +35,7 @@ class riscv_small_transaction extends uvm_sequence_item;
   int captured_data_rd;
   int captured_data_wr;
   int captured_data_wr_ctrl;
+  int captured_data_wr_strb;
 
   `uvm_object_utils_begin(riscv_small_transaction)
     `uvm_field_array_int(instruction_addr, UVM_ALL_ON)
@@ -52,6 +53,7 @@ class riscv_small_transaction extends uvm_sequence_item;
     `uvm_field_int(captured_data_rd, UVM_ALL_ON)
     `uvm_field_int(captured_data_wr, UVM_ALL_ON)
     `uvm_field_int(captured_data_wr_ctrl, UVM_ALL_ON)
+    `uvm_field_int(captured_data_wr_strb, UVM_ALL_ON)
   `uvm_object_utils_end
    
   function new(string name = "riscv_small_transaction");

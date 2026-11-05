@@ -24,14 +24,44 @@
 # skips them (exit 77 -> SKIP_RETURN_CODE) because it never built that snapshot;
 # the coverage target asks for them with RISCV_COVERAGE=1.
 #
-# Functional coverage is code-read: the collector must contain at least one
-# coverpoint. An empty covergroup makes it `missing_bins`, a signoff blocker.
+# Functional coverage is measured, not code-read: `coverpoints`, the bin counts
+# and the uncovered bin names come from parsing xcrg's text report, per
+# coverpoint and per bin. A report with zero coverpoints is `missing_bins`, a
+# signoff blocker; a report that has a CoverPoint Tables section but yields no
+# bin is a fatal parse error, never a silently published 0/0.
+#
+# --require-bins <cp.bin[,cp.bin]> (repeatable) turns the measurement into a
+# gate for a work package: every named bin must be present in the report and
+# covered (at least one hit). A bin absent from the report and a bin that exists
+# with zero hits are reported separately; both are exit 1, and the transcript
+# lands in build/require-bins-red.log, outside the report directory that every
+# run recreates, so the evidence of one failure survives the next run.
+#
+# Every summary.json records the requested list (`required`, empty when no list
+# was given) and the outcome of the bar (`require_bins`: none/ok/absent/
+# uncovered/mixed), apart from `status`, which reports the measurement only: a
+# failed --require-bins leaves `status: measured` and says why in `require_bins`.
+#
+# The A-09 bar is published apart from the report sum: `bar_covered`/`bar_total`
+# count only `cp_inst` (one bin per decoded instruction) and `cp_width` (one per
+# memory width). `cp_lane`/`cp_dir`/`cp_subword_lane` are extra evidence that
+# predates the bar, so they stay in `bins_covered`/`bins_total` and out of the
+# bar. The counts come from the parsed coverpoint rows, never from a hard-coded
+# 37/3: a covergroup change moves the bar instead of keeping a stale constant. A
+# missing bar coverpoint makes the bar unmeasurable (`bar_total: 0`, status
+# `missing_bins`, a reason naming it) instead of a plausible-looking 0.
+#
+# Bin names are data, not syntax: `\` and `"` are JSON-escaped on the way into
+# summary.json, because xcrg prints escaped identifiers verbatim (`\and`) and an
+# unusual bin name must not invalidate the report.
 #
 # Results: build/cov_db/ (per-test databases), build/cov_report/summary.json and
 #          the xcrg text report. The instrumented snapshot lives apart from
 #          `top_sim`, so a coverage run no longer invalidates the regression's.
 #
-# Exit codes: 0 measured, 1 measured but no coverpoint, 2 not measurable.
+# Exit codes: 0 measured; 1 not measured (absent report, no coverpoint, or a
+# failed --require-bins). CMake script mode has no other failure code, and
+# `make` reports any failed recipe as 2 on top of it.
 # =============================================================================
 
 set(DOLLAR "$")
@@ -126,7 +156,7 @@ if(CMAKE_ARGC GREATER 3)
         list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
-cmake_parse_arguments(R "" "seed;format" "test" ${ARGS})
+cmake_parse_arguments(R "" "seed;format" "test;require-bins" ${ARGS})
 if(R_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
 endif()
@@ -146,6 +176,21 @@ set(FORMAT "${R_format}")
 if(NOT FORMAT)
     set(FORMAT text)
 endif()
+
+# --require-bins is repeatable and CSV: `--require-bins a --require-bins b` and
+# `--require-bins "a,b"` mean the same list. Each entry is `<coverpoint>.<bin>`,
+# the same fully-qualified name summary.json publishes.
+set(REQUIRE_BINS "")
+foreach(ITEM IN LISTS R_require-bins)
+    string(REPLACE "," ";" CSV_ENTRIES "${ITEM}")
+    foreach(ENTRY IN LISTS CSV_ENTRIES)
+        string(STRIP "${ENTRY}" ENTRY)
+        if(NOT ENTRY STREQUAL "")
+            list(APPEND REQUIRE_BINS "${ENTRY}")
+        endif()
+    endforeach()
+endforeach()
+list(REMOVE_DUPLICATES REQUIRE_BINS)
 
 # --- selection: the CTest filters, on the coverage-labelled tests -------------
 set(CTEST_SELECT -L "^cov$")
@@ -243,22 +288,234 @@ if(PERCENTAGES)
     string(REPLACE ";" "," PERCENTAGES "${PERCENTAGES}")
 endif()
 
-# Functional coverage is code-read: it is measured only if the collector has a
-# coverpoint, whatever xcrg reports for code coverage.
-file(READ "${ROOT}/tb/env/top/riscv_small_coverage.sv" COV_SOURCE)
-string(REGEX MATCHALL "coverpoint" COV_POINTS "${COV_SOURCE}")
-list(LENGTH COV_POINTS N_COVERPOINTS)
+# Functional coverage is the report, not the collector source. Three regions
+# carry the facts:
+#   `Instance <inst> Cover Point Details` -> one row per coverpoint: name, table
+#       tag, expected/uncovered/covered bins;
+#   `Cover Point Table for Inst : <inst>, Variable :, <cp>` -> the `Uncovered
+#       bins` and `Covered bins` lists of `<bin> ,<hits> ,<atleast> ,`;
+#   `Coverage Score :, <pct>`, already parsed above.
+# Bins are published fully qualified as `<coverpoint>.<bin>`: a bare bin name is
+# ambiguous as soon as a second covergroup exists.
+set(IN_DETAILS FALSE)
+set(IN_BINS "")
+set(CURRENT_CP "")
+set(N_COVERPOINTS 0)
+set(BINS_TOTAL 0)
+set(BINS_COVERED 0)
+set(COVERED_BINS "")
+set(UNCOVERED_BINS "")
+set(REPORT_BINS "")
+set(BAR_COVERPOINTS "cp_inst;cp_width")
+set(BAR_SEEN "")
+set(BAR_COVERED 0)
+set(BAR_TOTAL 0)
+
+file(STRINGS "${REPORT_FILE}" REPORT_LINES)
+foreach(LINE IN LISTS REPORT_LINES)
+    # Region gates: a row is a coverpoint row only inside the details table, and
+    # a bin row only inside an Uncovered/Covered bins list.
+    if(LINE MATCHES "Cover Point Details")
+        set(IN_DETAILS TRUE)
+        set(IN_BINS "")
+    elseif(LINE MATCHES "CoverPoint Tables")
+        set(IN_DETAILS FALSE)
+        set(IN_BINS "")
+    endif()
+
+    if(LINE MATCHES "Cover Point Table for Inst")
+        string(REGEX REPLACE ".*Variable[ \t]*:,[ \t]*([A-Za-z_][A-Za-z0-9_]*).*"
+            "\\1" CURRENT_CP "${LINE}")
+        set(IN_BINS "")
+    elseif(LINE MATCHES "^[ \t]*Uncovered bins")
+        set(IN_BINS "uncovered")
+    elseif(LINE MATCHES "^[ \t]*Covered bins")
+        set(IN_BINS "covered")
+    elseif(LINE MATCHES "^[ \t]*Summary")
+        set(IN_BINS "")
+    endif()
+
+    # `cp_width ,cg_mem_obj.cg_mem_cp_width,3 ,1 ,2 ,66.6667 ,...`
+    if(IN_DETAILS AND LINE MATCHES "^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,([^,]*),([ \t]*[0-9]+)[ \t]*,([ \t]*[0-9]+)[ \t]*,([ \t]*[0-9]+)[ \t]*,([ \t]*[0-9.]+)")
+        set(CP_NAME "${CMAKE_MATCH_1}")
+        string(STRIP "${CMAKE_MATCH_3}" CP_EXPECTED)
+        string(STRIP "${CMAKE_MATCH_5}" CP_COVERED)
+        math(EXPR BINS_TOTAL "${BINS_TOTAL} + ${CP_EXPECTED}")
+        math(EXPR BINS_COVERED "${BINS_COVERED} + ${CP_COVERED}")
+        math(EXPR N_COVERPOINTS "${N_COVERPOINTS} + 1")
+        # The A-09 bar adds up only the coverpoints that define it.
+        list(FIND BAR_COVERPOINTS "${CP_NAME}" BAR_CP_INDEX)
+        if(NOT BAR_CP_INDEX EQUAL -1)
+            list(APPEND BAR_SEEN "${CP_NAME}")
+            math(EXPR BAR_COVERED "${BAR_COVERED} + ${CP_COVERED}")
+            math(EXPR BAR_TOTAL "${BAR_TOTAL} + ${CP_EXPECTED}")
+        endif()
+    endif()
+
+    # `      word_w      ,0           ,1           ,`
+    # The name is everything up to the first comma: explicit bins are
+    # identifiers, auto-bins are not (`[0]`), and dropping one silently would
+    # under-report `uncovered`.
+    if(IN_BINS AND LINE MATCHES "^[ \t]*([^,]+)[ \t]*,([ \t]*[0-9]+)[ \t]*,([ \t]*[0-9]+)[ \t]*,")
+        if(NOT CURRENT_CP STREQUAL "")
+            string(STRIP "${CMAKE_MATCH_1}" BIN_NAME)
+            set(QBIN "${CURRENT_CP}.${BIN_NAME}")
+            list(APPEND REPORT_BINS "${QBIN}")
+            if(IN_BINS STREQUAL "uncovered")
+                list(APPEND UNCOVERED_BINS "${QBIN}")
+            else()
+                list(APPEND COVERED_BINS "${QBIN}")
+            endif()
+        endif()
+    endif()
+endforeach()
+list(LENGTH REPORT_BINS N_REPORT_BINS)
+
+# Failure-loud: a report that has the section but parses to no bin means the
+# format moved, not that the design is fully uncovered.
+string(FIND "${REPORT_TEXT}" "CoverPoint Tables" COVERPOINT_TABLES)
+if(NOT COVERPOINT_TABLES EQUAL -1 AND N_REPORT_BINS EQUAL 0)
+    message(FATAL_ERROR "coverage report ${REPORT_FILE} has a CoverPoint Tables section but no bin was parsed; refusing to publish 0/0 (xcrg format changed?)")
+endif()
+
+# Not a failure: ignored/illegal bins can legitimately change the count. But a
+# partial parse (some bin rows lost) must leave a trace instead of silently
+# shortening `uncovered`. bins_parsed records it in summary.json.
+if(NOT N_REPORT_BINS EQUAL BINS_TOTAL)
+    message(WARNING "coverage report ${REPORT_FILE}: parsed ${N_REPORT_BINS} bin row(s) but the coverpoint tables expect ${BINS_TOTAL}; `uncovered` may be incomplete")
+endif()
 
 set(STATUS "measured")
 set(REASON "")
 if(N_COVERPOINTS EQUAL 0)
     set(STATUS "missing_bins")
-    set(REASON "tb/env/top/riscv_small_coverage.sv has no coverpoint: functional coverage is not measured (NFR-06)")
+    set(REASON "the xcrg report has no coverpoint: functional coverage is not measured (NFR-06)")
+endif()
+
+# The A-09 bar is cp_inst + cp_width, derived from the parsed rows. A missing
+# coverpoint makes the bar unmeasurable rather than a bar that looks measured.
+set(BAR_MISSING "")
+foreach(BAR_CP IN LISTS BAR_COVERPOINTS)
+    list(FIND BAR_SEEN "${BAR_CP}" BAR_SEEN_INDEX)
+    if(BAR_SEEN_INDEX EQUAL -1)
+        list(APPEND BAR_MISSING "${BAR_CP}")
+    endif()
+endforeach()
+if(BAR_MISSING)
+    set(BAR_COVERED 0)
+    set(BAR_TOTAL 0)
+    set(STATUS "missing_bins")
+    string(REPLACE ";" ", " BAR_MISSING_TEXT "${BAR_MISSING}")
+    if(REASON STREQUAL "")
+        set(REASON "A-09 bar coverpoint(s) missing from the xcrg report: ${BAR_MISSING_TEXT}; the cp_inst + cp_width bar is unmeasurable (NFR-06)")
+    else()
+        string(APPEND REASON "; A-09 bar coverpoint(s) missing: ${BAR_MISSING_TEXT}")
+    endif()
+endif()
+
+# JSON string escaping per bin name. xcrg prints escaped identifiers verbatim,
+# so a bin can legitimately contain `\` or `"`; serialising the name is the
+# parser's job, not the collector's naming luck, and an unusual name must not
+# turn into invalid JSON (and therefore a broken gate).
+list(LENGTH UNCOVERED_BINS N_UNCOVERED_BINS)
+set(UNCOVERED_ENTRIES "")
+foreach(BIN_NAME IN LISTS UNCOVERED_BINS)
+    string(REPLACE "\\" "\\\\" BIN_JSON "${BIN_NAME}")
+    string(REPLACE "\"" "\\\"" BIN_JSON "${BIN_JSON}")
+    list(APPEND UNCOVERED_ENTRIES "\"${BIN_JSON}\"")
+endforeach()
+if(UNCOVERED_ENTRIES)
+    list(JOIN UNCOVERED_ENTRIES ", " UNCOVERED_JSON)
+    set(UNCOVERED_JSON "[ ${UNCOVERED_JSON} ]")
+else()
+    set(UNCOVERED_JSON "[]")
 endif()
 
 riscv_tree_digests(RTL_DIGEST TB_DIGEST "${ROOT}")
 string(REPLACE ";" "\", \"" DB_JSON "${DB_NAMES}")
 string(TIMESTAMP STAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
+
+# --- --require-bins: present AND covered, two distinct failures --------------
+# A bin absent from the report is a coverage-model gap (the covergroup never
+# declared it); a bin present with zero hits is a stimulus/closure gap.
+# Collapsing them would hide which one a work package faces.
+set(REQUIRE_ABSENT "")
+set(REQUIRE_UNCOVERED "")
+foreach(ENTRY IN LISTS REQUIRE_BINS)
+    list(FIND REPORT_BINS "${ENTRY}" BIN_INDEX)
+    if(BIN_INDEX EQUAL -1)
+        list(APPEND REQUIRE_ABSENT "${ENTRY}")
+    else()
+        list(FIND COVERED_BINS "${ENTRY}" COVERED_INDEX)
+        if(COVERED_INDEX EQUAL -1)
+            list(APPEND REQUIRE_UNCOVERED "${ENTRY}")
+        endif()
+    endif()
+endforeach()
+list(LENGTH REQUIRE_BINS N_REQUIRED)
+list(LENGTH REQUIRE_ABSENT N_ABSENT)
+list(LENGTH REQUIRE_UNCOVERED N_UNCOVERED)
+
+# The outgoing verdict of the bar, published next to the measurement. `none`
+# means the run did not ask for a bin; otherwise it names the worst outcome, so
+# a green-looking summary can never hide a failed --require-bins.
+if(N_REQUIRED EQUAL 0)
+    set(REQUIRE_STATE "none")
+elseif(N_ABSENT GREATER 0 AND N_UNCOVERED GREATER 0)
+    set(REQUIRE_STATE "mixed")
+elseif(N_ABSENT GREATER 0)
+    set(REQUIRE_STATE "absent")
+elseif(N_UNCOVERED GREATER 0)
+    set(REQUIRE_STATE "uncovered")
+else()
+    set(REQUIRE_STATE "ok")
+endif()
+
+# The requested list goes into summary.json as an array (empty when no list was
+# given), JSON-escaped like the bin names: the name is data, not syntax.
+set(REQUIRED_ENTRIES "")
+foreach(ENTRY IN LISTS REQUIRE_BINS)
+    string(REPLACE "\\" "\\\\" ENTRY_JSON "${ENTRY}")
+    string(REPLACE "\"" "\\\"" ENTRY_JSON "${ENTRY_JSON}")
+    list(APPEND REQUIRED_ENTRIES "\"${ENTRY_JSON}\"")
+endforeach()
+if(REQUIRED_ENTRIES)
+    list(JOIN REQUIRED_ENTRIES ", " REQUIRED_JSON)
+    set(REQUIRED_JSON "[ ${REQUIRED_JSON} ]")
+else()
+    set(REQUIRED_JSON "[]")
+endif()
+
+set(REQUIRE_FAILURE "")
+set(ABSENT_TEXT "")
+set(UNCOVERED_TEXT "")
+if(N_ABSENT GREATER 0 OR N_UNCOVERED GREATER 0)
+    string(REPLACE ";" ", " ABSENT_TEXT "${REQUIRE_ABSENT}")
+    string(REPLACE ";" ", " UNCOVERED_TEXT "${REQUIRE_UNCOVERED}")
+    if(N_ABSENT GREATER 0)
+        string(APPEND REQUIRE_FAILURE "bin(s) absent from the report: ${ABSENT_TEXT}")
+    endif()
+    if(N_UNCOVERED GREATER 0)
+        if(NOT REQUIRE_FAILURE STREQUAL "")
+            string(APPEND REQUIRE_FAILURE "; ")
+        endif()
+        string(APPEND REQUIRE_FAILURE "bin(s) present with zero hits: ${UNCOVERED_TEXT}")
+    endif()
+    # Written after the parse, so it can never quote a stale measurement. The
+    # path is outside build/cov_report/, which every run recreates: a failure
+    # leaves build/require-bins-red.log and the next run does not erase it.
+    file(WRITE "${BUILD}/require-bins-red.log" "coverage --require-bins: FAIL
+report:      ${REPORT_FILE}
+coverpoints: ${N_COVERPOINTS}
+bins:        ${BINS_COVERED}/${BINS_TOTAL} (percentages ${PERCENTAGES})
+required:    ${REQUIRE_BINS}
+absent from the report: ${ABSENT_TEXT}
+present but uncovered:  ${UNCOVERED_TEXT}
+require_bins: ${REQUIRE_STATE}
+rtl_digest:  ${RTL_DIGEST}
+tb_digest:   ${TB_DIGEST}
+")
+endif()
 
 file(WRITE "${COV_REPORT}/summary.json" "{
   \"kind\": \"coverage\",
@@ -266,20 +523,34 @@ file(WRITE "${COV_REPORT}/summary.json" "{
   \"reason\": \"${REASON}\",
   \"rtl_digest\": \"${RTL_DIGEST}\",
   \"tb_digest\": \"${TB_DIGEST}\",
+  \"required\": ${REQUIRED_JSON},
+  \"require_bins\": \"${REQUIRE_STATE}\",
   \"recorded\": \"${STAMP}\",
   \"seed\": ${SEED},
   \"databases\": [ \"${DB_JSON}\" ],
   \"merged\": \"build/cov_merged/merged\",
   \"report\": \"${REPORT_FILE}\",
   \"coverpoints\": ${N_COVERPOINTS},
+  \"bins_covered\": ${BINS_COVERED},
+  \"bins_total\": ${BINS_TOTAL},
+  \"bins_parsed\": ${N_REPORT_BINS},
+  \"bar_covered\": ${BAR_COVERED},
+  \"bar_total\": ${BAR_TOTAL},
+  \"uncovered\": ${UNCOVERED_JSON},
   \"percentages\": \"${PERCENTAGES}\"
 }
 ")
 
 message(STATUS "report:  ${REPORT_FILE}")
 message(STATUS "summary: build/cov_report/summary.json")
-message("COVERAGE status=${STATUS} coverpoints=${N_COVERPOINTS} percentages=${PERCENTAGES}")
+message("COVERAGE status=${STATUS} coverpoints=${N_COVERPOINTS} bins=${BINS_COVERED}/${BINS_TOTAL} bar=${BAR_COVERED}/${BAR_TOTAL} percentages=${PERCENTAGES}")
+if(N_REQUIRED GREATER 0 AND REQUIRE_FAILURE STREQUAL "")
+    message(STATUS "require-bins: ${N_REQUIRED} bin(s) present and covered")
+endif()
 
 if(NOT STATUS STREQUAL "measured")
     message(FATAL_ERROR "${REASON}")
+endif()
+if(NOT REQUIRE_FAILURE STREQUAL "")
+    message(FATAL_ERROR "--require-bins: ${REQUIRE_FAILURE}; transcript build/require-bins-red.log, report ${REPORT_FILE}")
 endif()

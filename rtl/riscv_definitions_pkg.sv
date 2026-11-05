@@ -257,6 +257,31 @@ package riscv_definitions_pkg;
         SW = 3'b010  //0100011
     } funct3SType_e;
 
+    /* 
+     * Memory access size, the width shared by data_rd_wr_ctrl and the store
+     * lane/strobe logic.
+     */
+    typedef enum logic [1:0] {
+        ACCESS_BYTE = 2'b00,
+        ACCESS_HALF = 2'b01,
+        ACCESS_WORD = 2'b10
+    } accessSize_e;
+
+    /* 
+     * Decode the access size from a LOAD or STORE funct3.
+     * The low two bits select the width: 00 byte, 01 halfword, 10 word.
+     * funct3[2] only distinguishes LBU/LHU from LB/LH. It is total, so a
+     * reserved encoding defaults to a word instead of producing 'x.
+     */
+    function automatic accessSize_e access_size(logic [2:0] funct3);
+        case (funct3)
+            3'b000, 3'b100: access_size = ACCESS_BYTE;
+            3'b001, 3'b101: access_size = ACCESS_HALF;
+            3'b010:         access_size = ACCESS_WORD;
+            default:        access_size = ACCESS_WORD;
+        endcase
+    endfunction
+
 
     /* 
      * R-type instruction definition.

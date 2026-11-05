@@ -41,6 +41,7 @@ import riscv_definitions_pkg::*;
 (
 	input clk,    // Clock
 	input clk_en, // Clock Enable
+	input logic clk_en_wb, //[in] Clock Enable of the register file write back
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
 	input dataBus_t pc,   // PC value from IF
@@ -189,10 +190,17 @@ import riscv_definitions_pkg::*;
 
 	/*
 	 * Registration File instantiation
+	 *
+	 * The register file uses its own clock enable (clk_en_wb), not the ID/EX
+	 * stage enable: a load-use hazard clears clk_en, and gating the write back
+	 * with it would drop the write of a younger instruction that WB is already
+	 * holding (G-19). During the bubble WB holds a completed instruction;
+	 * rewriting the same register on the next cycle is idempotent, so the
+	 * global clock enable is safe here. rd0_wr_en still qualifies the write.
 	 */
 	reg_file u_reg_file (
 		.clk         (clk),    //[in] Clock
-		.clk_en      (clk_en), //[in] Clock Enable
+		.clk_en      (clk_en_wb), //[in] Clock Enable from write back
 		.rst_n       (rst_n),  //[in] Asynchronous reset active low
 		.rs1_addr    (inst.r_type.rs1), //[in] Reg source one address
 		.rs2_addr    (inst.r_type.rs2), //[in] Reg source two address

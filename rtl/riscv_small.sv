@@ -54,7 +54,8 @@ import riscv_definitions_pkg::*;
 	output logic data_wr_en_ma, //[out] Data memory write enable to be used with data_rd_wr_ctrl
     output dataBus_u data_wr, //[out] Data to data_memory
     output dataBus_u data_addr,//[out] Address of next data
-    output logic [1:0] data_rd_wr_ctrl //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
+    output logic [1:0] data_rd_wr_ctrl, //[out] 2'b00 = 8bits, 2'b01 = 16bits, 2'b10 = 32bits,
+    output logic [3:0] data_wr_strb //[out] Byte write strobe of data_wr, one bit per lane
 );
 
     logic if_id_clk_en;
@@ -115,7 +116,7 @@ import riscv_definitions_pkg::*;
 
     dataBus_u rd0_data_wb; //[out] Reg destination (rd) data from write back (wb)
 
-    assign data_rd_wr_ctrl = logic'(rd_wr_ctrl);
+    assign data_rd_wr_ctrl = access_size(rd_wr_ctrl);
     assign data_addr = alu_ma;
 
 
@@ -140,6 +141,7 @@ import riscv_definitions_pkg::*;
     instruction_decode u_instruction_decode (
         .clk              (clk),// Clock
 	    .clk_en           (id_ex_clk_en),// Clock Enable
+	    .clk_en_wb        (clk_en),//[in] Clock Enable of the register file write back
 	    .rst_n            (rst_n),// Asynchronous reset active low
 	    .inst             (inst_id),// Instruction from IF
 	    .pc               (pc_id),// PC value from IF
@@ -193,6 +195,7 @@ import riscv_definitions_pkg::*;
         .alu_ex           (alu_ex), //[out] ALU result from execution not registered to jump forward (ex)
         .alu_ma           (alu_ma),//[out] ALU result to memory access (ma)
         .rs2_ma           (data_wr), //[out] Reg source two (rs2) data to data memory
+        .data_wr_strb_ma  (data_wr_strb), //[out] Byte write strobe to data memory
         .rd0_wr_en_ma     (rd0_wr_en_ma),//[out] Reg destination (rd) write enable to pipeline to memory access
         .data_rd_en_ma    (data_rd_en_ma),//[out] Data memory read enable (wb_mux_sel) to be used with funct3 
         .data_wr_en_ma    (data_wr_en_ma),//[out] Data memory write enable to be used together with funct3

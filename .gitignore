@@ -129,3 +129,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .vscode/settings.json
+
+# Simulator artifacts (xvlog/xelab write these to the current directory)
+xvlog.pb
+xelab.pb
+xsim.pb

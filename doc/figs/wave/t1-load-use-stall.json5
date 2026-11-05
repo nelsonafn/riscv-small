@@ -1,35 +1,47 @@
-// T1 - load-use hazard, as built.
+// T1 - load-use hazard, as built after WP-6.
 //
 // Scenario: addi x5,x5,1 ; addi x7,x7,1 ; lw x1,0(x2) ; add x3,x1,x4 ; sub x8,x9,x10 ;
 //           then three unrelated addi instructions (I1..I3).
+// Cycle numbering is relative: column 1 is the cycle in which the load is in ID.
 //
-// rtl/control.sv:204-210 (rs1 consumer) and :228-233 (rs2 / store-data consumer):
+// rtl/control.sv:207-209 (rs1 consumer) and :231-233 (rs2 / store-data consumer):
 // when the load is in MA and a dependent consumer is in EX, control sets
 // ex_ma_flush = 1, if_id_clk_en = 0 and id_ex_clk_en = 0. It does NOT touch
-// ex_ma_clk_en or ma_wb_clk_en (contrast rtl/control.sv:267-273, the data-wait stall,
+// ex_ma_clk_en or ma_wb_clk_en (contrast rtl/control.sv:268-271, the data-wait stall,
 // which clears all four). The consumer is held in EX, EX/MA receives a NOP.
 //
 // rtl/control.sv:200-202: in the next cycle the load is in WB and the held consumer
-// selects RD_WB_S1, so the value arrives through the write-back forward, not the
-// register file.
+// selects RD_WB_S1, so the value arrives through the write-back forward.
 //
-// rtl/riscv_small.sv:142 wires reg_file.clk_en to id_ex_clk_en, so the write of the
-// instruction resident in WB during the stall cycle (I0, addi x7) is suppressed: G-19.
+// rtl/instruction_decode.sv:44, :203 and rtl/riscv_small.sv:144: the register file is
+// clocked by clk_en_wb, which the top wires to the global clk_en (1 in every cycle of
+// a run: tb/riscv_small_tb.sv:29), NOT by id_ex_clk_en. So in cycle 3 the write-back
+// of the addi x7 resident in WB (rd0_wr_en_wb = 1, rd0_addr_wb = x7) commits at the
+// edge that ends the stall, although id_ex_clk_en is 0. That is the WP-6 fix for
+// G-19: before it the register file shared id_ex_clk_en and the write was lost.
+//
+// rtl/instruction_fetch.sv:67-71: while IF/ID is paused the fetch request follows
+// pc_fetch, so inst_data stays aligned with pc_id on the release cycle.
+//
+// Levels below are read from the RTL, not invented: a throwaway harness driving
+// rtl/riscv_small with this exact program prints, per cycle,
+//   if_id_en=0 id_ex_en=0 ex_ma_en=1 ma_wb_en=1 clk_en_wb=1 | ex_ma_flush=1
+//   | rd_wb=7 wr_wb=1 | RTL REG_WRITE: x7 = 0x2
+// for the stall cycle, i.e. the write lands while the ID/EX enable is low.
 {
   signal: [
     { name: 'clk',          wave: 'p......' },
     { name: 'if_id_clk_en', wave: '1.01...' },
-    { name: 'id_ex_clk_en', wave: '1.01...' }, // also reg_file.clk_en
-    { name: 'ex_ma_clk_en', wave: '1......' },
-    { name: 'ma_wb_clk_en', wave: '1......' },
+    { name: 'id_ex_clk_en', wave: '1.01...' },
+    { name: 'clk_en_wb',    wave: '1......' }, // reg_file.clk_en (global clk_en): stays 1
     { name: 'ex_ma_flush',  wave: '0.10...' },
     { name: 'inst_id',      wave: '234.567', data: ['LW', 'ADD', 'SUB', 'I1', 'I2', 'I3'] },
     { name: 'rd0_wr_en_ma', wave: '1..01..' },
-    { name: 'rd0_wr_en_wb', wave: '1...01.' }, // cycle 3: I0 valid but not written
+    { name: 'rd0_wr_en_wb', wave: '1...01.' }, // cycle 3: addi x7 in WB, and it commits
     { name: 'alu_src1',     wave: '2..32..', data: ['RS1_S1', 'RD_WB_S1', 'RS1_S1'] },
   ],
   head: {
-    text: 'T1 load-use: IF/ID and ID/EX hold, EX/MA is flushed, the WB forward carries the value',
+    text: 'T1 load-use: IF/ID and ID/EX hold, EX/MA is flushed, the WB forward carries the value, and the WB write still lands (clk_en_wb)',
     tick: 1,
     every: 1,
   },
