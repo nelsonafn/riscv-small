@@ -56,6 +56,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
     input logic data_wr_en_ex,  //[in] Data memory write enable to be used with funct3
     input logic mux_sel_rd_wb, //[in] Data memory read enable (wb_mux_sel) 
     input logic cond_jump, // Used to indicate a conditional branch have been decoded
+    input logic jalr, //[in] Indicates a JALR, whose target reads rs1
     input logic branch_taken,  //[in] Indicates that a branch should be taken to the control  
     input exception, //[in] Exception trigger
     input dataBus_u pc_ex, //[in] PC value to EX
@@ -89,12 +90,20 @@ import riscv_definitions_pkg::*; // import package into $unit space
      * the branch resolved must be discarded too. */
     logic branch_taken_q;
 
+    /* G-30: the branch operand is not resolved while a load feeding it is
+     * still in MA/EX. The decision comes from the stale register-file value,
+     * so neither the current-cycle redirect nor its registered echo may fire;
+     * IF/ID and ID/EX are held, so the branch is re-evaluated next cycle with
+     * the forwarded value. Only the load-use freeze sets this, never the
+     * data_ready wait or the inst_ready stall. */
+    logic branch_op_stall;
+
     always_ff @(posedge clk or negedge rst_n) begin: proc_branch_flush
         if (!rst_n) begin: proc_branch_flush_rst
             branch_taken_q <= 1'b0;
         end: proc_branch_flush_rst
         else if (clk_en) begin
-            branch_taken_q <= branch_taken;
+            branch_taken_q <= branch_taken & ~branch_op_stall;
         end
     end: proc_branch_flush
 
@@ -113,13 +122,17 @@ import riscv_definitions_pkg::*; // import package into $unit space
         ex_ma_flush =  '0;// Don't insert NOP in EX_MA
         pc_sel = PC_PLUS4; 
         inst_rd_en = 1;
+        branch_op_stall = 1'b0;
         
         //TODO: Duplicated code. Move to function
         /*
          * Forward for JUMP Compare
          */
         //R0 is always zeros, it should not be forward
-        if (rs1_addr_id != '0 && cond_jump) begin
+        /* G-07: a JALR target is rs1 + imm, so its rs1 needs the same
+         * EX/MA/WB forwarding a branch operand gets. JAL keeps its base in PC
+         * and is deliberately not included. */
+        if (rs1_addr_id != '0 && (cond_jump || jalr)) begin
             // TODO: Maybe it doesn't need jump forward from wb because it is already 
             //       bypassed inside register file bank. We should try remove this after
             //       verification be stable and check logic and paths length
@@ -131,6 +144,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if (rs1_addr_id == rd0_addr_ma && rd0_wr_en_ma) begin
                 // If the data is being read from memory
                 if (data_rd_en_ma) begin
+                    branch_op_stall = '1;// Branch operand still in MA
                     ex_ma_flush =  '1;// Insert NOP in EX_MA
                     if_id_clk_en = '0;// Pause IF_ID
                     id_ex_clk_en = '0;// Pause ID_EX
@@ -144,6 +158,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if (rs1_addr_id == rd0_addr_ex && rd0_wr_en_ex) begin
                 // If the data is being read from memory
                 if (data_rd_en_ex) begin
+                    branch_op_stall = '1;// Branch operand still in EX
                     id_ex_flush =  '1;// Insert NOP in ID_EX
                     if_id_clk_en = '0;// Pause IF_ID
                 end
@@ -167,6 +182,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if (rs2_addr_id == rd0_addr_ma && rd0_wr_en_ma) begin
                 // If the data is being read from memory
                 if (data_rd_en_ma) begin
+                    branch_op_stall = '1;// Branch operand still in MA
                     ex_ma_flush =  '1;// Insert NOP in EX_MA
                     if_id_clk_en = '0;// Pause IF_ID
                     id_ex_clk_en = '0;// Pause ID_EX
@@ -180,6 +196,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if (rs2_addr_id == rd0_addr_ex && rd0_wr_en_ex) begin
                 // If the data is being read from memory
                 if (data_rd_en_ex) begin
+                    branch_op_stall = '1;// Branch operand still in EX
                     id_ex_flush =  '1;// Insert NOP in ID_EX
                     if_id_clk_en = '0;// Pause IF_ID
                 end
@@ -204,6 +221,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if (rs1_addr_ex == rd0_addr_ma && rd0_wr_en_ma && alu_src1_ex == RS1) begin
                 // If the data is being read from memory
                 if (data_rd_en_ma) begin
+                    branch_op_stall = '1;// EX operand still in MA
                     ex_ma_flush =  '1;// Insert NOP in EX_MA
                     if_id_clk_en = '0;// Pause IF_ID
                     id_ex_clk_en = '0;// Pause ID_EX
@@ -228,6 +246,7 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if (rs2_addr_ex == rd0_addr_ma && rd0_wr_en_ma && (alu_src2_ex == RS2 || data_wr_en_ex)) begin
                 // If the data is being read from memory
                 if (data_rd_en_ma) begin
+                    branch_op_stall = '1;// EX operand still in MA
                     ex_ma_flush =  '1;// Insert NOP in EX_MA
                     if_id_clk_en = '0;// Pause IF_ID
                     id_ex_clk_en = '0;// Pause ID_EX
@@ -243,7 +262,8 @@ import riscv_definitions_pkg::*; // import package into $unit space
             end
         end
 
-        if (branch_taken) begin
+        // G-30: do not act on a branch whose own operand is still in flight
+        if (branch_taken && !branch_op_stall) begin
             if_id_flush =  '1;
             pc_sel = JUMP;
         end

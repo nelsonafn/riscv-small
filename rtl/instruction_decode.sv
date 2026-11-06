@@ -67,6 +67,7 @@ import riscv_definitions_pkg::*;
 	output logic branch_taken,  //[out] Indicates that a branch should be taken to the control 
 	output dataBus_t jump_addr, //[out] Jump address
     output logic cond_jump, // Used to indicate a conditional branch have been decoded
+	output logic jalr, // Used to indicate a JALR have been decoded (its target reads rs1)
 	output funct3ITypeLOAD_e funct3_ex, //[out] funct3 LOAD
 	output regAddr_t rd0_addr_ex,  //[out] Reg destination (rd) addr
 	output regAddr_t rs1_addr_ex, //[out] Reg source one (rs1) addr
@@ -245,6 +246,7 @@ import riscv_definitions_pkg::*;
 	always_comb begin: proc_decode
 		uncond_jump = '0;
 		cond_jump = '0;
+		jalr = '0;
 		rd0_wr_en_2pipe = '0;
 		base_addr_sel = PC;
 		alu_src1 = RS1; 
@@ -277,6 +279,7 @@ import riscv_definitions_pkg::*;
 		// Branch are calculated and decided independent of ALU in a specific unit
 		JALR: begin
 			uncond_jump = '1;
+			jalr = '1;
 			rd0_wr_en_2pipe = '1;
 			base_addr_sel = RS1;
 			//add+4 (funct7 and funct3 is undefined)

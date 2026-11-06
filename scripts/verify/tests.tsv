@@ -35,3 +35,37 @@ T-12	riscv_small_sanity_test	4c	FR-08	300	mutant:negative-branch	sanity:rv32ui-p
 T-13	riscv_small_sanity_test	6	NFR-05,FR-11	300	mutant:store-lane-offset	sanity:rv32ui-p-sb
 T-14	riscv_small_sanity_test	6	NFR-05,FR-11	300	mutant:store-strb-all	sanity:rv32ui-p-sh
 T-15	riscv_small_sanity_test	6	NFR-05,FR-11	300	mutant:store-width-cast	sanity:rv32ui-p-st_ld
+# wp 7 - RV32I closure (E4): one image per unstimulated instruction bin; every row carries its mutant (P3)
+T-16	riscv_small_sanity_test	7	NFR-05,FR-17	300	mutant:branch-taken-stale	sanity:rv32ui-p-ld_st
+T-17	riscv_small_sanity_test	7	NFR-05,FR-07	300	mutant:jalr-no-forward	sanity:rv32ui-p-jalr
+T-18	riscv_small_sanity_test	7	NFR-05,FR-06	300	mutant:jal-offset-zero	sanity:rv32ui-p-jal
+T-19	riscv_small_sanity_test	7	NFR-05,FR-08	300	mutant:branch-always-taken	sanity:rv32ui-p-blt
+T-20	riscv_small_sanity_test	7	NFR-05,FR-08	300	mutant:branch-always-taken	sanity:rv32ui-p-bge
+T-21	riscv_small_sanity_test	7	NFR-05,FR-08	300	mutant:branch-always-taken	sanity:rv32ui-p-bltu
+T-22	riscv_small_sanity_test	7	NFR-05,FR-08	300	mutant:branch-always-taken	sanity:rv32ui-p-bgeu
+T-23	riscv_small_sanity_test	7	NFR-05,FR-02	300	mutant:imm-zero	sanity:rv32ui-p-slti
+T-24	riscv_small_sanity_test	7	NFR-05,FR-02	300	mutant:imm-zero	sanity:rv32ui-p-sltiu
+T-25	riscv_small_sanity_test	7	NFR-05,FR-02	300	mutant:imm-zero	sanity:rv32ui-p-xori
+T-26	riscv_small_sanity_test	7	NFR-05,FR-03	300	mutant:imm-zero	sanity:rv32ui-p-srli
+T-27	riscv_small_sanity_test	7	NFR-05,FR-03	300	mutant:imm-zero	sanity:rv32ui-p-srai
+T-28	riscv_small_sanity_test	7	NFR-05,FR-02	300	mutant:imm-zero	sanity:rv32ui-p-andi
+T-29	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-sub
+T-30	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-sll
+T-31	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-slt
+T-32	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-sltu
+T-33	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-xor
+T-34	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-srl
+T-35	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-sra
+T-36	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-or
+# T-37 is the local image scripts/verify/sanity/local/rv32ui-p-jalr_unaligned.S; every WP-7 row now carries its mutant
+T-37	riscv_small_sanity_test	7	NFR-05,FR-07	300	mutant:jalr-keep-bit0	sanity:rv32ui-p-jalr_unaligned
+# wp 7 P4b - the last five acceptance-cell instructions get a named test each (bne, ori, slli, lui, auipc); the images already pass, the mutant is the proof
+T-38	riscv_small_sanity_test	7	NFR-05,FR-08	300	mutant:branch-always-taken	sanity:rv32ui-p-bne
+T-39	riscv_small_sanity_test	7	NFR-05,FR-02	300	mutant:alu-or-to-and	sanity:rv32ui-p-ori
+T-40	riscv_small_sanity_test	7	NFR-05,FR-03	300	mutant:shift-left-zero	sanity:rv32ui-p-slli
+T-41	riscv_small_sanity_test	7	NFR-05,FR-04	300	mutant:lui-ignores-imm	sanity:rv32ui-p-lui
+T-42	riscv_small_sanity_test	7	NFR-05,FR-05	300	mutant:auipc-no-pc	sanity:rv32ui-p-auipc
+# wp 7 follow-up (FR-01): T-01 only ever issues ADD as `add x0,x0,x0`, so no test observed an ADD result. rv32ui-p-add
+# checks one directly: TESTNUM 3 is `add rd,1,1` == 2, and `alu-ignore-rs2` makes it store 3. The mutant is shared
+# with T-29..T-36; each row is applied independently (as branch-always-taken is for T-19..T-22 and T-38).
+T-43	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-add

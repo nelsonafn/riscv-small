@@ -109,6 +109,12 @@ import riscv_definitions_pkg::*;
 		endcase
 
 		jump_addr = base_addr + imm;
+		/* FR-07 / G-07: a JALR target is (rs1 + imm) with bit 0 cleared.
+		 * base_addr_sel is RS1 only for JALR; JAL and branch targets use PC
+		 * and must keep every one of their (aligned) address bits. */
+		if (base_addr_sel == RS1) begin
+			jump_addr = jump_addr & ~32'h1;
+		end
 	end: addr_calc
 
 	/* 

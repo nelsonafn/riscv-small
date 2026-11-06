@@ -70,6 +70,7 @@ import riscv_definitions_pkg::*;
     nextPCType_e pc_sel; // PC source selector
 
     logic cond_jump; // Used to indicate a conditional branch have been decode
+    logic jalr; // Used to indicate a JALR have been decode (rs1 is a source)
 
 	logic id_ex_clk_en; // Clock Enable
 	//logic rd0_wr_en_;    //[in] Reg register (rd) write enable from Write Back stage
@@ -167,6 +168,7 @@ import riscv_definitions_pkg::*;
 	    .branch_taken     (branch_taken),//[out] Indicates that a branch should be taken to the control 
 	    .jump_addr        (jump_addr),//[out] Jump address
         .cond_jump        (cond_jump),// Used to indicate a conditional branch have been decode
+        .jalr             (jalr),// Used to indicate a JALR have been decode
 	    .funct3_ex        (funct3_ex),//[out] funct3 LOAD
 	    .rd0_addr_ex      (rd0_addr_ex),//[out] Reg destination (rd) addr
 	    .rs1_addr_ex      (rs1_addr_ex),//[out] Reg source one (rs1) addr
@@ -242,6 +244,7 @@ import riscv_definitions_pkg::*;
         .data_wr_en_ex    (data_wr_en_ex),//[in] Data memory write enable to be used with funct3
         .mux_sel_rd_wb    (wb_mux_sel_wb),//[in] Data memory read enable (wb_mux_sel) 
         .cond_jump        (cond_jump),//Used to indicate a conditional branch have been decoded
+        .jalr             (jalr),//Used to indicate a JALR have been decoded (rs1 is a source)
         .branch_taken     (branch_taken),//[in] Indicates that a branch should be taken to the control  
         .exception        (exception),//[in] Exception trigger
         .pc_ex            (pc_ex),//[in] PC value to EX

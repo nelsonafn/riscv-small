@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Requirement | Functional coverage shall close on the instruction set and memory behaviour it claims. |
-| Gap | `G-03`, `G-04`, `G-11` |
+| Gap | `G-04`, `G-11` |
 | Owner | verification lead |
-| Status | partial - `cg_mem` closed, 19 instruction bins owed to `E4` |
+| Status | **bins closed** - 40 of the 40 `A-09` bar bins and 50 of the 50 report bins hit, `G-03` closed 2026-11-06. `NFR-06` itself stays `partial`: its acceptance also needs every `FR` `verified` (`A-09`) |
 
 ## Method
 
@@ -43,27 +43,28 @@ make coverage COVERAGE_ARGS="--require-bins cp_inst.slti"               # red un
 
 ## Result
 
-Measured 2026-11-05 over all eleven manifest tests (`T-01`, `T-02`, `T-06`, `T-08`, `T-09`, `T-10`, `T-11`,
-`T-12`, `T-13`, `T-14`, `T-15`), at `rtl_digest` `sha256:f48ab029…b9586d` and `tb_digest` `sha256:ae4e6c79…8b5764`
+Measured 2026-11-06 over all **39** manifest tests (`T-01`, `T-02`, `T-06`, `T-08`..`T-43`), at
+`rtl_digest` `sha256:3541dfb8…cd80` and `tb_digest` `sha256:ae4e6c79…b5764`
 (`build/cov_report/summary.json`):
 
 | Metric | Value |
 |---|---|
 | Coverpoints | 5 |
-| Whole report | 31 of 50 bins (`xcrg` score 74.3243 %, the mean of the two covergroups) |
-| `A-09` bar | **21 of 40** |
-| `cp_inst` | 18 of 37 |
+| Whole report | **50 of 50** bins (`uncovered` empty, `xcrg` score 100 %) |
+| `A-09` bar | **40 of 40** |
+| `cp_inst` | **37 of 37** |
 | `cp_width` | **3 of 3** |
+| `cg_mem` | **13 of 13** |
 
-`cg_mem` is now **13 of 13**: WP-6 decoded the width from `funct3` (`access_size`, `rtl/riscv_definitions_pkg.sv`)
-instead of the one-bit `logic'(rd_wr_ctrl)` cast, so `cp_width.word_w` fills. The three images added by the same WP
-(`T-13` `sb`, `T-14` `sh`, `T-15` `st_ld`) also closed `cp_inst.sb` and `cp_inst.sh`, and their `la` prologue
-reached `cp_inst.auipc`.
+WP-6 had taken the bar to 21/40 by decoding the width from `funct3` and closing `sb`/`sh`. WP-7 closed the last
+nineteen with one image per instruction — `jalr` (`T-17`, plus the local odd-target image `T-37`) and the
+eighteen `T-19`..`T-36` — and the bar is now full. `T-38`..`T-43` were added afterwards as `FR` evidence
+(`bne`, `ori`, `slli`, `lui`, `auipc`, `add`); they closed no bin, because those bins were already hit. No bin is hit by an accident: each one has a
+manifest row and a mutant that makes that row fail (check 11, 37 rows).
 
-The 19 open `cp_inst` bins are all stimulus, not collector, gaps, and all belong to `E4`: `jalr`, four branches,
-six immediates (`slti`, `sltiu`, `xori`, `srli`, `srai`, `andi`) and eight ALU operations (`sub`, `sll`, `slt`,
-`sltu`, `xor_`, `srl`, `sra`, `or_`). Code coverage is instrumented with `--cc_type sbct --cc_libs` and merged by
-the same `xcrg` run.
+What a hit does **not** mean is unchanged: it is an accepted **fetch**, not a retire (`G-28`, `E3`), and it
+verifies no `FR` by itself (`G-04`). Closing `G-03` closes the *bins*; `A-09` still needs every `FR` row
+`verified`. Code coverage is instrumented with `--cc_type sbct --cc_libs` and merged by the same `xcrg` run.
 
 ## History
 
@@ -73,6 +74,7 @@ the same `xcrg` run.
 | 2026-11-04 | `sha256:d12dc1a2...` | 4 | 91.67 % (`word_w` open, `FR-11`) | not declared as bins | `xcrg` over the eight manifest tests (TB `f542affd...`) |
 | 2026-11-05 | `sha256:d12dc1a2...` | 5 | 27/50 bins (`xcrg` score 66.1036 %; `cp_inst` 15/37, `word_w` open) | **17/40** | WP-5: `cg_inst` added, report parsed per bin (TB `506d4810...`) |
 | 2026-11-05 | `sha256:f48ab029...` | 5 | 31/50 bins (`xcrg` score 74.3243 %; `cp_inst` 18/37, `cg_mem` 13/13) | **21/40** | WP-6: width decoded, `sb`/`sh`/`st_ld` tests added (TB `ae4e6c79...`) |
+| 2026-11-06 | `sha256:3541dfb8...` | 5 | 50/50 bins, `uncovered` empty (100 %; `cp_inst` 37/37) | **40/40** | WP-7: one image per instruction, 19 bins closed (TB `ae4e6c79...`) |
 
 The 2026-11-04 figure is not comparable with the 2026-11-05 one: the first measured four memory coverpoints and
 nothing of the instruction set, so it was true and flattering at the same time. From 2026-11-05 the headline is the

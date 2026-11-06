@@ -63,3 +63,82 @@ store-strb-all	rtl/execution.sv	data_wr_strb_ex = 4'b0011 << {alu_result.u_data[
 # 2- or 4-bit strobe, which the strb_checker rejects even when the image's own
 # software verdict would pass.
 store-width-cast	rtl/riscv_small.sv	assign data_rd_wr_ctrl = access_size(rd_wr_ctrl);	assign data_rd_wr_ctrl = 2'b00; // negative control: width port forced to byte	the width port reports byte for every access (FR-11, the old one-bit cast)
+#
+# T-16 (FR-17 / G-30): rv32ui-p-ld_st branches at 0xa4 on `sp`, which the load
+# at 0x9c has just written and is still in MA. The frozen branch re-evaluates
+# correctly one cycle later, but the stale echo of the first decision is
+# registered without the qualifier, so the fetch that follows the branch is
+# flushed and the image loses the instruction at 0xa8. Reverting the redirect
+# alone (`if (branch_taken)`) does NOT reproduce: with the echo still qualified
+# the held branch recovers, so the mutant targets the registered echo.
+branch-taken-stale	rtl/control.sv	branch_taken_q <= branch_taken & ~branch_op_stall;	branch_taken_q <= branch_taken; // negative control: stale branch echo	a stale branch decision is echoed and flushes the fetch that follows the branch (G-30)
+#
+# T-17 (FR-07 / G-31): rv32ui-p-jalr computes its target from a register the
+# previous instruction produced. Closing the jump-forward mux to cond_jump
+# leaves that rs1 stale, so every JALR after its producer jumps to the wrong
+# place and the image never reaches tohost (the original G-31 timeout).
+jalr-no-forward	rtl/control.sv	jalr)) begin	cond_jump)) begin // negative control: JALR rs1 not forwarded	a JALR target reads a stale rs1 because the jump-forward mux is closed (G-31)
+#
+# T-37 (FR-07): the local image jumps through an odd address. With the mask
+# removed the target stays odd; the word-indexed image memory still returns the
+# word at the aligned address, but the unaligned PC makes the test's PC-relative
+# `la` compute linkaddr_3 + 1 and its `bne` sends the image to fail (testnum 3).
+jalr-keep-bit0	rtl/jump_decision.sv	jump_addr = jump_addr & ~32'h1;	jump_addr = jump_addr; // negative control: JALR target keeps bit 0	an odd JALR target is not masked to an instruction boundary (FR-07)
+#
+# T-29..T-36 (FR-01): SUB, SLL, SLT, SLTU, XOR, SRL, SRA and OR read their
+# second operand from rs2 (directly or through the EX/MA/WB forward muxes).
+# Selecting the immediate side for every op makes each of them compute with 0
+# instead of rs2; the I-type instructions used to build the test data (`li`,
+# `la`) are unaffected, so the image reports the failing TESTNUM.
+alu-ignore-rs2	rtl/execution.sv	case (alu_src2)	case (IMM_S2) // negative control: every ALU op reads the immediate side	the ALU second operand ignores rs2, so the R-type instructions compute with the immediate
+#
+# T-23..T-28 (FR-02/FR-03): SLTI, SLTIU, XORI, SRLI, SRAI and ANDI take their
+# second operand from the immediate port. Zeroing that port makes the result
+# independent of the encoded immediate, but it also breaks the PC-relative `la`
+# that builds the tohost address, so these images reach the pass/fail ceremony
+# with a wrong store address and the harness times out (SANITY: TIMEOUT,
+# UVM_RESULT: FAIL) instead of storing a TESTNUM. The image fails either way.
+imm-zero	rtl/execution.sv	alu_data2 = imm;	alu_data2 = '0; // negative control: immediate operand is zero	the ALU immediate operand is zero, so the I-type instructions compute with 0
+#
+# T-19..T-22 (FR-08): BLT, BGE, BLTU and BGEU are checked with both taken and
+# not-taken cases. Forcing branch_taken for every conditional branch sends the
+# not-taken cases (and every `bne ..., fail` guard) down the taken path, so the
+# image stores a nonzero TESTNUM to tohost.
+branch-always-taken	rtl/jump_decision.sv	if (cond_jump) begin	if (cond_jump) branch_taken = 1'b1; else if (cond_jump) begin // negative control: every conditional branch taken	every conditional branch is taken, so the not-taken cases reach `fail` (FR-08)
+#
+# T-18 (FR-06): rv32ui-p-jal checks the link register and the branch target of
+# JAL. Dropping the offset makes the jump target the instruction's own PC, so
+# the core loops on the JAL forever and the harness never sees tohost.
+jal-offset-zero	rtl/jump_decision.sv	jump_addr = base_addr + imm;	jump_addr = base_addr; // negative control: jump target drops the offset	JAL jumps to its own PC instead of PC+offset (FR-06)
+#
+# T-38 reuses `branch-always-taken` above (FR-08): rv32ui-p-bne has both taken
+# and not-taken cases, and every `bne ..., fail` guard is taken, so the image
+# reports a nonzero TESTNUM.
+#
+# T-39 (FR-02): rv32ui-p-ori takes its function from the ALU_OR arm. The body
+# line `alu_result = alu_data1 | alu_data2;` cannot be the `find` of a TSV row
+# (a cell may not contain `|`, it is the table separator), so the same defect
+# is introduced one line up: the case selector routes ALU_OR into the AND arm,
+# and ORI computes AND. Test 2 expects 0xffffff0f and reads 0xff00ff00, so the
+# image reaches `fail`; the ceremony's own `ori gp,gp,1` then stores 0x0, which
+# the checker reports as SANITY: FAIL testnum=0.
+alu-or-to-and	rtl/alu.sv	case (alu_op)	case (alu_op == ALU_OR ? ALU_AND : alu_op) // negative control: OR computes AND	ALU_OR is routed into the AND arm, so ORI writes the bitwise AND (FR-02)
+#
+# T-40 (FR-03): rv32ui-p-slli checks SLLI at shifts 0, 1, 7, 14 and 31. Keeping
+# data1 and dropping the shift matches only shift 0, so TESTNUM 3 reports.
+shift-left-zero	rtl/alu.sv	alu_result = alu_data1 << alu_data2[4:0];	alu_result = alu_data1; // negative control: the left shift is dropped	SLL/SLLI return the unshifted first operand (FR-03)
+#
+# T-41 (FR-04): rv32ui-p-lui reads the upper immediate back (`lui ra,0xfffff;
+# srai ra,1` == -2048). Sending the LUI arm to ALU_ADD does NOT reproduce it:
+# the rs1 field of those U-type encodings selects x0/x31/a6, all still zero, so
+# rd is still the immediate. Zeroing the shared U-type immediate does, and the
+# image reports TESTNUM 3. The same row also reaches AUIPC, which has its own
+# mutant below.
+lui-ignores-imm	rtl/instruction_decode.sv	imm.s_data = signed'({inst.u_type.imm1, 12'b0});	imm.s_data = '0; // negative control: U-type immediate zero	LUI ignores its upper immediate and writes 0 (FR-04)
+#
+# T-42 (FR-05): the decoder sets `alu_src1 = PC;` for AUIPC, but that line
+# occurs three times (AUIPC, JAL, JALR) and a `find` must be unique. The defect
+# is the same one arm up: PC_S1 in ALU mux 1 returns rs1, so AUIPC adds rs1
+# (== x0 in this image) instead of pc and the image reports TESTNUM 5. The
+# JAL/JALR link values move too; each of those has its own mutant.
+auipc-no-pc	rtl/execution.sv	alu_data1 = pc;	alu_data1 = rs1; // negative control: the pc is not added	AUIPC adds rs1 instead of pc, so rd is the immediate alone (FR-05)

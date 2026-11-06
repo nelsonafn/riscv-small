@@ -4,9 +4,10 @@
 #
 # Included by CMakeLists.txt (configure mode), it owns the whole riscv-tests
 # pipeline:
-#   1. compile each isa/rv32ui/*.S image with the project's own environment
-#      (scripts/verify/sanity/riscv_test.h + link.ld) -- no autoconf, no
-#      out-of-tree configure, no suite Makefile;
+#   1. compile each isa/rv32ui/*.S image -- and each project-local
+#      scripts/verify/sanity/local/*.S image -- with the project's own
+#      environment (scripts/verify/sanity/riscv_test.h + link.ld) -- no
+#      autoconf, no out-of-tree configure, no suite Makefile;
 #   2. convert the ELF to a Verilog hex and extract `tohost` from the ELF;
 #   3. declare one CTest test per image (label `sanity`) and the `sanity`
 #      target, which runs this same file with `cmake -P`.
@@ -38,9 +39,12 @@
 # verdict, JUnit), exactly like the regression and the coverage runs; a plain
 # `ctest` skips these tests (exit 77) because it never built the images.
 #
-# Scope: only isa/rv32ui. rv32mi needs CSR/trap (E6/E7), rv32um/rv32uc need
-# M/C (E8); rv32si is not in NFR-05. The glob is a one-line change when those
-# requirements land.
+# Scope: isa/rv32ui plus the project-local sanity/local directory. The second
+# directory exists because some requirements need an image the bundled suite
+# does not provide: rv32ui-p-jalr_unaligned derives from jalr.S and adds the
+# odd-target case FR-07 needs, without touching the src/riscv-tests submodule.
+# rv32mi needs CSR/trap (E6/E7), rv32um/rv32uc need M/C (E8); rv32si is not in
+# NFR-05. The glob is a one-line change when those requirements land.
 #
 # Results: build/sanity/summary.json, one log per image, one dump per image.
 # Exit codes: 0 the measurement ran (not measurable is still a run), 1 an image
@@ -94,13 +98,21 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
 
     # --- image list ---------------------------------------------------------
     # Each isa/rv32ui/<stem>.S builds the bare-metal image rv32ui-p-<stem>
-    # ("-p-" is the physical target of the bundled suite). The list is written
-    # to images.txt so the run mode never globs the sources a second time.
-    file(GLOB SANITY_SOURCES "${RISCV_TESTS_DIR}/isa/rv32ui/*.S")
+    # ("-p-" is the physical target of the bundled suite). A project-local
+    # sanity/local/<stem>.S builds the same name; a local file that already
+    # carries the image name (local/rv32ui-p-<stem>.S) is used verbatim. The
+    # list is written to images.txt so the run mode never globs twice.
+    file(GLOB SANITY_SOURCES
+         "${RISCV_TESTS_DIR}/isa/rv32ui/*.S"
+         "${CMAKE_CURRENT_LIST_DIR}/sanity/local/*.S")
     set(SANITY_IMAGES "")
     foreach(SANITY_SOURCE IN LISTS SANITY_SOURCES)
         get_filename_component(SANITY_STEM "${SANITY_SOURCE}" NAME_WE)
-        list(APPEND SANITY_IMAGES "rv32ui-p-${SANITY_STEM}")
+        if(SANITY_STEM MATCHES "^rv32ui-p-")
+            list(APPEND SANITY_IMAGES "${SANITY_STEM}")
+        else()
+            list(APPEND SANITY_IMAGES "rv32ui-p-${SANITY_STEM}")
+        endif()
     endforeach()
     list(SORT SANITY_IMAGES)
     list(LENGTH SANITY_IMAGES SANITY_IMAGE_COUNT)
@@ -121,7 +133,19 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     foreach(SANITY_IMAGE IN LISTS SANITY_IMAGES)
         set(SANITY_STEM "${SANITY_IMAGE}")
         string(REGEX REPLACE "^rv32ui-p-" "" SANITY_STEM "${SANITY_STEM}")
-        set(SANITY_SOURCE "${RISCV_TESTS_DIR}/isa/rv32ui/${SANITY_STEM}.S")
+        # A project-local image shadows a bundled one of the same stem; the
+        # bundled directory is the fallback, so src/riscv-tests stays untouched.
+        # Both local spellings are accepted: <stem>.S and <image>.S.
+        set(SANITY_LOCAL_DIR "${CMAKE_CURRENT_LIST_DIR}/sanity/local")
+        set(SANITY_LOCAL_SOURCE "${SANITY_LOCAL_DIR}/${SANITY_IMAGE}.S")
+        if(NOT EXISTS "${SANITY_LOCAL_SOURCE}")
+            set(SANITY_LOCAL_SOURCE "${SANITY_LOCAL_DIR}/${SANITY_STEM}.S")
+        endif()
+        if(EXISTS "${SANITY_LOCAL_SOURCE}")
+            set(SANITY_SOURCE "${SANITY_LOCAL_SOURCE}")
+        else()
+            set(SANITY_SOURCE "${RISCV_TESTS_DIR}/isa/rv32ui/${SANITY_STEM}.S")
+        endif()
         set(SANITY_ELF "${SANITY_ISA_DIR}/${SANITY_IMAGE}")
         set(SANITY_HEX "${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex")
         set(SANITY_TOHOST "${SANITY_TOHOST_DIR}/${SANITY_IMAGE}")
@@ -203,8 +227,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     # --- one CTest test per image -------------------------------------------
     # Declared only when the testbench has the +HEX/+TOHOST mode: without it
     # there is nothing to run, and `sanity` answers `not_measurable` instead of
-    # failing 42 times. The env guard keeps these 42 simulations out of a plain
-    # `ctest`/`make test` (they are skipped, never run by accident).
+    # failing once per image. The env guard keeps these image simulations out of
+    # a plain `ctest`/`make test` (they are skipped, never run by accident).
     if(EXISTS "${CMAKE_SOURCE_DIR}/tb/tests/${SANITY_TEST}.sv")
         foreach(SANITY_IMAGE IN LISTS SANITY_IMAGES)
             riscv_xsim_command(TEST_CMD SNAPSHOT top_sim TEST "${SANITY_TEST}"
