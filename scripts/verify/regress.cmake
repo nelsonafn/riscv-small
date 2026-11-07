@@ -16,6 +16,7 @@
 #   cmake -P scripts/verify/regress.cmake --list
 #   cmake -P scripts/verify/regress.cmake --wp 0
 #   cmake -P scripts/verify/regress.cmake --test T-06 --record red --wp 0
+#   cmake -P scripts/verify/regress.cmake --jobs 8
 #
 # Division of labour -- each fact is defined once, where it already lived:
 #   CTest     test name (T-id), command, timeout, labels, selection (-R/-L),
@@ -71,8 +72,11 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
                 HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}"
                 REQUIRE_SANITY SANITY_IMAGE "${TEST_IMAGE}")
         endif()
+        # One run directory per test: xsim.log/xsim.jou/*.pb/top_sim.wdb are
+        # CWD files, so a shared build/ makes two tests race.
+        riscv_test_run_dir(TEST_RUN_DIR "${TID}")
         add_test(NAME ${TID} COMMAND bash -c "${TEST_CMD}"
-            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+            WORKING_DIRECTORY "${TEST_RUN_DIR}")
 
         # Labels are the selection keys and the class carrier: run mode filters
         # with -R (T-id) and -L (wp/class) and reads the class back from the
@@ -91,7 +95,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     # simulate a stale snapshot. `$(REGRESS_ARGS)` is a make variable, e.g.
     # `make regress REGRESS_ARGS="--wp 0"`.
     add_custom_target(regress
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(REGRESS_ARGS)
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE}
+                --jobs ${DOLLAR}${DOLLAR}{VERIFY_JOBS:-${VERIFY_JOBS}} $(REGRESS_ARGS)
         DEPENDS elaborate
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running the regression and recording evidence (results.json)..."
@@ -117,7 +122,7 @@ if(CMAKE_ARGC GREATER 3)
         list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
-cmake_parse_arguments(R "all;list" "wp;seed;record;out;config" "test" ${ARGS})
+cmake_parse_arguments(R "all;list" "wp;seed;record;out;config;jobs" "test" ${ARGS})
 if(R_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
 endif()
@@ -132,6 +137,10 @@ endif()
 if(NOT SEED MATCHES "^[0-9]+$")
     message(FATAL_ERROR "--seed must be an unsigned integer, got '${SEED}'")
 endif()
+
+# 1 is the historical behaviour: a direct `cmake -P` is serial. The gate
+# targets pass --jobs from VERIFY_JOBS; a later --jobs in REGRESS_ARGS wins.
+riscv_parallel_jobs(JOBS "${R_jobs}")
 
 set(RECORD "${R_record}")
 if(NOT RECORD)
@@ -175,10 +184,19 @@ if(R_list)
 endif()
 
 # The sanity test needs its image built before CTest runs it. Build exactly
-# the images named by the manifest's optional 7th column, next to `elaborate`,
-# so a direct `cmake -P` cannot simulate an image that was never produced.
+# the images of the current selection -- the manifest's optional 7th column,
+# filtered by `--test`/`--wp` -- next to `elaborate`, so a direct `cmake -P`
+# cannot simulate an image that was never produced and a single-test run does
+# not rebuild every image the manifest names.
+set(SANITY_TESTS "")
+if(R_test)
+    set(SANITY_TESTS ${R_test})
+elseif(NOT "${R_wp}" STREQUAL "")
+    riscv_manifest_wp_tests(SANITY_TESTS "${ROOT}/scripts/verify/tests.tsv" "${R_wp}")
+endif()
 set(BUILD_TARGETS elaborate)
-riscv_manifest_sanity_targets(SANITY_TARGETS "${ROOT}/scripts/verify/tests.tsv")
+riscv_manifest_sanity_targets(SANITY_TARGETS "${ROOT}/scripts/verify/tests.tsv"
+    TESTS ${SANITY_TESTS})
 list(APPEND BUILD_TARGETS ${SANITY_TARGETS})
 list(REMOVE_DUPLICATES BUILD_TARGETS)
 
@@ -211,6 +229,7 @@ string(TIMESTAMP STARTED "%Y-%m-%dT%H:%M:%SZ" UTC)
 message(STATUS "running the selection through ctest")
 riscv_ctest_run("${OUT}/junit.xml" "${BUILD}"
     LOG "${OUT}/ctest.log"
+    JOBS "${JOBS}"
     ENV "SEED=${SEED}"
     SELECT ${CTEST_SELECT})
 

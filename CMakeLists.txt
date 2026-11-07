@@ -452,7 +452,8 @@ add_custom_target(docs-check
 #   make regress REGRESS_ARGS="--record red --wp 0"   test-first evidence
 #   make sanity    [SANITY_ARGS="rv32ui-p-add"]
 #   make coverage  [COVERAGE_ARGS="--test T-01 | --require-bins <cp.bin,...>"]
-#   make signoff-check [SIGNOFF_ARGS="--wp 0"]
+#   make signoff-check [SIGNOFF_ARGS="--wp 0"]      release gate (full evidence chain)
+#   make wp-check   [SIGNOFF_ARGS="--wp 7"]         WP checkpoint (regress + coverage + its mutants)
 
 # --- regression: included, not duplicated ------------------------------------
 # regress.cmake is a module in two modes. Included, it declares one CTest test

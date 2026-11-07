@@ -17,6 +17,7 @@
 #
 #   cmake -P scripts/verify/coverage.cmake
 #   cmake -P scripts/verify/coverage.cmake --test T-01 --seed 42
+#   cmake -P scripts/verify/coverage.cmake --jobs 8
 #
 # Why these are CTest tests: a coverage run is the same test against another
 # snapshot, so timeout, the `UVM_RESULT:` verdict, the log and the JUnit XML are
@@ -116,8 +117,12 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
                 HEX "${TEST_HEX}" TOHOST_FILE "${TEST_TOHOST}"
                 REQUIRE_SANITY SANITY_IMAGE "${TEST_IMAGE}")
         endif()
+        # A private run directory: the coverage database is already absolute
+        # (--cov_db_dir ${COV_DB}), only the files xsim writes into the CWD move
+        # there, so `ctest -j` cannot cross two tests' logs.
+        riscv_test_run_dir(TEST_RUN_DIR "COV-${TID}")
         add_test(NAME COV-${TID} COMMAND bash -c "${TEST_CMD}"
-            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+            WORKING_DIRECTORY "${TEST_RUN_DIR}")
         set_tests_properties(COV-${TID} PROPERTIES
             TIMEOUT ${TEST_TIMEOUT}
             SKIP_RETURN_CODE 77
@@ -127,7 +132,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     message(STATUS "Coverage tests: ${COV_TESTS}")
 
     add_custom_target(coverage
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(COVERAGE_ARGS)
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE}
+                --jobs ${DOLLAR}${DOLLAR}{VERIFY_JOBS:-${VERIFY_JOBS}} $(COVERAGE_ARGS)
         DEPENDS elaborate_cov
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Measuring and merging coverage with xcrg (NFR-06)..."
@@ -156,10 +162,14 @@ if(CMAKE_ARGC GREATER 3)
         list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
-cmake_parse_arguments(R "" "seed;format" "test;require-bins" ${ARGS})
+cmake_parse_arguments(R "" "seed;format;jobs" "test;require-bins" ${ARGS})
 if(R_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
 endif()
+
+# 1 is the historical behaviour: a direct `cmake -P` is serial. The gate
+# targets pass --jobs from VERIFY_JOBS; a later --jobs in COVERAGE_ARGS wins.
+riscv_parallel_jobs(JOBS "${R_jobs}")
 
 set(SEED "${R_seed}")
 if(NOT SEED)
@@ -204,9 +214,12 @@ file(MAKE_DIRECTORY "${BUILD}/regress")
 riscv_bootstrap_build("${BUILD}/regress/configure.log")
 
 # The sanity test needs its image before CTest runs COV-T-08; build it next to
-# the instrumented snapshot, exactly like the regression does.
+# the instrumented snapshot, exactly like the regression does. Only the images
+# of the selected tests are built: `--test T-13` runs COV-T-13 alone, so the
+# other images would be built for nobody.
 set(BUILD_TARGETS elaborate_cov)
-riscv_manifest_sanity_targets(SANITY_TARGETS "${ROOT}/scripts/verify/tests.tsv")
+riscv_manifest_sanity_targets(SANITY_TARGETS "${ROOT}/scripts/verify/tests.tsv"
+    TESTS ${R_test})
 list(APPEND BUILD_TARGETS ${SANITY_TARGETS})
 list(REMOVE_DUPLICATES BUILD_TARGETS)
 
@@ -230,6 +243,7 @@ file(MAKE_DIRECTORY "${COV_DB}" "${COV_REPORT}")
 message(STATUS "running the coverage-labelled tests")
 riscv_ctest_run("${COV_REPORT}/junit.xml" "${BUILD}"
     LOG "${COV_REPORT}/ctest.log"
+    JOBS "${JOBS}"
     ENV RISCV_COVERAGE=1 "SEED=${SEED}"
     SELECT ${CTEST_SELECT})
 

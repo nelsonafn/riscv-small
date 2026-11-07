@@ -3,6 +3,10 @@
 #
 #   cmake -P scripts/verify/signoff_check.cmake                release (1-11)
 #   cmake -P scripts/verify/signoff_check.cmake --wp 0        work-package gate
+#   cmake -P scripts/verify/signoff_check.cmake --wp 7 --run-mutants
+#                                                             run that WP's mutants first
+#   cmake -P scripts/verify/signoff_check.cmake --wp 7 --run-mutants --shards 8 --mt 2
+#                                                             ... as eight concurrent shards
 #   cmake -P scripts/verify/signoff_check.cmake --no-docs
 #
 # Checks
@@ -40,12 +44,20 @@ include(${CMAKE_CURRENT_LIST_DIR}/common.cmake)
 # Configure mode: the gate, and the evidence it audits as dependencies.
 # =============================================================================
 if(NOT CMAKE_SCRIPT_MODE_FILE)
+    set(DOLLAR "$")
     # The negative control proves that each test fails on the defect it covers,
     # by rebuilding a disposable copy of the tree with that defect. It is part
     # of the chain on purpose: `rm -rf build` must not be able to erase the
-    # evidence, and a fresh machine must be able to produce it.
+    # evidence, and a fresh machine must be able to produce it. One mutant is a
+    # private tree plus a full compile and elaboration, so the catalogue is run
+    # as VERIFY_JOBS concurrent shards; `--mt` keeps the N elaborations from
+    # asking for 16 threads each. Both are make-time knobs, like VERIFY_JOBS.
+    set(NEGATIVE_CONTROL_MT "2" CACHE STRING
+        "xelab thread budget per negative-control shard (make-time override: NEGATIVE_CONTROL_MT=4 make negative-control)")
     add_custom_target(negative-control
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/negative_control.cmake
+                --shards ${DOLLAR}${DOLLAR}{VERIFY_JOBS:-${VERIFY_JOBS}}
+                --mt ${DOLLAR}${DOLLAR}{NEGATIVE_CONTROL_MT:-${NEGATIVE_CONTROL_MT}}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Proving every work-package test fails on its mutant..."
         USES_TERMINAL
@@ -55,6 +67,22 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         DEPENDS regress coverage sanity-evidence negative-control
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running the signoff gate (A-09)..."
+        USES_TERMINAL
+    )
+    # The work-package checkpoint uses the same gate but only the evidence a WP
+    # gate reads: check 5 (a fresh regression) and check 7 (coverage at the
+    # current digest). It cannot push its `--wp` into the `negative-control`
+    # dependency, so it asks the script to run that WP's mutants itself
+    # (--run-mutants). `signoff-check` above is untouched: it keeps the release
+    # chain, including the full mutant catalogue.
+    add_custom_target(wp-check
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE}
+                --shards ${DOLLAR}${DOLLAR}{VERIFY_JOBS:-${VERIFY_JOBS}}
+                --mt ${DOLLAR}${DOLLAR}{NEGATIVE_CONTROL_MT:-${NEGATIVE_CONTROL_MT}}
+                $(SIGNOFF_ARGS) --run-mutants
+        DEPENDS regress coverage
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running the work-package checkpoint (regress, coverage, its mutants)..."
         USES_TERMINAL
     )
     return()
@@ -86,7 +114,7 @@ if(CMAKE_ARGC GREATER 3)
         list(APPEND ARGS "${ARG}")
     endforeach()
 endif()
-cmake_parse_arguments(R "release;no_docs" "wp" "" ${ARGS})
+cmake_parse_arguments(R "release;no_docs;run_mutants" "wp;jobs;mt;shards" "" ${ARGS})
 if(R_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "unknown option(s): ${R_UNPARSED_ARGUMENTS}")
     return()
@@ -652,12 +680,42 @@ endif()
 # --- 11. work-package negative control (test-first) --------------------------
 # A stored red run is history: it dies with `build/` and cannot be regenerated
 # on fixed RTL. What is reproducible is that the test fails on its mutant, so
-# this check reads build/red/<T-id>/results.json, produced by the
-# `negative-control` target that this gate depends on.
+# this check reads build/red/<T-id>/results.json. `signoff-check` gets it from
+# the `negative-control` dependency (the whole catalogue); `wp-check` passes
+# --run-mutants, and the script runs only this WP's mutants before reading them.
 if(WP STREQUAL "")
+    if(R_run_mutants)
+        # `wp-check` without `--wp` is a release audit that lacks the release
+        # chain: say so instead of pretending the flag did something.
+        message(STATUS "wp-check: no --wp given, so no mutant is selected (check 11 is release-skipped)")
+    endif()
     add_row("11::work-package negative control (test-first)::skipped::checked per work package; see --wp <n>")
 else()
     set(NC_PROBLEMS "")
+    if(R_run_mutants)
+        # One mutant is a full compile and elaboration, so this gate starts the
+        # same sharded runner the `negative-control` target uses. The defaults
+        # are set by the target; a direct `cmake -P` stays serial.
+        set(NC_ARGS --wp "${WP}")
+        if(NOT R_shards STREQUAL "")
+            list(APPEND NC_ARGS --shards "${R_shards}")
+        endif()
+        if(NOT R_mt STREQUAL "")
+            list(APPEND NC_ARGS --mt "${R_mt}")
+        endif()
+        message(STATUS "negative control: running the mutants of work package ${WP}")
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/negative_control.cmake ${NC_ARGS}
+            WORKING_DIRECTORY "${ROOT}"
+            RESULT_VARIABLE NC_RC
+            OUTPUT_FILE "${OUT}/negative-control.log"
+            ERROR_FILE "${OUT}/negative-control.log")
+        if(NOT NC_RC EQUAL 0)
+            # The verdict stays blocked: a mutant that passed is a test without
+            # teeth, and a build failure is missing evidence, never a pass.
+            list(APPEND NC_PROBLEMS "negative-control --wp ${WP} failed (exit ${NC_RC}); see build/signoff/negative-control.log and build/signoff/negative-control.<i>.log")
+        endif()
+    endif()
     set(NC_WP_TESTS 0)
     riscv_manifest_rows(MANIFEST_ROWS "${MANIFEST}")
     foreach(MROW IN LISTS MANIFEST_ROWS)

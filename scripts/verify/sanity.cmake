@@ -28,6 +28,7 @@
 #   cmake -P scripts/verify/sanity.cmake --list
 #   cmake -P scripts/verify/sanity.cmake --exclude rv32ui-p-x
 #   cmake -P scripts/verify/sanity.cmake --trace          add +TRACE to the TB
+#   cmake -P scripts/verify/sanity.cmake --jobs 8         run the images in parallel
 #
 # What the run mode keeps, because nobody else can do it: `tohost` is read from
 # the ELF (never from a literal) and the verdict line is `SANITY: PASS|FAIL`.
@@ -237,8 +238,11 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
                 HEX "${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex"
                 TOHOST_FILE "${SANITY_TOHOST_DIR}/${SANITY_IMAGE}"
                 REQUIRE_SANITY SANITY_IMAGE "${SANITY_IMAGE}")
+            # One run directory per image: xsim.log/xsim.jou/*.pb/top_sim.wdb
+            # are CWD files, so two images must not share build/.
+            riscv_test_run_dir(TEST_RUN_DIR "${SANITY_IMAGE}")
             add_test(NAME ${SANITY_IMAGE} COMMAND bash -c "${TEST_CMD}"
-                WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+                WORKING_DIRECTORY "${TEST_RUN_DIR}")
             set_tests_properties(${SANITY_IMAGE} PROPERTIES
                 LABELS "sanity"
                 TIMEOUT ${SANITY_TIMEOUT}
@@ -253,7 +257,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     # answer "not measurable" on a machine with no Vivado. The run mode pulls
     # the images and the elaboration only when it is really going to run.
     add_custom_target(sanity
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} $(SANITY_ARGS)
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE}
+                --jobs ${DOLLAR}${DOLLAR}{VERIFY_JOBS:-${VERIFY_JOBS}} $(SANITY_ARGS)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running the bundled RISC-V test images (NFR-05)..."
         USES_TERMINAL
@@ -263,7 +268,8 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     # summary.json and check 6 turns the failures into `blocked`. Without this,
     # `make signoff-check` would abort in the dependency before judging.
     add_custom_target(sanity-evidence
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE} --allow-fail $(SANITY_ARGS)
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_FILE}
+                --allow-fail --jobs ${DOLLAR}${DOLLAR}{VERIFY_JOBS:-${VERIFY_JOBS}} $(SANITY_ARGS)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Measuring NFR-05 for the signoff gate (failures are a verdict)..."
         USES_TERMINAL
@@ -291,6 +297,7 @@ set(COMPILE_ONLY FALSE)
 set(DO_LIST FALSE)
 set(DO_TRACE FALSE)
 set(ALLOW_FAIL FALSE)
+set(JOBS_ARG "")
 math(EXPR LAST_ARG "${CMAKE_ARGC} - 1")
 if(CMAKE_ARGC GREATER 3)
     foreach(I RANGE 3 ${LAST_ARG})
@@ -311,6 +318,11 @@ if(CMAKE_ARGC GREATER 3)
         elseif(DEFINED NEED_EXCLUDE)
             unset(NEED_EXCLUDE)
             list(APPEND EXCLUDE "${ARG}")
+        elseif(ARG STREQUAL "--jobs")
+            set(NEED_JOBS TRUE)
+        elseif(DEFINED NEED_JOBS)
+            unset(NEED_JOBS)
+            set(JOBS_ARG "${ARG}")
         elseif(ARG MATCHES "^-")
             message(FATAL_ERROR "unknown option '${ARG}'")
             return()
@@ -319,6 +331,10 @@ if(CMAKE_ARGC GREATER 3)
         endif()
     endforeach()
 endif()
+
+# 1 is the historical behaviour: a direct `cmake -P` is serial. The gate
+# targets pass --jobs from VERIFY_JOBS; a later --jobs in SANITY_ARGS wins.
+riscv_parallel_jobs(JOBS "${JOBS_ARG}")
 
 # --- chain: ./configure gives the image list --------------------------------
 file(MAKE_DIRECTORY "${OUT}")
@@ -429,6 +445,7 @@ if(DO_TRACE)
 endif()
 riscv_ctest_run("${OUT}/junit.xml" "${BUILD}"
     LOG "${OUT}/ctest.log"
+    JOBS "${JOBS}"
     ENV ${CTEST_ENV}
     SELECT -L "^sanity$" -R "^(${PATTERN})$")
 

@@ -3,23 +3,29 @@
 #
 # Included by regress.cmake, coverage.cmake, sanity.cmake, negative_control.cmake
 # and signoff_check.cmake, in configure mode and in `cmake -P` mode. It defines
-# functions and two path variables; it never declares a target.
+# functions, two path variables and the `VERIFY_JOBS` cache default; it never
+# declares a target.
 #
 #   riscv_tsv_rows(OUT <file>)                  rows of a tab-separated table, `|`-joined
 #   riscv_tsv_cell(OUT <row> <index>)           one cell; `;` restored, spaces kept
 #   riscv_manifest_rows(OUT <tests.tsv>)        one row: T-id|uvm_test|wp|frs|timeout|red|extra
 #   riscv_manifest_extra(OUT <row>)             the optional 7th column (`sanity:<image>`)
+#   riscv_manifest_wp_tests(OUT <manifest> <wp>) T-ids owned by a work package
 #   riscv_manifest_sanity_images(OUT <manifest>) images named by the 7th column
-#   riscv_manifest_sanity_targets(OUT <manifest>) `compile_sanity_<image>` for each
+#   riscv_manifest_sanity_targets(OUT <manifest> [TESTS <T-id>...])
+#                                               `compile_sanity_<image>` for each selected row
 #   riscv_junit_rows(OUT <junit.xml>)           CTest verdicts: T-id|pass|fail|timeout|skip|class
 #   riscv_tree_digest(OUT <dir>)                sha256 over the .sv/.svh content
 #   riscv_tree_digests(OUT_RTL OUT_TB <root>)   the RTL/TB pair every gate records
 #   riscv_bootstrap_build(<log>)                ./configure when build/Makefile is absent
-#   riscv_ctest_run(<junit> <workdir> LOG <log> [ENV ...] [SELECT ...])
+#   riscv_ctest_run(<junit> <workdir> LOG <log> [JOBS <n>] [ENV ...] [SELECT ...])
+#   riscv_test_run_dir(OUT_VAR <name>)          build/runs/<name> with xsim.dir symlinked
+#   riscv_parallel_jobs(OUT_VAR <raw>)          validate `--jobs`, default 1
 #   riscv_xsim_command(OUT ...)                 the one `bash -c` xsim command string
 #                                               (`SANITY_IMAGE` pins the verdict line)
 #   riscv_mutant_names(OUT <mutants.tsv>)       the `name` column of the catalogue
-#   riscv_patch_once(<file> <find> <replace> <why>) exact single-occurrence text patch
+#   riscv_patch_once(<file> <find> <replace> <why> [<label>])
+#                                               exact single-occurrence text patch
 #   riscv_mutant_apply(<tree> <name> <tsv>)     every row named <name>, in table order
 #
 # Everything that was copied once per gate lives here. A gate module declares
@@ -38,6 +44,29 @@ endif()
 
 get_filename_component(RISCV_VERIFY_DIR "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 get_filename_component(RISCV_ROOT "${RISCV_VERIFY_DIR}/../.." ABSOLUTE)
+
+# --- parallel verification ---------------------------------------------------
+# The one default every gate target uses. It is a cache variable so ./configure
+# fixes a sensible value, and the target command lines read VERIFY_JOBS at make
+# time (`--jobs $${VERIFY_JOBS:-<default>}`), so `VERIFY_JOBS=12 make regress`
+# needs no re-configure. A --jobs inside *_ARGS comes later on the argv and
+# wins: `jobs` is a one-value keyword and cmake_parse_arguments keeps the last
+# value it sees.
+if(NOT CMAKE_SCRIPT_MODE_FILE)
+    include(ProcessorCount)
+    ProcessorCount(RISCV_VERIFY_CORES)
+    if(RISCV_VERIFY_CORES EQUAL 0)
+        set(RISCV_VERIFY_CORES 1)
+    endif()
+    # Measured on the 24-core reference machine: 8 jobs 23.1 s, 12 jobs
+    # 20.9 s for the 39-test regression (16/24 measured 18.2/15.7 s but the
+    # default is bounded to keep one suite's peak well inside the machine).
+    if(RISCV_VERIFY_CORES GREATER 12)
+        set(RISCV_VERIFY_CORES 12)
+    endif()
+    set(VERIFY_JOBS "${RISCV_VERIFY_CORES}" CACHE STRING
+        "Parallel ctest jobs for the verification targets (make-time override: VERIFY_JOBS=N make regress)")
+endif()
 
 # --- safe line reader --------------------------------------------------------
 # file(STRINGS) splits a line at every non-ASCII byte (measured: "emdash—tail"
@@ -122,12 +151,53 @@ function(riscv_manifest_sanity_images OUT_VAR MANIFEST)
     set(${OUT_VAR} "${IMAGES}" PARENT_SCOPE)
 endfunction()
 
-function(riscv_manifest_sanity_targets OUT_VAR MANIFEST)
-    riscv_manifest_sanity_images(IMAGES "${MANIFEST}")
-    set(TARGETS "")
-    foreach(IMAGE IN LISTS IMAGES)
-        list(APPEND TARGETS "compile_sanity_${IMAGE}")
+# The T-ids of the rows a work package owns (the manifest's `wp` column), so a
+# selection is resolved once and every caller -- the regression's image list, the
+# negative control's mutant list -- reads the same rows. Empty <wp> is "no
+# filter" and returns every T-id.
+function(riscv_manifest_wp_tests OUT_VAR MANIFEST WP)
+    riscv_manifest_rows(ROWS "${MANIFEST}")
+    set(IDS "")
+    foreach(ROW IN LISTS ROWS)
+        riscv_tsv_cell(TID "${ROW}" 0)
+        riscv_tsv_cell(ROW_WP "${ROW}" 2)
+        if(WP STREQUAL "" OR ROW_WP STREQUAL WP)
+            list(APPEND IDS "${TID}")
+        endif()
     endforeach()
+    set(${OUT_VAR} "${IDS}" PARENT_SCOPE)
+endfunction()
+
+# `TESTS <T-id>...` restricts the list to the rows of the current selection, so a
+# `--test T-13` run builds the one image it will simulate instead of every image
+# the manifest names. No TESTS keeps the release path exactly as it was: every
+# image the manifest names, through riscv_manifest_sanity_images().
+function(riscv_manifest_sanity_targets OUT_VAR MANIFEST)
+    cmake_parse_arguments(S "" "" "TESTS" ${ARGN})
+    if(NOT S_TESTS)
+        riscv_manifest_sanity_images(IMAGES "${MANIFEST}")
+        set(TARGETS "")
+        foreach(IMAGE IN LISTS IMAGES)
+            list(APPEND TARGETS "compile_sanity_${IMAGE}")
+        endforeach()
+        set(${OUT_VAR} "${TARGETS}" PARENT_SCOPE)
+        return()
+    endif()
+
+    riscv_manifest_rows(ROWS "${MANIFEST}")
+    set(TARGETS "")
+    foreach(ROW IN LISTS ROWS)
+        riscv_tsv_cell(TID "${ROW}" 0)
+        list(FIND S_TESTS "${TID}" TID_INDEX)
+        if(TID_INDEX EQUAL -1)
+            continue()
+        endif()
+        riscv_manifest_extra(IMAGE "${ROW}")
+        if(IMAGE)
+            list(APPEND TARGETS "compile_sanity_${IMAGE}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES TARGETS)
     set(${OUT_VAR} "${TARGETS}" PARENT_SCOPE)
 endfunction()
 
@@ -216,17 +286,61 @@ function(riscv_bootstrap_build LOG)
     endif()
 endfunction()
 
+# One working directory per CTest test. xsim writes xsim.log, xsim.jou, the
+# protobuf files, top_sim.wdb and xsim.covdb into the *current* directory, so
+# two tests that share build/ overwrite each other's log and the verdict becomes
+# a race (measured: `ctest -R '^(T-13|T-14)$' -j2` failed one of the two, and
+# which one changed between runs).
+#
+# The snapshot directory is NOT read-only either: xsim rewrites
+# `xsim.dir/<snapshot>/xsim_script.tcl` with the process's own command line (and
+# touches xsimcrash.log) on every invocation, so a symlink to the shared
+# build/xsim.dir makes two concurrent tests execute each other's argv (measured:
+# T-13 and T-14 both loaded the same image and the loser failed only its
+# `SANITY: PASS image=` grep). riscv_xsim_command() therefore materialises a
+# private snapshot directory per run -- symlinks to the elaborated files, with
+# xsim_script.tcl/xsimcrash.log left to the run. Only the run directory itself
+# is created here, because the snapshot is built by `elaborate` after configure.
+function(riscv_test_run_dir OUT_VAR NAME)
+    if(CMAKE_SCRIPT_MODE_FILE)
+        message(FATAL_ERROR "riscv_test_run_dir is a configure-mode helper")
+    endif()
+    set(DIR "${CMAKE_BINARY_DIR}/runs/${NAME}")
+    file(MAKE_DIRECTORY "${DIR}")
+    set(${OUT_VAR} "${DIR}" PARENT_SCOPE)
+endfunction()
+
+# `--jobs N`: every gate accepts it and 1 is the default, so a direct
+# `cmake -P` behaves exactly as it did before the option existed. A value
+# larger than the number of selected tests is harmless: CTest schedules what it
+# has.
+function(riscv_parallel_jobs OUT_VAR RAW)
+    set(N "${RAW}")
+    if(N STREQUAL "")
+        set(N 1)
+    endif()
+    if(NOT N MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "--jobs must be a positive integer, got '${N}'")
+    endif()
+    set(${OUT_VAR} "${N}" PARENT_SCOPE)
+endfunction()
+
 function(riscv_ctest_run JUNIT WORKDIR)
-    cmake_parse_arguments(C "" "LOG" "ENV;SELECT" ${ARGN})
+    cmake_parse_arguments(C "" "LOG;JOBS" "ENV;SELECT" ${ARGN})
     if(C_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "riscv_ctest_run: unknown ${C_UNPARSED_ARGUMENTS}")
     endif()
     if(NOT C_LOG)
         message(FATAL_ERROR "riscv_ctest_run: LOG is required")
     endif()
+    # No -j at all for the serial default: the command line is unchanged.
+    set(PARALLEL "")
+    if(C_JOBS AND C_JOBS GREATER 1)
+        set(PARALLEL "-j${C_JOBS}")
+    endif()
     execute_process(
         COMMAND ${CMAKE_COMMAND} -E env ${C_ENV}
-                ${CMAKE_CTEST_COMMAND} --output-junit "${JUNIT}" ${C_SELECT}
+                ${CMAKE_CTEST_COMMAND} ${PARALLEL} --output-junit "${JUNIT}" ${C_SELECT}
         WORKING_DIRECTORY "${WORKDIR}"
         RESULT_VARIABLE RC
         OUTPUT_FILE "${C_LOG}"
@@ -261,6 +375,22 @@ function(riscv_xsim_command OUT_VAR)
     endif()
 
     set(CMD "")
+    # Private snapshot: one symlink per elaborated file, and the two files xsim
+    # writes inside the snapshot directory belong to this run alone. The test
+    # runs in its own working directory (riscv_test_run_dir), so `xsim.dir` is
+    # relative to it.
+    set(SNAP_SRC "${CMAKE_BINARY_DIR}/xsim.dir/${X_SNAPSHOT}")
+    string(APPEND CMD
+        # A build configured before this rule may still carry the old whole-dir
+        # symlink; remove the link (never its target) before building the tree.
+        "if [ -L 'xsim.dir' ]; then rm -f 'xsim.dir'; fi; "
+        "mkdir -p 'xsim.dir/${X_SNAPSHOT}'; "
+        "if [ -d '${SNAP_SRC}' ]; then "
+        "for f in '${SNAP_SRC}'/*; do "
+        "ln -sfn \"${DOLLAR}f\" \"xsim.dir/${X_SNAPSHOT}/${DOLLAR}(basename \"${DOLLAR}f\")\"; "
+        "done; "
+        "fi; "
+        "rm -f 'xsim.dir/${X_SNAPSHOT}/xsim_script.tcl' 'xsim.dir/${X_SNAPSHOT}/xsimcrash.log'; ")
     if(X_TOHOST_FILE)
         string(APPEND CMD "TOHOST=${DOLLAR}(cat ${X_TOHOST_FILE}); ")
     endif()
@@ -317,13 +447,20 @@ endfunction()
 # The one mutation mechanism: an exact single-occurrence text replacement. It
 # knows nothing about RTL, UVM or tests -- a file and two strings. `find` must
 # occur exactly once, or the mutant is stale and the gate aborts (a silent 0- or
-# 2-replacement would prove nothing).
+# 2-replacement would prove nothing). The optional <label> names the caller in
+# the log ("mutant" by default): the negative control also uses this to set the
+# elaboration thread budget on its disposable tree, and a line that says
+# `mutant:` there would be a lie.
 function(riscv_patch_once FILE FIND REPLACE_TEXT WHY)
+    set(LABEL "mutant")
+    if(ARGN)
+        list(GET ARGN 0 LABEL)
+    endif()
     if(NOT EXISTS "${FILE}")
-        message(FATAL_ERROR "mutant: ${FILE} does not exist")
+        message(FATAL_ERROR "${LABEL}: ${FILE} does not exist")
     endif()
     if(FIND STREQUAL "" OR FIND STREQUAL REPLACE_TEXT)
-        message(FATAL_ERROR "mutant: empty or no-op find in ${FILE}; the mutant proves nothing")
+        message(FATAL_ERROR "${LABEL}: empty or no-op find in ${FILE}; the mutant proves nothing")
     endif()
     file(READ "${FILE}" TEXT)
     string(REPLACE "${FIND}" "" STRIPPED "${TEXT}")
@@ -332,11 +469,11 @@ function(riscv_patch_once FILE FIND REPLACE_TEXT WHY)
     string(LENGTH "${FIND}" LEN_NEEDLE)
     math(EXPR COUNT "(${LEN_FULL} - ${LEN_STRIPPED}) / ${LEN_NEEDLE}")
     if(NOT COUNT EQUAL 1)
-        message(FATAL_ERROR "mutant: '${FIND}' occurs ${COUNT} time(s) in ${FILE}; the mutant is stale")
+        message(FATAL_ERROR "${LABEL}: '${FIND}' occurs ${COUNT} time(s) in ${FILE}; the mutation is stale")
     endif()
     string(REPLACE "${FIND}" "${REPLACE_TEXT}" MUTATED "${TEXT}")
     file(WRITE "${FILE}" "${MUTATED}")
-    message(STATUS "mutant: ${FILE} <- ${WHY}")
+    message(STATUS "${LABEL}: ${FILE} <- ${WHY}")
 endfunction()
 
 # Apply every row of <table> named <name>, in table order, under <tree>.
