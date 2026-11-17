@@ -56,12 +56,12 @@ make compile_sanity_images                    # same build step, from CMake
 `make sanity` exits 0 when it produced a verdict and 1 when an image failed. The signoff gate runs the
 same measurement through `sanity-evidence` (`--allow-fail`).
 
-## Result - 2026-11-06 (WP-7)
+## Result - 2026-11-07 (WP-8)
 
 | Field | Value |
 |---|---|
-| RTL digest | `sha256:3541dfb8465edb0be8e976bf5fe0802285165b9e67855a718acda96ec287cd80` |
-| TB digest | `sha256:ae4e6c793ec7e345313273dde076d7ac20c7833c242716d9d51b1ecb428b5764` |
+| RTL digest | `sha256:120b211ff9c9f769c870fa43a4b8bfa626ffc749133287107c2efe08c9ea3cf0` |
+| TB digest | `sha256:86bcd47121c8e6730b827bf58de7b7fc54f6df4229652622dad4fc9fd5fd10e8` |
 | Images | 43 = 42 bundled + 1 project-local (`rv32ui-p-jalr_unaligned`) |
 | Pass | 42 (41 bundled + the local image) |
 | Fail | 1 (`rv32ui-p-ma_data`) |
@@ -149,3 +149,4 @@ measurement regardless.
 | 2026-11-04 | `sha256:d12dc1a201e403a1bc55469e9802f28734b28889c10ec1837389e4fb698027b2` | 42 | 34 | 8 | WP-4c: `G-27`/`G-26`/`G-20`; `T-10`/`T-11`/`T-12` green; verdict image-pinned (TB `f542affd...`) |
 | 2026-11-05 | `sha256:f48ab029b3c0cf986106d639b295f62fe0285b6eb2b34d78cf510e4259b9586d` | 42 | 38 | 4 | WP-6: `G-08`/`G-19`/`G-29` closed, `G-30` opened; `T-13`/`T-14`/`T-15` green (TB `ae4e6c79...`) |
 | 2026-11-06 | `sha256:3541dfb8465edb0be8e976bf5fe0802285165b9e67855a718acda96ec287cd80` | 43 (42 + 1 local) | 42 | 1 | WP-7: `G-07`/`G-30`/`G-31` closed, `G-15` re-attributed; `T-16`..`T-43` green; `jalr_unaligned` added (TB `ae4e6c79...`) |
+| 2026-11-07 | `sha256:120b211f...` | 43 (42 + 1 local) | 42 | 1 | WP-8: retire probe + monitor-fed model (`G-28` closed); same one failure `ma_data` (`FR-42`) (TB `86bcd471...`) |

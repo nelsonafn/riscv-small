@@ -46,6 +46,8 @@ import riscv_definitions_pkg::*;
 	input ctrlAluSrc2_e alu_src2, //[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
     input ctrlAluSrc2_e storage_src,//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) TODO:TBR
     input dataBus_u pc, //[in] PC value to EX	
+    input instruction_u inst, //[in] Instruction word from decode (id)
+    input logic valid, //[in] Instruction valid from decode (id)
 	input dataBus_u rs1, //[in] Reg source one (rs1) data
 	input dataBus_u rs2, //[in] Reg source two (rs2) data
 	input dataBus_u imm, //[in] Immediate value
@@ -59,6 +61,9 @@ import riscv_definitions_pkg::*;
     //TODO: Check critical path of forward from not registered ALU (alu_ex)
     output dataBus_u alu_ex, //[out] ALU result from execution not registered to jump forward (ex)
     output dataBus_u alu_ma, //[out] ALU result to memory access (ma)
+    output dataBus_u pc_ma, //[out] PC value to memory access (ma)
+    output instruction_u inst_ma, //[out] Instruction word to memory access (ma)
+    output logic valid_ma, //[out] Instruction valid to memory access (ma)
     output dataBus_u rs2_ma, //[out] Reg source two (rs2) data
     output logic [3:0] data_wr_strb_ma, //[out] Byte write strobe to memory access (ma)
 	output logic rd0_wr_en_ma,//[out] Reg destination (rd) write enable to pipeline to memory access
@@ -96,6 +101,9 @@ import riscv_definitions_pkg::*;
     always_ff @(posedge clk or negedge rst_n) begin: proc_ex_ma
         if (!rst_n || flush) begin: proc_ex_ma_rst
             alu_ma <= '0;
+            pc_ma <= '0;
+            inst_ma <= '0;
+            valid_ma <= '0;
             rd0_wr_en_ma <= '0;
             data_rd_en_ma <= '0;
             data_wr_en_ma <= '0;
@@ -106,6 +114,9 @@ import riscv_definitions_pkg::*;
         end: proc_ex_ma_rst
         else if (clk_en) begin
             alu_ma <= alu_result;
+            pc_ma <= pc;
+            inst_ma <= inst;
+            valid_ma <= valid;
             rd0_wr_en_ma <= rd0_wr_en;
             data_rd_en_ma <= data_rd_en;
             data_wr_en_ma <= data_wr_en;

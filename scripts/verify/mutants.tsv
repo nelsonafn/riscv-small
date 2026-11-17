@@ -142,3 +142,11 @@ lui-ignores-imm	rtl/instruction_decode.sv	imm.s_data = signed'({inst.u_type.imm1
 # (== x0 in this image) instead of pc and the image reports TESTNUM 5. The
 # JAL/JALR link values move too; each of those has its own mutant.
 auipc-no-pc	rtl/execution.sv	alu_data1 = pc;	alu_data1 = rs1; // negative control: the pc is not added	AUIPC adds rs1 instead of pc, so rd is the immediate alone (FR-05)
+#
+# T-44 (G-28 / C-16): the retire observation is only meaningful if a slot that
+# never held a real instruction does not retire. The flush path zeroes inst_ex
+# and valid_ex together, so the bubble that follows every flush is invisible to
+# WB. Forcing valid_ex for every enabled slot sends that bubble (pc=0, word=0)
+# to write-back, where the probe publishes it and the retire checker reports it
+# as not the program's next instruction.
+retire-every-slot	rtl/instruction_decode.sv	valid_ex <= valid_id && !flush;	valid_ex <= 1'b1; // negative control: every pipeline slot retires	a flushed slot retires as if it were an instruction (G-28)

@@ -69,3 +69,12 @@ T-42	riscv_small_sanity_test	7	NFR-05,FR-05	300	mutant:auipc-no-pc	sanity:rv32ui
 # checks one directly: TESTNUM 3 is `add rd,1,1` == 2, and `alu-ignore-rs2` makes it store 3. The mutant is shared
 # with T-29..T-36; each row is applied independently (as branch-always-taken is for T-19..T-22 and T-38).
 T-43	riscv_small_sanity_test	7	NFR-05,FR-01	300	mutant:alu-ignore-rs2	sanity:rv32ui-p-add
+# wp 8 - retire observation and the monitor-fed model (G-28, C-16). T-44 runs T-01's program with the model fed
+# by the monitor only (no program feed other than the monitor) and checks every published fetch pair against the
+# program image (G-32) and the commit stream, per commit, against the same image (G-28). The mutant sends the
+# bubble that follows a flush to write-back, so the commit stream is no longer the program.
+T-44	riscv_small_monitor_model_test	8	-	300	mutant:retire-every-slot
+# wp 8 follow-up (G-28): T-44's program is straight-line, so fetches == commits there and a model that counted
+# fetches would pass it. T-45 runs a program whose taken forward branch skips two placed stores: 12 fetches, 10
+# commits, difference 2 == the discarded fetches, and the two skipped PCs must never appear in the commit stream.
+T-45	riscv_small_branch_model_test	8	-	300	mutant:retire-every-slot

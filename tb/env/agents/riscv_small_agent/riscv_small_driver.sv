@@ -124,6 +124,14 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       forever begin : inst_mem_thread
         @(posedge vif.clk);
         vif.inst_ready <= #OUTPUT_DELAY 0; // Default
+        // wp-8 §3.1.1: the target must not present rsp_valid while the core is
+        // in reset. Answering a reset-time request leaves a response on the bus
+        // that the core latches on the first post-reset edge *and* again one
+        // cycle later, executing the reset PC twice -- the retire observation
+        // found it (an extra commit at pc=0). The request presented while reset
+        // is low is answered on the first post-reset edge, which is the
+        // one-cycle latency the core's pc_fetch/pc_id pairing expects.
+        if (!vif.rst_n) continue;
         if (vif.inst_rd_en) begin
           bit found = 0;
           foreach (req.instruction_addr[i]) begin
@@ -180,7 +188,15 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
           @(posedge vif.clk);
           if (vif.inst_rd_en && (vif.inst_addr == last_addr)) break;
         end
-        
+
+        // The request presented in the cycle that just ended is the program's
+        // last one: its response goes out on the next cycle, and the core
+        // captures it one edge after that. Wait for that response, then stop
+        // answering -- a BFM that leaves rsp_valid high with the stale last
+        // word lets the core fetch and retire instructions past the program.
+        @(posedge vif.clk);
+        vif.inst_ready <= #OUTPUT_DELAY 0;
+
         `uvm_info("DRIVER", "Last instruction fetch detected, waiting for pipeline to drain...", UVM_LOW)
         `uvm_info("DRIVER", "Subprogram completion detected!", UVM_LOW)
       end

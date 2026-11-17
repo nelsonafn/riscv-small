@@ -52,6 +52,7 @@ import riscv_definitions_pkg::*;
     // Communication instruction decoder
     output instruction_u inst_id,// Registered instruction to be decode
     output dataBus_t pc_id,  // PC of current instruction to decode
+    output logic valid_id, //[out] Instruction valid in ID (0 when the fetch is flushed)
     // Next PC control
     input dataBus_t jump_addr,// Jump address
     input dataBus_t trap_addr,// Exception/interruption address
@@ -80,14 +81,17 @@ import riscv_definitions_pkg::*;
             pc_id <= 'b0;
             inst_id <= 'b0;
             pc_fetch <= 'b0;
+            valid_id <= 1'b0;
         end else if(clk_en) begin
             pc_fetch <= pc;
             if(flush) begin
                 pc_id <= 'b0;
                 inst_id <= 'b0;
+                valid_id <= 1'b0;
             end else begin
                 pc_id <= pc_fetch;
                 inst_id <= inst_data;
+                valid_id <= 1'b1;
             end
         end
     end: proc_if_id

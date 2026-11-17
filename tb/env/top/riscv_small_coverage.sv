@@ -244,11 +244,16 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
   function void write(riscv_small_transaction t);
     // Fetch transactions share the analysis port but not the memory covergroup:
     // sampling them would leave lane/direction bins that no data access made.
-    // They feed cg_inst instead, through the local decoder.
+    // They feed cg_inst instead, through the local decoder. An orphan response
+    // is not a fetch -- no request produced it -- so it samples nothing.
     if (t.op_is_inst) begin
+      if (t.captured_inst_orphan) return;
       cg_inst.sample(decode_inst(t.captured_inst_data));
       return;
     end
+    // Retire (commit) events share the port too and carry no data-port fields:
+    // sampling them would hit the lane/direction bins with all-zero values.
+    if (t.op_is_retire) return;
     $cast(cov_trans, t);
     cg_mem.sample(cov_trans.captured_data_wr_ctrl[1:0],
                   cov_trans.captured_data_addr[1:0],

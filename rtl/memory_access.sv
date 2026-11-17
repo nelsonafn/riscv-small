@@ -44,12 +44,18 @@ import riscv_definitions_pkg::*;
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
     input dataBus_u alu_result, //[in] ALU result to from (ex)
+    input dataBus_u pc, //[in] PC value from execution (ex)
+    input instruction_u inst, //[in] Instruction word from execution (ex)
+    input logic valid, //[in] Instruction valid from execution (ex)
     input dataBus_u data, //[in] Data from data_memory
     input logic rd0_wr_en,//[in] Reg destination (rd) write enable from (ex)
     input logic data_rd_en, //[in] Data memory read enable (wb_mux_sel) to be used with funct3  
     input funct3ITypeLOAD_e rd_wr_ctrl, //[in] funct3 LOAD from execution (ex)
 	input regAddr_t rd0_addr,  //[in] Reg destination (rd) addr from execution (ex)
     output dataBus_u alu_wb, //[out] ALU result to write back (wb)
+    output dataBus_u pc_wb, //[out] PC value to write back (wb)
+    output instruction_u inst_wb, //[out] Instruction word to write back (wb)
+    output logic valid_wb, //[out] Instruction valid in write back (wb)
 	output logic rd0_wr_en_wb,//[out] Reg destination (rd) write enable to pipeline to write back
     output logic wb_mux_sel_wb, //[out] Data memory read enable (wb_mux_sel) 
     output dataBus_u ld_data_wb, //[out] Data from load_extension
@@ -75,6 +81,9 @@ import riscv_definitions_pkg::*;
             wb_mux_sel_wb <= '0;
             rd0_wr_en_wb <= '0;
             alu_wb <= '0;
+            pc_wb <= '0;
+            inst_wb <= '0;
+            valid_wb <= '0;
         end: proc_ma_wb_rst
         else if (clk_en) begin
             //ld_data_wb <= ld_data;
@@ -83,6 +92,9 @@ import riscv_definitions_pkg::*;
             wb_mux_sel_wb <= data_rd_en;
             rd0_wr_en_wb <= rd0_wr_en;
             alu_wb <= alu_result;
+            pc_wb <= pc;
+            inst_wb <= inst;
+            valid_wb <= valid;
         end        
     end: proc_ma_wb
     

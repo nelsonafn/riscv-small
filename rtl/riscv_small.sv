@@ -64,6 +64,7 @@ import riscv_definitions_pkg::*;
     // Communication instruction decoder
     instruction_u inst_id;// Registered instruction to be decode
     dataBus_t pc_id;  // PC of current instruction to decode
+    logic valid_id; //[out] Instruction valid from IF
     // Next PC control
     dataBus_t jump_addr;// Jump address
     dataBus_t trap_addr;// Exception/interruption address
@@ -80,6 +81,8 @@ import riscv_definitions_pkg::*;
 	aluSrc1_e alu_src1_ex; //[out] ALU source one mux selection (possible values PC/RS1)
 	aluSrc2_e alu_src2_ex; //[out] ALU source two mux selection (possible values RS2/IMM) 
 	dataBus_u pc_ex; //[out] PC value to EX	
+	instruction_u inst_ex; //[out] Instruction word in EX
+	logic valid_ex; //[out] Instruction valid in EX
 	dataBus_u rs1_ex; //[out] Reg source one (rs1) data
 	dataBus_u rs2_ex; //[out] Reg source two (rs2) data
 	dataBus_u imm_ex; //[out] Immediate value
@@ -102,6 +105,9 @@ import riscv_definitions_pkg::*;
     ctrlCJmpSrc_e jmp_src2;//[out] JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
     dataBus_u alu_ex; //[out] ALU result from execution not registered to jump forward (ex)
     dataBus_u alu_ma; //[out] ALU result to memory access (ma)
+    dataBus_u pc_ma; //[out] PC value to memory access (ma)
+    instruction_u inst_ma; //[out] Instruction word in memory access (ma)
+    logic valid_ma; //[out] Instruction valid in memory access (ma)
     
     dataBus_u rs2_ma; //[out] Reg source two (rs2) data
 	logic rd0_wr_en_ma;//[out] Reg destination (rd) write enable to pipeline to memory access
@@ -110,6 +116,9 @@ import riscv_definitions_pkg::*;
     logic ma_wb_clk_en;    
     funct3ITypeLOAD_e rd_wr_ctrl; //[in] funct3 LOAD from execution (ex)
     dataBus_u alu_wb; //[out] ALU result to write back (wb)
+    dataBus_u pc_wb; //[out] PC value to write back (wb)
+    instruction_u inst_wb; //[out] Instruction word in write back (wb)
+    logic valid_wb; //[out] Instruction valid in write back (wb)
 	logic rd0_wr_en_wb;//[out] Reg destination (rd) write enable to pipeline to write back
     logic wb_mux_sel_wb; //[out] Data memory read enable (wb_mux_sel) 
     dataBus_u ld_data_wb; //[out] Data from load_extension
@@ -133,6 +142,7 @@ import riscv_definitions_pkg::*;
         // Communication instruction decoder
         .inst_id      (inst_id),// Registered instruction to be decode
         .pc_id        (pc_id),// PC of current instruction to decode
+        .valid_id     (valid_id),//[out] Instruction valid from IF
         // Next PC control
         .jump_addr    (jump_addr),// Jump address
         .trap_addr    (trap_addr),// Exception/interruption address
@@ -146,6 +156,7 @@ import riscv_definitions_pkg::*;
 	    .rst_n            (rst_n),// Asynchronous reset active low
 	    .inst             (inst_id),// Instruction from IF
 	    .pc               (pc_id),// PC value from IF
+	    .valid_id         (valid_id),//[in] Instruction valid from IF
         // JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data (rd0_data_wb))
         .rd0_data_ex      (alu_ex),//[in] Reg destination data forward from EX
         .rd0_data_ma      (alu_ma),//[in] Reg destination data forward from MA
@@ -159,6 +170,8 @@ import riscv_definitions_pkg::*;
 	    .alu_src1_ex      (alu_src1_ex),//[out] ALU source one mux selection (possible values PC/RS1)
 	    .alu_src2_ex      (alu_src2_ex),//[out] ALU source two mux selection (possible values RS2/IMM) 
 	    .pc_ex            (pc_ex),//[out] PC value to EX	
+	    .inst_ex          (inst_ex),//[out] Instruction word to EX
+	    .valid_ex         (valid_ex),//[out] Instruction valid in EX
 	    .rs1_ex           (rs1_ex),//[out] Reg source one (rs1) data
 	    .rs2_ex           (rs2_ex),//[out] Reg source two (rs2) data
 	    .imm_ex           (imm_ex),//[out] Immediate value
@@ -184,6 +197,8 @@ import riscv_definitions_pkg::*;
         .alu_src2         (alu_src2),//[in] ALU mux2 sel (RS2/IMM/RD MA forward [alu_ma]/ RD WB rd0_data)
         .storage_src      (storage_src),//[in] rs2 mux2 sel (RS2/RD MA forward [alu_ma]/ RD WB rd0_data) //TODO:TBR
         .pc               (pc_ex),//[in] PC value to EX	
+        .inst             (inst_ex),//[in] Instruction word from (id)
+        .valid            (valid_ex),//[in] Instruction valid from (id)
         .rs1              (rs1_ex),//[in] Reg source one (rs1) data
         .rs2              (rs2_ex),//[in] Reg source two (rs2) data
         .imm              (imm_ex),//[in] Immediate value
@@ -196,6 +211,9 @@ import riscv_definitions_pkg::*;
         .flush            (ex_ma_flush),// Insert NOP
         .alu_ex           (alu_ex), //[out] ALU result from execution not registered to jump forward (ex)
         .alu_ma           (alu_ma),//[out] ALU result to memory access (ma)
+        .pc_ma            (pc_ma),//[out] PC value to memory access (ma)
+        .inst_ma          (inst_ma),//[out] Instruction word to memory access (ma)
+        .valid_ma         (valid_ma),//[out] Instruction valid in memory access (ma)
         .rs2_ma           (data_wr), //[out] Reg source two (rs2) data to data memory
         .data_wr_strb_ma  (data_wr_strb), //[out] Byte write strobe to data memory
         .rd0_wr_en_ma     (rd0_wr_en_ma),//[out] Reg destination (rd) write enable to pipeline to memory access
@@ -210,12 +228,18 @@ import riscv_definitions_pkg::*;
         .clk_en           (ma_wb_clk_en),//[in] Clock Enable
         .rst_n            (rst_n),//[in] Asynchronous reset active low
         .alu_result       (alu_ma),//[in] ALU result to from (ex)
+        .pc               (pc_ma),//[in] PC value from (ex)
+        .inst             (inst_ma),//[in] Instruction word from (ex)
+        .valid            (valid_ma),//[in] Instruction valid from (ex)
         .data             (data_rd),//[in] Data from data_memory
         .rd0_wr_en        (rd0_wr_en_ma),//[in] Reg destination (rd) write enable from (ex)
         .data_rd_en       (data_rd_en_ma),//[in] Data memory read enable (wb_mux_sel) to be used with funct3  
         .rd_wr_ctrl       (rd_wr_ctrl),//[in] funct3 LOAD from execution (ex)
         .rd0_addr         (rd0_addr_ma),//[in] Reg destination (rd) addr from execution (ex)
         .alu_wb           (alu_wb),//[out] ALU result to write back (wb)
+        .pc_wb            (pc_wb),//[out] PC value to write back (wb)
+        .inst_wb          (inst_wb),//[out] Instruction word to write back (wb)
+        .valid_wb         (valid_wb),//[out] Instruction valid in write back (wb)
         .rd0_wr_en_wb     (rd0_wr_en_wb),//[out] Reg destination (rd) write enable to pipeline to write back
         .wb_mux_sel_wb    (wb_mux_sel_wb),//[out] Data memory read enable (wb_mux_sel) 
         .ld_data_wb       (ld_data_wb),//[out] Data from load_extension

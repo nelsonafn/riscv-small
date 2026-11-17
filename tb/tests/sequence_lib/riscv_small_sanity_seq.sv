@@ -55,18 +55,9 @@ class riscv_small_sanity_seq extends uvm_sequence #(riscv_small_transaction);
     end
     `uvm_info("SANITY_SEQ", $sformatf("image=%s program_words=%0d", hex_file, req.program_addr.size()), UVM_LOW)
 
-    publish_program(req);
     start_item(req);
     finish_item(req);
   endtask
-
-  // The reference model receives the program from here, never from the driver.
-  // In sanity mode this port has no subscriber; the write is harmless.
-  function void publish_program(riscv_small_transaction item);
-    uvm_analysis_port#(riscv_small_transaction) program_port;
-    if (uvm_config_db#(uvm_analysis_port#(riscv_small_transaction))::get(m_sequencer, "", "program_port", program_port))
-      program_port.write(item);
-  endfunction
 
 endclass
 

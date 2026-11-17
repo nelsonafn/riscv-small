@@ -45,6 +45,7 @@ import riscv_definitions_pkg::*;
 	input rst_n,  // Asynchronous reset active low
 	input instruction_u inst, // Instruction from IF
 	input dataBus_t pc,   // PC value from IF
+	input logic valid_id, //[in] Instruction valid from IF (0 when the fetch is flushed)
     // JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data (rd0_data_wb))
     input dataBus_t rd0_data_ex,//[in] Reg destination data forward from EX
     input dataBus_t rd0_data_ma,//[in] Reg destination data forward from MA
@@ -58,6 +59,8 @@ import riscv_definitions_pkg::*;
 	output aluSrc1_e alu_src1_ex, //[out] ALU source one mux selection (possible values PC/RS1)
 	output aluSrc2_e alu_src2_ex, //[out] ALU source two mux selection (possible values RS2/IMM) 
 	output dataBus_t pc_ex, //[out] PC value to EX	
+	output instruction_u inst_ex, //[out] Instruction word to EX
+	output logic valid_ex, //[out] Instruction valid in EX (cleared by flush)
 	output dataBus_t rs1_ex, //[out] Reg source one (rs1) data
 	output dataBus_t rs2_ex, //[out] Reg source two (rs2) data
 	output dataBus_t imm_ex, //[out] Immediate value
@@ -103,6 +106,8 @@ import riscv_definitions_pkg::*;
 			alu_src2_ex <= RS2;
 			alu_op_ex <= ALU_ADD;
 			pc_ex <= '0;
+			inst_ex <= '0;
+			valid_ex <= '0;
 			rs1_ex <= '0;
 			rs2_ex <= '0;
 			imm_ex <= '0;
@@ -119,6 +124,8 @@ import riscv_definitions_pkg::*;
 			alu_src2_ex <= alu_src2;
 			alu_op_ex <= alu_op;
 			pc_ex <= pc;
+			inst_ex <= inst;
+			valid_ex <= valid_id && !flush;
 			imm_ex <= imm;
 			rd0_addr_ex <= inst.r_type.rd;
 			rs1_addr_ex <= inst.r_type.rs1;

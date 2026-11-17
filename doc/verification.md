@@ -6,7 +6,7 @@ Traceability and honest status. The specification states the requirement; this f
 |---|---|
 | Status | draft |
 | Version | v0.10 |
-| Baseline | `doc/spec.md` v0.8.0 (RISC-V ISA v20260120; RISC-V Debug Specification v1.0); `rtl_digest` `sha256:3541dfb8...` and `tb_digest` `sha256:ae4e6c79...`; the 39 manifest tests are green at that digest (2026-11-06, WP-7 regression) |
+| Baseline | `doc/spec.md` v0.8.1 (RISC-V ISA v20260120; RISC-V Debug Specification v1.0); `rtl_digest` `sha256:120b211f...` and `tb_digest` `sha256:86bcd471...`; the 41 manifest tests are green at that digest (2026-11-07, WP-8 regression) |
 | Implements | [spec.md](spec.md) |
 
 ## Tests
@@ -38,6 +38,8 @@ Traceability and honest status. The specification states the requirement; this f
 | T-41 | `riscv_small_sanity_test` | `sanity:rv32ui-p-lui` | verified (`FR-04`) |
 | T-42 | `riscv_small_sanity_test` | `sanity:rv32ui-p-auipc` | verified (`FR-05`) |
 | T-43 | `riscv_small_sanity_test` | `sanity:rv32ui-p-add`; the `ADD` result, which `T-01` only issued as a NOP | verified (`FR-01`) |
+| T-44 | `riscv_small_monitor_model_test` | the model runs off the monitor only, no program port; 72 commits for 72 instructions | implemented (WP-8; `G-28` closed) |
+| T-45 | `riscv_small_branch_model_test` | a taken branch: 10 commits for 12 fetches, the two skipped `pc` never retire | implemented (WP-8; `G-28` closed) |
 | T-09 | `riscv_small_passive_test` | `is_active=UVM_PASSIVE`: driver and sequencer are absent, the monitor is present; no DUT stimulus | implemented (passive topology) |
 | T-03 | CSR and trap test | the `FR-50` map, `misa`, `mepc`/`mcause`/`mtval`, `mscratch`, the reset vector | deferred (`G-13`) |
 | T-04 | timer and interrupt test | `mtip`/`meip`/`msip`, `mie`/`mip`/`mstatus`, entry stack, priority | deferred (`G-14`) |
@@ -50,7 +52,7 @@ locate it in `rtl/`, then ask whether `tb/` observes it. `verified` needs a test
 (`LW`/`SW`) and the directed sub-word checks, `T-02` adds no stimulus
 (`tb/tests/sequence_lib/riscv_small_corner_seq.sv:31`), and `T-08` measures `NFR-05` and is the store-data-forwarding evidence (`FR-18`).
 `verified` therefore lags `implemented`: the `implemented` rows outside the `LW`/`SW`/sub-word subset wait on `G-04`
-(the ISS covers only `LW`/`SW`) or on the one remaining sanity failure (`FR-42`). A row is `partial` when the clause
+(the model executes the load/store subset and publishes only `SW` predictions) or on the one remaining sanity failure (`FR-42`). A row is `partial` when the clause
 executes but a named gap shows it wrong for part of its domain — three rows, `FR-07`, `FR-22`
 and `FR-41`; the
 `deferred` rows keep the status of `doc/spec.md` §4 because the capability is absent, not because the intent is
@@ -79,7 +81,7 @@ itself make a row `deferred`: `deferred` is about the capability, not about the 
 | FR-15 write-read same cycle | — | `rtl/reg_file.sv:71-73`, `rtl/reg_file.sv:83-85`; no test (`G-04`) | implemented |
 | FR-16 arithmetic forwarding | `T-11` | `rtl/control.sv:215-263`, `rtl/execution.sv:113-152`; `T-11` (`rv32ui-p-addi`) and the mutant `forward-rs1`; the `rs2`/distance-2 cells are unexercised (`G-04`) | verified |
 | FR-17 load result to consumer | `T-16` | `rtl/control.sv:135-168`, `rtl/control.sv:215-263`; both gaps that kept it `partial` are closed — `G-19` by WP-6 (the register file keeps its own `clk_en_wb`) and `G-30` by WP-7 (`branch_op_stall` suppresses a redirect decided against an unresolved load). `T-16` (`rv32ui-p-ld_st`) is the image whose dependent branch failed on the stale value; mutant `branch-taken-stale` | verified |
-| FR-18 store data forwarding | `T-08` | `rtl/execution.sv:157-174`, `rtl/control.sv:219-244`; `T-08` (`li gp,1; sw gp,tohost`) and the mutant `sanity-addi` | verified |
+| FR-18 store data forwarding | `T-08` | `rtl/execution.sv:177-194`, `rtl/control.sv:237-263`; `T-08` (`li gp,1; sw gp,tohost`) and the mutant `sanity-addi` | verified |
 | FR-19 branch operand forwarding | — | `rtl/instruction_decode.sv:136-175`, `rtl/control.sv:122-191`; `G-26` closed; no named test builds the 0/1/2-distance matrix (`G-04`) | implemented |
 | FR-20 one fetch address per cycle | — | `rtl/instruction_fetch.sv:67`, `rtl/instruction_fetch.sv:96-115`; no test (`G-04`) | implemented |
 | FR-21 load waits for data_ready | — | `rtl/control.sv:287-293`; no test (`G-04`) | implemented |
@@ -129,21 +131,24 @@ itself make a row `deferred`: `deferred` is about the capability, not about the 
 that table (`FENCE`/`FENCE.I`, and `ECALL`/`EBREAK`/`CSR*`) carry no bin, because the RTL decodes them as
 no-operations (`G-06`, `G-13`); a word outside the decoded subset decodes to a sentinel that names no bin, so it
 is counted by nothing. The collector is `riscv_small_coverage` (`tb/env/top/riscv_small_coverage.sv`), a
-subscriber to the monitor; it never samples the driver, the sequence or the reference model.
+subscriber to the monitor; it never samples the driver, the sequence or the reference model. Since WP-8 the
+monitor also publishes retire events on the same port; the collector filters them out before sampling
+`cg_mem`, so a retire cannot hit a lane or direction bin with zeroed data fields. A bin is still a fetch.
 
-Measured 2026-11-06 by `make coverage` over the **39** manifest tests, at RTL `sha256:3541dfb8…cd80` and TB
-`sha256:ae4e6c79…b5764`: **40 of the 40 bar bins** and **50 of the 50 report bins**, `uncovered` empty,
+Measured 2026-11-07 by `make coverage` over the **41** manifest tests, at RTL `sha256:120b211f…` and TB
+`sha256:86bcd471…`: **40 of the 40 bar bins** and **50 of the 50 report bins**, `uncovered` empty,
 `percentages=100`. `cp_inst` is 37 of 37, `cp_width` 3 of 3, and `cg_mem` 13 of 13. This closes `G-03`; it does
-**not** close `A-09`, which needs every `FR` row `verified`, and it does not close `G-28`.
+**not** close `A-09`, which needs every `FR` row `verified`. `G-28` is closed by WP-8, but the bins are still
+fetch-based.
 
 Two limits still apply to every row. A hit is a **fetch**, not a retire: `if_id_flush` (`rtl/control.sv:263-268`)
 discards an instruction the monitor has already published, so a bin proves the class was **accepted on the fetch
 handshake** (`inst_rd_en && inst_ready`) — it does not prove it entered IF/ID, and it does not prove it retired
-(`G-28`, `E3`). And a hit verifies no `FR` on its own — the reference model still covers only `LW`/`SW` (`G-04`),
+(`G-28`, closed by WP-8; the collector has not been migrated to the retire stream). And a hit verifies no `FR` on its own — the model executes the load/store subset but publishes only `SW` predictions (`G-04`),
 so the `FR` column says what a bin *could* witness. The `Witness` column names the test that fills the bin and
 that must fail on the bin's mutant.
 
-| Bin | Instruction / width | `FR` it can support | Witness | 2026-11-06 |
+| Bin | Instruction / width | `FR` it can support | Witness | 2026-11-07 |
 |---|---|---|---|---|
 | `cp_inst.lui` | `LUI` | `FR-04` | `T-41` | hit |
 | `cp_inst.auipc` | `AUIPC` | `FR-05` | `T-42` | hit |
@@ -220,7 +225,7 @@ prints, because `xsim` exits `0` even when the run ends with `UVM_ERROR`s.
 | 8 | `doc/measurements/NFR-01..04-*.md` | a file is missing, has no method or no date | ok (4 files with method and date) |
 | 9 | `doc/measurements/NFR-07-*.md` | absent (no synthesis lint flow, `G-05`) | not measurable |
 | 10 | `A-09`: every FR `verified` | any FR is not `verified` | blocked (14/59; release-blocker gaps `G-04`, `G-11`) |
-| 11 | negative control: every WP test fails on the mutant it carries | no mutant run, or the test passes on the mutant | ok (37 rows: `T-06`, `T-08`..`T-15`, `T-16`..`T-43`) |
+| 11 | negative control: every WP test fails on the mutant it carries | no mutant run, or the test passes on the mutant | ok (39 rows: `T-06`, `T-08`..`T-15`, `T-16`..`T-45`) |
 
 The work-package gate runs checks 1-5, 7 and 11. Checks 6 and 8-10 are release evidence and are reported as `skipped` in a
 WP. Check 7 runs in both modes on purpose: a WP that changes behaviour without re-measuring coverage has no
@@ -245,11 +250,12 @@ new: `G-13` to `G-18`.
 v0.7 adds `G-23` and `G-24` for the debug subsystem that `FR-53`..`FR-59` require and the RTL does not have.
 WP-4 adds `G-25` (store-address forwarding, closed), `G-26` (operand forwarding) and `G-27` (branch-target first
 instruction skipped); `G-10` and `G-25` are closed 2026-10-30. WP-4c closes `G-26`, `G-27` and `G-20` on
-2026-11-04 and measures `G-19` for the first time. `G-28` is the first row opened against the **verification
-environment** rather than the RTL: `Q-43`/`C-16` (2026-11-04) require the reference model to run off the monitor and
-to survive in a passive agent, and the core publishes no retire/commit observation, so the only instruction-level
-visibility is a fetch that `if_id_flush` can discard. The two consequences — a coverage bin a flushed fetch can
-satisfy, and a model fed by the sequence — are one missing signal, owed by `E3`.
+2026-11-04 and measures `G-19` for the first time. `G-28` was the first row opened against the **verification
+environment** rather than the RTL: `Q-43`/`C-16` (2026-11-04) required the reference model to run off the monitor and
+to survive in a passive agent, and the core published no retire/commit observation, so the only instruction-level
+visibility was a fetch that `if_id_flush` can discard. The two consequences — a coverage bin a flushed fetch could
+satisfy, and a model fed by the sequence — were one missing signal. **WP-8 closed it on 2026-11-07** (row `G-28`
+below): the retire observation exists and the model consumes only the monitor.
 
 The `Owner` and `Target` columns are the commitments of `A-09`, confirmed by the designer on 2026-10-28 under
 `Q-12`: the designer owns the spec and ISA gaps, the verification lead owns the DV gaps, and every target is
@@ -258,9 +264,9 @@ The `Owner` and `Target` columns are the commitments of `A-09`, confirmed by the
 | ID | Gap | Impact | Owner | Target |
 |---|---|---|---|---|
 | G-01 | `trap_addr` is hardcoded to 1000 (`rtl/control.sv:297`); v0.2 sets the target as the `mtvec` CSR with direct and vectored modes (`FR-29`, `FR-30`) | traps always land at the same address, and the vector cannot be changed by software | designer | 2026-12-31 |
-| G-02 | `scause` is tied to zero (`rtl/control.sv:287`); v0.2 sets the target as `mcause` per the ratified privileged specification (`FR-23`) | no trap cause reported, so a handler cannot tell a timer tick from an illegal instruction | designer | 2026-12-31 |
+| G-02 | `scause` is tied to zero (`rtl/control.sv:307`); v0.2 sets the target as `mcause` per the ratified privileged specification (`FR-23`) | no trap cause reported, so a handler cannot tell a timer tick from an illegal instruction | designer | 2026-12-31 |
 | G-03 | **closed 2026-11-06 by WP-7**: the `A-09` bar is full. `cg_inst`/`cp_inst` (`tb/env/top/riscv_small_coverage.sv:194-236`) declares one bin per instruction of `spec.md` §4.1 and the monitor samples every accepted fetch; WP-5 reached 17/40, WP-6 21/40, and WP-7's nineteen images took it to **40 of 40** (`cp_inst` 37/37, `cp_width` 3/3, `cg_mem` 13/13), `uncovered` empty. The path is in the section "Coverage bins" | closed; the bins are hit, so `NFR-06` has no open bin. `G-28` still bounds what a hit means — a bin is a fetch, not a retire | verification lead | closed 2026-11-06 |
-| G-04 | Reference model and scoreboard cover only LW/SW | other opcodes are not checked; the six as-built requirements outside `LW`/`SW` (`FR-13`, `FR-14`, `FR-15`, `FR-19`, `FR-20`, `FR-21`) cannot become `verified`, so the `Q-11` bar ("every `FR` row `verified`") cannot be met — a **release blocker** | verification lead | 2026-12-31 |
+| G-04 | Reference model and scoreboard cover only LW/SW (the model executes the load/store subset and publishes only `SW` predictions) — **narrowed 2026-11-07:** the model is no longer fed by the program (`G-28` closed), so what remains is ISA coverage, not the input path | other opcodes are not checked; the six as-built requirements outside `LW`/`SW` (`FR-13`, `FR-14`, `FR-15`, `FR-19`, `FR-20`, `FR-21`) cannot become `verified`, so the `Q-11` bar ("every `FR` row `verified`") cannot be met — a **release blocker** | verification lead | 2026-12-31 |
 | G-05 | No timing, area, or power measurement exists | `NFR-01` to `NFR-04` and `NFR-07` cannot be verified; no frequency or part is recorded (`A-08`, `Q-08`) | designer | 2026-12-31 |
 | G-06 | Unimplemented encodings execute as no-operations: unknown opcodes and RV32M aliases fall through the decode default (`rtl/instruction_decode.sv:247-256`, `rtl/instruction_decode.sv:336`), `FENCE` is an empty case (`rtl/instruction_decode.sv:341-343`) and `ECALL`/`EBREAK`/CSR are an empty case (`rtl/instruction_decode.sv:344-346`) | no illegal-instruction trap; `FR-24`, `FR-25`, `FR-26` stay `deferred`; `M` and `C` cannot be claimed in phase 1. Since `Q-05` (2026-10-28) every unimplemented encoding must trap, so this is a conformance blocker, not a scope choice; `FR-24`, `FR-25`, `FR-43` and `FR-44` stay `deferred` for lack of the trap; the `FENCE` half is the separate phase-1 row `FR-26`, blocked only by the decoder (`Q-15` was answered on 2026-10-28) | designer | 2026-12-31 |
 | G-07 | **closed 2026-11-05 by WP-7**: `JALR` did not clear bit 0 of its target. `rtl/jump_decision.sv:115-116` now masks `& ~32'h1` when `base_addr_sel == RS1` (the `JALR` case only; `JAL` and branches keep every address bit). Closing it also exposed `G-31` | closed; `T-17` (`rv32ui-p-jalr`) and `T-37` (`rv32ui-p-jalr_unaligned`, an odd target) pass, and the mutant `jalr-keep-bit0` makes `T-37` fetch `pc=0xc1` and fail `testnum=3`. `FR-07` stays `partial` for its other clause (`G-13`) | designer | closed 2026-11-05 |
@@ -276,25 +282,25 @@ The `Owner` and `Target` columns are the commitments of `A-09`, confirmed by the
 | G-17 | No decision log: `doc/decisions.md` does not exist, so `D-01` to `D-11` live in `doc/spec.md` §0.1 | decisions are not indexed beside the requirements they justify, and a superseded decision has nowhere to be retired | designer | 2026-12-31 |
 | G-18 | Stores do not wait for the data grant: the stall condition at `rtl/control.sv:288` also requires a load destination, so a store asserts its strobe for one cycle whatever `data_ready` does | `FR-38` stays `deferred`; the store contract is the testbench's, which grants every access immediately, so the difference is invisible today | designer | 2026-12-31 |
 | G-19 | **closed 2026-11-05 by WP-6**: a load-use insertion cleared `id_ex_clk_en`, which was also the register file's clock enable (`rtl/instruction_decode.sv:195`, `rtl/riscv_small.sv:144-145`, `rtl/reg_file.sv:99`), so the write-back of a younger instruction was dropped. `instruction_decode` now takes `clk_en_wb` (the global `clk_en`) for `u_reg_file`, and the ID/EX register keeps `id_ex_clk_en`. | closed; before the fix `x4` was written 3 times against 33308 for `x5` in `T-13`, after it 39 against 39 (`build/regress/2026-11-05T17-39-54Z` and `…18-37-01Z`), and `rv32ui-p-lb`/`-lbu` went green | designer | closed 2026-11-05 |
-| G-29 | **closed 2026-11-05 by WP-6**: `pc_fetch` was gated by `if_id_clk_en` while the external instruction memory kept answering the held address, so on a load-use release the IF/ID register captured `pc_id` from one address and `inst_id` from another (`0x254` decoded with the word of `0x258`); the fix is `assign inst_addr = clk_en ? pc : pc_fetch;` (`rtl/instruction_fetch.sv:67-71`), which re-requests the address whose word is on the bus during the freeze. | closed; `T-13`/`T-14` green and 11/11 regression, where before the fix they timed out at `pc=0x24c`; the rejected variant, which aligned the pair but dropped `0x254`, is what showed that the request must be held rather than the delay line. | The same defect was **manufacturing a false PASS** in `rv32ui-p-ld_st` (stale PC at `0xa4` → target `0xee4` → `<pass>` → `tohost=1`), which is why that image flipped from pass to fail when this closed | verification lead | closed 2026-11-05 |
+| G-29 | **closed 2026-11-05 by WP-6**: `pc_fetch` was gated by `if_id_clk_en` while the external instruction memory kept answering the held address, so on a load-use release the IF/ID register captured `pc_id` from one address and `inst_id` from another (`0x254` decoded with the word of `0x258`); the fix is `assign inst_addr = clk_en ? pc : pc_fetch;` (`rtl/instruction_fetch.sv:72`), which re-requests the address whose word is on the bus during the freeze. | closed; `T-13`/`T-14` green and 11/11 regression, where before the fix they timed out at `pc=0x24c`; the rejected variant, which aligned the pair but dropped `0x254`, is what showed that the request must be held rather than the delay line. | The same defect was **manufacturing a false PASS** in `rv32ui-p-ld_st` (stale PC at `0xa4` → target `0xee4` → `<pass>` → `tohost=1`), which is why that image flipped from pass to fail when this closed | verification lead | closed 2026-11-05 |
 | G-30 | **closed 2026-11-05 by WP-7**: a load-use freeze evaluated the branch with the load result unresolved, so `branch_taken` redirected to a stale target and `branch_taken_q` flushed a valid fetch. `rtl/control.sv:99` declares `branch_op_stall`, set by exactly the six `data_rd_en_ma`/`data_rd_en_ex` freeze arms and **not** by `data_ready`/`inst_ready`; it gates the current-cycle redirect (`:266`) and the registered echo (`:106`). `branch-taken-stale` reverts only the echo, because reverting `:266` alone was measured **not** to reproduce the failure (the branch re-evaluates and recovers); `:266` is therefore proven by reading, not by a mutant. Found 2026-11-05 by WP-6 once `G-29` stopped masking it | closed; `T-16` (`rv32ui-p-ld_st`) passes, and the mutant `branch-taken-stale` — which must revert the **registered echo**, not the current-cycle gate — reproduces `testnum=2 value=5` | verification lead | closed 2026-11-05 |
 | G-31 | `JALR`'s `rs1` was never forwarded: the jump-compare forward mux was gated on `cond_jump` only, so a `JALR` immediately after its producer compared a stale register value and went to the wrong target. Found by the WP-7 red — `T-17` re-ran identically after the bit-0 mask was added, which showed the mask was not the reason it failed | closed in the same WP: `rtl/control.sv:135` opens the forward for `cond_jump || jalr`, and `rtl/instruction_decode.sv:282` exports `jalr` (two new ports, catalogued in `uarch.md` §4). Evidence: `T-17` green, mutant `jalr-no-forward`. Never released, so it was never a blocker | verification lead | closed 2026-11-05 |
-| G-32 | **Open, found 2026-11-06 while planning WP-8.** The monitor publishes the fetch pair from two different cycles: `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:42-43` samples `inst_addr` and `inst_data` in the same `@(posedge clk)`, but the driver assigns `inst_data` with `OUTPUT_DELAY = 2` after that edge (`riscv_small_driver.sv:29`, `:248`) and the core captures `pc_id <= pc_fetch` with `inst_id <= inst_data`, so the published word belongs to the previous address. The same root cause is on the data port: it publishes once per cycle `data_rd_en`/`data_wr_en` is high instead of once per accepted handshake (`data_ready`), so a wait-stated read would publish duplicates and a write would be sampled before its grant. | Harmless today because the TB is zero-latency and the scoreboard only compares stores, but a `pc -> word` table built on it would execute the wrong instruction, and the monitor cannot survive a cache (`F-10`/`FR-27`) or a wait state (`G-09`, `G-18`). Not a release blocker; closed by WP-8 P1 | verification lead | 2026-12-31 |
+| G-32 | **closed 2026-11-07 by WP-8.** The monitor sampled `inst_addr` and `inst_data` in the same `@(posedge clk)` while the driver answered with `OUTPUT_DELAY` after the edge, so the published fetch pair was `(address t, word t-1)`; and on the data port it published once per cycle the enable was high instead of once per accepted handshake. The monitor now correlates by **handshake**: an outstanding-request queue pushes on the request and pops on the response, so the pair is exact at any latency. | closed for the fetch port; `FETCH_PAIR` is green on the five tests that configure a program image (`T-01`, `T-02`, `T-06`, `T-44`, `T-45`; the other 36 print `NONE compared`), and the mechanism survives a cache or a wait state. The **data port is documented, not fixed** — with the flat port no rule is correct, because `data_ready` is a level the driver echoes while the core holds the enable; it needs the req/rsp form of `E8`/`G-18` | verification lead | closed 2026-11-07 |
 | G-20 | **closed 2026-11-04 by WP-4c**: `rtl/jump_decision.sv:111` added `imm[20:0]`, zero-extending a negative offset; the fix is `base_addr + imm` (the `imm` is already sign-extended by `imm_gen`). | closed; `T-12`/`rv32ui-p-beq`, the branch images and `FR-08` pass | designer | closed 2026-11-04 |
-| G-21 | Reset is asynchronous on both edges: every DUT module hardcodes `or negedge rst_n` (`rtl/instruction_fetch.sv:74`, `rtl/control.sv:101`) and there is no de-assertion synchroniser and no `ASYNC_RESET`-style macro selection. `D-09` and `FR-41` require async assertion with a synchronised release | the release edge is asynchronous, so a de-assertion that arrives close to a clock edge can release different registers on different edges; the FPGA synchronous-reset variant cannot be built at all | designer | 2026-12-31 |
+| G-21 | Reset is asynchronous on both edges: every DUT module hardcodes `or negedge rst_n` (`rtl/instruction_fetch.sv:79`, `rtl/control.sv:101`) and there is no de-assertion synchroniser and no `ASYNC_RESET`-style macro selection. `D-09` and `FR-41` require async assertion with a synchronised release | the release edge is asynchronous, so a de-assertion that arrives close to a clock edge can release different registers on different edges; the FPGA synchronous-reset variant cannot be built at all | designer | 2026-12-31 |
 | G-22 | **narrowed 2026-11-05 by WP-6 to the misaligned split.** The byte strobes exist: `data_wr_strb[3:0]` is driven from the store lane (`rtl/execution.sv:191-214`, `rtl/riscv_small.sv:58`) and checked by `riscv_small_strb_checker`. What remains is that an access crossing a word boundary is not split: `data_addr` is still `alu_ma` (`rtl/riscv_small.sv:121`), so `FR-42`'s two word-aligned beats are not issued. | the strobe half is closed; the split half keeps `A-05`'s EEI guarantee unmet for a cross-word access (`SH` at an odd address, `SW` off-word), owned by `FR-42` (`E8`) | designer | 2026-12-31 |
 | G-23 | No debug subsystem: the DUT has no debug port, no debug mode, no `dcsr`/`dpc`/`dscratch` and no abstract-command or program-buffer path (`rtl/riscv_small.sv:41-58`, `rtl/instruction_decode.sv:344-346`) | `FR-53` to `FR-56`, `FR-58` and `FR-59` stay `deferred`, and `T-05` cannot exist until a Debug Module model is built | designer | 2026-12-31 |
 | G-24 | No trigger unit: `tselect`/`tdata1`..`tdata3`/`tinfo` are not decoded and no address or data comparator exists (`rtl/instruction_decode.sv:344-346`) | `FR-57` stays `deferred`; breakpoints and watchpoints cannot be observed in any configuration | designer | 2026-12-31 |
 | G-25 | **closed 2026-10-30 by WP-4**: the MA forward block in `rtl/control.sv:246-263` forced `alu_src2` to the store data, so a store's address became `rs1 + rs2` instead of `rs1 + imm` (`sw gp,tohost` went to `0x1`). The fix gates `alu_src2` on `alu_src2_ex == RS2` and keeps `storage_src` for the store data (`rtl/control.sv:238-241`). | closed; `T-08` and `rv32ui-p-simple` pass | verification lead | closed 2026-10-30 |
 | G-26 | **closed 2026-11-04 by WP-4c**: the branch/jump forward mux `jmp_src1`/`jmp_src2` was unconnected (`rtl/riscv_small.sv:155-156`) and `alu_ex`, the EX forward source, was undriven (`rtl/execution.sv:230`); the ALU forward itself was functional. | closed; `T-10`/`T-11`, the `add`/`addi`/`and` images and the mutants pass; `FR-16`/`FR-18` verified, `FR-19` implemented | verification lead | closed 2026-11-04 |
 | G-27 | **closed 2026-11-04 by WP-4c**: the decoder PC was one instruction ahead of `inst_data` (`pc_id <= pc`) and the redirect had one flush too few; `pc_fetch` (`rtl/instruction_fetch.sv:74-89`) and `branch_taken_q` (`rtl/control.sv:101-108`, `:271-274`) fix it. | closed; `T-10`/`rv32ui-p-and` and the fail-path `testnum` pass; `FR-08` | designer | closed 2026-11-04 |
-| G-28 | **No retire/commit observation.** The only instruction-level visibility on the DUT ports is the fetch (`inst_rd_en && inst_ready`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:38-47`); an accepted fetch can still be discarded by `if_id_flush` (`rtl/control.sv:265-285`), so fetch != retire. Opened 2026-11-04 by `Q-43`/`C-16`. | Two consequences, one missing signal: (a) a functional-coverage bin can be satisfied by an instruction the core never executed — WP-5 measures on the fetch and declares the limit; (b) the reference model cannot be driven by the monitor, so it stays fed by `program_port` (`tb/env/top/riscv_small_env.sv:36`, `:86` → `tb/env/ref_model/riscv_small_ref_model.sv:48`), which blocks passive reuse and the Spike seam. Not a release blocker in the `Q-11` sense: it makes the verification weaker than it looks, it does not make a product claim false. | verification lead | 2026-12-31 (`E3`) |
+| G-28 | **closed 2026-11-07 by WP-8.** There was no retire/commit observation: the only instruction-level visibility was the fetch, and `if_id_flush` could discard an instruction the monitor had already published. The core now carries `valid`, `pc` and the instruction word to WB (`rtl/instruction_fetch.sv` `valid_id` -> `instruction_decode.sv` `valid_ex` -> `execution.sv` `valid_ma` -> `memory_access.sv` `valid_wb`), and a `bind` probe (`riscv_small_retire_if`, `tb/riscv_small_interface.sv`) publishes `(pc, inst, rd, wdata)` on `valid_wb && ma_wb_clk_en`. The reference model consumes **only** the monitor, and `program_port`/`rm_export`/`publish_program()` are deleted (`grep` empty). | closed; `T-44` (72 commits for 72 instructions) and `T-45` (10 commits for 12 fetches, difference exactly the two instructions a taken branch discarded, neither skipped `pc` retiring) pass, and the mutant `retire-every-slot` fails them while the store comparison still passes — proof that the retire checker, not the SW comparison, has the teeth. **Limit kept:** a `cp_inst` bin is still a fetch; coverage has not been migrated to the retire stream | verification lead | closed 2026-11-07 |
 
 ## Notes
 
-- `T-01`, `T-02`, `T-06`, `T-08`..`T-15` and `T-16`..`T-43` are the tests in `scripts/verify/tests.tsv`; `T-03`,
+- `T-01`, `T-02`, `T-06`, `T-08`..`T-15`, `T-16`..`T-45` are the tests in `scripts/verify/tests.tsv`; `T-03`,
   `T-04` and `T-05` are v0.7 targets with no implementation yet (`G-04`, `G-13`, `G-14`, `G-23`).
-- The 39 manifest tests are green at `rtl_digest` `sha256:3541dfb8…` and `tb_digest` `sha256:ae4e6c79…` (2026-11-06,
+- WP-7 history: the 39 manifest tests were green at `rtl_digest` `sha256:3541dfb8…` and `tb_digest` `sha256:ae4e6c79…` (2026-11-06,
   the WP-7 regression, `build/regress/2026-11-06T02-17-17Z`): `T-01`/`T-02`/`T-06` directed, `T-08`..`T-43` one image
   each, `T-09` the passive topology. `NFR-05` is **measured** at 41 of the 42 bundled images — 42 of 43 runs, the
   extra being the project-local `rv32ui-p-jalr_unaligned` — (`doc/measurements/NFR-05-riscv-tests.md`), not
@@ -319,15 +325,26 @@ The `Owner` and `Target` columns are the commitments of `A-09`, confirmed by the
   passes genuinely, and `rv32ui-p-fence_i` passed once `G-31` landed (its `jalr`s are aligned, so the `G-07` mask is a no-op there), which is why `G-15` is no longer an
   `NFR-05` failure. The only failing image is `ma_data` (`FR-42`, owned by `E8`). `FR-07` stays `partial`: the
   bit-0 clause is verified, the misaligned-fetch clause of its acceptance is not implemented (`G-13`, epic `E6`).
+- WP-8 closed `G-28` and `G-32` and satisfied `C-16`. The core now pipelines `valid`, `pc` and the instruction
+  word to WB — `valid_id` is born at IF/ID precisely so a flushed fetch cannot retire as a phantom at `pc=0` — and
+  a `bind` probe publishes a retire event on `valid_wb && ma_wb_clk_en`. The reference model consumes **only** the
+  monitor and keeps its own architectural state; `riscv_small_program_image` (pc→word plus the initial data
+  memory) is the only program input and it is configuration, not a transaction. `program_port`, `rm_export` and
+  `publish_program()` are deleted. Evidence: `T-44` 72 commits for 72 instructions; `T-45` **10 commits for 12
+  fetches**, the difference exactly the two instructions a taken branch discarded, with neither skipped `pc`
+  retiring — and the mutant `retire-every-slot` fails both while the store comparison still passes, which is what
+  proves the retire checker has the teeth. Two BFM defects surfaced while measuring and were fixed: it answered a
+  fetch during reset, and it left `inst_ready` high after the program ended (the core fetched and retired past it).
+  A `cp_inst` bin is still a **fetch**; the retire stream is not yet a coverage source.
 - The sanity harness is UVM-separated (WP-4b): the test reads `+HEX`/`+TOHOST`/`+MAX_CYCLES`/`+TRACE`; the sequence builds the
   program item (`program_addr[]`/`program_data[]`); the driver is a memory BFM and never reads a plusarg, decodes
   `tohost` or raises a verdict error; the monitor publishes fetch **and** data; `riscv_small_sanity_checker` owns
   `SANITY`/`uvm_error`; the test owns the objection and the timeout. The CTest command pins
   `^SANITY: PASS image=<image>$` and the summary rejects a log naming another image (`not_measurable`). The agent honors `is_active` (active =
-  driver+sequencer+monitor; passive = monitor only). `drv2rm_port` is gone, but the directed reference model is still
-  fed by `program_port` (the sequence, never the driver): that is the deviation `C-16` records and `G-28` names, and
-  it is why `T-09` proves the passive *topology* only — a sequence-fed model has nothing to consume there. `T-08`
-  exercises the active path.
+  driver+sequencer+monitor; passive = monitor only). `drv2rm_port`, `program_port`, `rm_export` and
+  `publish_program()` were **removed by WP-8** (`grep` empty in `tb/` and `scripts/`): the model consumes only the
+  monitor, so `C-16` is met and `G-28` is closed. `T-44`/`T-45` are the retire evidence; `T-09` still proves the
+  passive *topology* only, because it drives no program, and `T-08` exercises the active path.
 - `T-09` was red first against the pre-`is_active` TB (`uvm_errors=2`, driver and sequencer built in passive
   mode) and the mutant `passive-agent-always-active` re-proves it at `build/red/T-09/results.json` (`status=fail`,
   `uvm_errors=2`); it is green in the 8/8 regression at TB `sha256:f542affd…` after the `is_active` change.

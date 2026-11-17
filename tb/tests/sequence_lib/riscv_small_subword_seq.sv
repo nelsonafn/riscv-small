@@ -115,20 +115,26 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
       idx++;
     end
 
-    // The program item is complete: publish it to the reference model, then
-    // hand the same item to the driver.
-    publish_program(req);
+    // The program image is configuration, not a transaction: the test creates
+    // it, this sequence fills in what it built, and the model/checkers read it.
+    register_image(req);
+
+    // The program item is complete: hand it to the driver, the only consumer.
     start_item(req);
     finish_item(req);
   endtask
 
-  // The reference model receives the program from here, never from the driver.
-  function void publish_program(riscv_small_transaction item);
-    uvm_analysis_port#(riscv_small_transaction) program_port;
-    if (uvm_config_db#(uvm_analysis_port#(riscv_small_transaction))::get(m_sequencer, "", "program_port", program_port))
-      program_port.write(item);
-    else
-      `uvm_warning("PROGRAM_PORT", "no program_port: the reference model will not see this program")
+  // The program image receives the words this sequence built. It is state a
+  // checker reads, never a stream and never a path into the reference model's
+  // execution: the model's architectural state is updated from the monitor.
+  function void register_image(riscv_small_transaction item);
+    riscv_small_program_image image;
+    if (!uvm_config_db#(riscv_small_program_image)::get(m_sequencer, "", "program_image", image))
+      return;
+    foreach (item.instruction_addr[i])
+      image.add_inst(item.instruction_addr[i], item.instruction_list[i]);
+    foreach (item.data_addr[i])
+      image.add_data(item.data_addr[i], item.data_list[i]);
   endfunction
 
   function automatic string load_name(bit [2:0] f3);

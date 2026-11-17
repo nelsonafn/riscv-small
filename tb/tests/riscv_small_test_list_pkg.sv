@@ -16,6 +16,7 @@ package riscv_small_test_list_pkg;
   `include "uvm_macros.svh"
 
   import riscv_small_env_pkg::*;
+  import riscv_small_ref_model_pkg::*;
   import riscv_small_seq_list_pkg::*;
 
   /*
@@ -27,6 +28,8 @@ package riscv_small_test_list_pkg;
   `include "riscv_small_subword_access_test.sv"
   `include "riscv_small_sanity_test.sv"
   `include "riscv_small_passive_test.sv"
+  `include "riscv_small_monitor_model_test.sv"
+  `include "riscv_small_branch_model_test.sv"
 
 endpackage 
 

@@ -3,12 +3,22 @@
 //------------------------------------------------------------------------------
 // This module instantiates agents, monitors, and other components for the riscv_small environment.
 //
-// The sequence publishes the program item on `program_port`; the reference
-// model subscribes to it in the directed mode. The driver never feeds the
-// reference. In sanity mode there is no reference model and no scoreboard: the
-// sanity checker component watches the monitor and owns the verdict. The
-// coverage collector and the FR-11 strobe checker subscribe to the monitor in
-// both modes, so the store contract is watched by the image path too.
+// ONLY THE MONITOR FEEDS THE REFERENCE MODEL (C-16, AGENTS.md responsibility 9).
+// The model subscribes to `mon2sb_port` and executes the retire events it finds
+// there; there is no path from the sequence or from the driver into it. The
+// program image the test/sequence fills is configuration, not a stream, and is
+// read by the model for its initial data memory only.
+//
+// There is no program path from the environment into the model: the sequences
+// only fill the `program_image` configuration object, which the checkers and
+// the model read for their initial state.
+//
+// The retire checker and the coverage collector are inert without the
+// observation they were configured for (no program image, no traffic), so they
+// are built in both modes and never stall an image run.
+//
+// In sanity mode there is no reference model and no scoreboard: the sanity
+// checker component watches the monitor and owns the verdict.
 //
 // Author: Nelson Alves nelsonafn@gmail.com
 // Date  : October 2023
@@ -22,18 +32,14 @@ class riscv_small_environment extends uvm_env;
   /*
    * Declaration of components
    */
-  riscv_small_agent          riscv_small_agnt;
-  riscv_small_ref_model      ref_model;
-  riscv_small_coverage       coverage;
-  riscv_small_scoreboard     sb;
-  riscv_small_strb_checker   strb_checker;
-  riscv_small_sanity_checker sanity_checker;
-
-  /*
-   * Program item published by the sequence/test. The reference model
-   * subscribes here; a passive environment may leave it unconnected.
-   */
-  uvm_analysis_port#(riscv_small_transaction) program_port;
+  riscv_small_agent              riscv_small_agnt;
+  riscv_small_ref_model          ref_model;
+  riscv_small_coverage           coverage;
+  riscv_small_scoreboard         sb;
+  riscv_small_strb_checker       strb_checker;
+  riscv_small_fetch_pair_checker fetch_pair_checker;
+  riscv_small_retire_checker     retire_checker;
+  riscv_small_sanity_checker     sanity_checker;
 
   // The image path has no directed transaction for the ISS to predict, and the
   // scoreboard would block forever on rm_fifo.get().
@@ -58,12 +64,16 @@ class riscv_small_environment extends uvm_env;
     super.build_phase(phase);
     if (!uvm_config_db#(bit)::get(this, "", "sanity_mode", sanity_mode))
       sanity_mode = 0;
-    program_port = new("program_port", this);
     riscv_small_agnt = riscv_small_agent::type_id::create("riscv_small_agent", this);
     coverage = riscv_small_coverage::type_id::create("coverage", this);
     // FR-11 strobe/width invariant: no reference model needed, so it runs in
     // both modes and the image path witnesses the byte/halfword arms.
     strb_checker = riscv_small_strb_checker::type_id::create("strb_checker", this);
+    // G-32 fetch pairing: also a property of one observation, so it runs in
+    // both modes. It is inert unless a program image was configured.
+    fetch_pair_checker = riscv_small_fetch_pair_checker::type_id::create("fetch_pair_checker", this);
+    // G-28 commit stream: same shape, same inertness rule.
+    retire_checker = riscv_small_retire_checker::type_id::create("retire_checker", this);
     if (!sanity_mode) begin
       ref_model = riscv_small_ref_model::type_id::create("ref_model", this);
       sb = riscv_small_scoreboard::type_id::create("sb", this);
@@ -81,16 +91,18 @@ class riscv_small_environment extends uvm_env;
     riscv_small_agnt.monitor.mon2sb_port.connect(coverage.analysis_export);
     // The strobe invariant is a property of one observation, not of a prediction.
     riscv_small_agnt.monitor.mon2sb_port.connect(strb_checker.analysis_export);
+    // Same for the fetch pair: the oracle is configuration, not the model.
+    riscv_small_agnt.monitor.mon2sb_port.connect(fetch_pair_checker.analysis_export);
+    // And for the commit stream (inert without a program image).
+    riscv_small_agnt.monitor.mon2sb_port.connect(retire_checker.analysis_export);
     if (!sanity_mode) begin
-      // The reference model is fed by the sequence, not by the driver.
-      program_port.connect(ref_model.rm_export);
+      // Only the monitor feeds the model (C-16). This is the whole input.
+      riscv_small_agnt.monitor.mon2sb_port.connect(ref_model.mon_export);
       riscv_small_agnt.monitor.mon2sb_port.connect(sb.sb_export_mon);
       ref_model.rm2sb_port.connect(sb.sb_export_rm);
     end else begin
       riscv_small_agnt.monitor.mon2sb_port.connect(sanity_checker.checker_export);
     end
-    // Sequences fetch this at run time; the driver never sees it.
-    uvm_config_db#(uvm_analysis_port#(riscv_small_transaction))::set(this, "*", "program_port", program_port);
   endfunction : connect_phase
 
 endclass : riscv_small_environment

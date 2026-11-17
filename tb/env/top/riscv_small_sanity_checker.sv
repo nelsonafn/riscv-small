@@ -67,6 +67,10 @@ class riscv_small_sanity_checker extends uvm_component;
     riscv_small_transaction tr;
     forever begin
       mon_fifo.get(tr);
+      // An orphan response has no request behind it and its address is the raw
+      // pin, so it is not "where the core is" and not a fetch: history and the
+      // last-pc fallback skip it.
+      if (tr.op_is_inst && tr.captured_inst_orphan) continue;
       record(tr);
       if (tr.op_is_inst) begin
         last_pc = tr.captured_inst_addr;
