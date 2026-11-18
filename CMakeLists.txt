@@ -475,6 +475,13 @@ include(${CMAKE_SOURCE_DIR}/scripts/verify/regress.cmake)
 # `make coverage` never builds a second snapshot by hand.
 include(${CMAKE_SOURCE_DIR}/scripts/verify/coverage.cmake)
 
+# --- spike trace: the external reference, included like the other gates ------
+# spike_trace.cmake declares the T-47..T-49 CTest tests (label `spike`) and the
+# `spike-trace` target; regress.cmake leaves those names free because the test
+# IS the trace comparison, not a plain xsim run. The images come from the sanity
+# module (§9) and the snapshot from `elaborate`.
+include(${CMAKE_SOURCE_DIR}/scripts/verify/spike_trace.cmake)
+
 # --- signoff: the gate and its evidence chain -------------------------------
 # signoff_check.cmake declares `signoff-check` with regress/coverage/sanity as
 # dependencies, so one command builds the evidence and then audits it. The one

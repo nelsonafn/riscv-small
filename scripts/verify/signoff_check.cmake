@@ -683,6 +683,53 @@ endif()
 # this check reads build/red/<T-id>/results.json. `signoff-check` gets it from
 # the `negative-control` dependency (the whole catalogue); `wp-check` passes
 # --run-mutants, and the script runs only this WP's mutants before reading them.
+
+# The verdict of one mutant-bearing manifest row, as check 11 states it: "" when
+# the red is evidence, "<T-id>(<reason>)" when it is not.
+#
+# Which rule applies is the manifest's 7th column, never the T-id. An ordinary
+# row is judged by the DUT's own verdict -- a UVM error is the test saying it saw
+# the defect. A `spike:` row asserts a trace divergence instead, so it is judged
+# on the COMPARATOR's evidence, exactly as the judge that produced the red does:
+# riscv_red_trace_verdict() in common.cmake classifies the stored log and both
+# layers read that one function, so this scanner cannot accept a red the judge
+# rejected (or refuse one it accepted) without both changing together.
+#
+# RED_DIR is a parameter, not ${BUILD}/red, so a probe can point this at scratch
+# evidence: judging the gate's scanner otherwise needs a fabricated build/red,
+# which is the one thing a signoff gate must never be given.
+function(riscv_nc_row_problem OUT_VAR TID ROW RED_DIR)
+    set(PROBLEM "")
+    set(TRACE "")
+    riscv_manifest_spike_image(SPIKE_IMAGE "${ROW}")
+    if(NOT SPIKE_IMAGE STREQUAL "")
+        # Computed first because the identity guard vetoes before the record is
+        # even read, in this order, exactly as riscv_nc_judge() does it.
+        riscv_red_trace_verdict(TRACE "${RED_DIR}/${TID}/${TID}.log")
+    endif()
+    if(TRACE STREQUAL "guarded")
+        set(PROBLEM "${TID}(spike-identity-guard; the reference could not be identified, so the comparator never measured the mutant)")
+    elseif(NOT EXISTS "${RED_DIR}/${TID}/results.json")
+        set(PROBLEM "${TID}(no-negative-control; run make negative-control)")
+    else()
+        file(READ "${RED_DIR}/${TID}/results.json" NCJSON)
+        if(NOT NCJSON MATCHES "\"id\": \"${TID}\", \"test\": \"[^\"]*\", \"status\": \"(fail|timeout)\"")
+            set(PROBLEM "${TID}(mutant-not-detected)")
+        elseif(SPIKE_IMAGE STREQUAL "")
+            if(NOT NCJSON MATCHES "\"uvm_errors\": [1-9]")
+                set(PROBLEM "${TID}(no-uvm-error-on-mutant)")
+            endif()
+        elseif(TRACE STREQUAL "matched")
+            set(PROBLEM "${TID}(comparator-matched; the two traces agree, so this row has no teeth on the mutant)")
+        elseif(TRACE STREQUAL "absent")
+            set(PROBLEM "${TID}(no-comparator-verdict; the log has no compare_rc= line, so compare.py never ran to completion)")
+        elseif(TRACE STREQUAL "error")
+            set(PROBLEM "${TID}(comparator-error; compare.py exited without a divergence, so this red is not a detection)")
+        endif()
+    endif()
+    set(${OUT_VAR} "${PROBLEM}" PARENT_SCOPE)
+endfunction()
+
 if(WP STREQUAL "")
     if(R_run_mutants)
         # `wp-check` without `--wp` is a release audit that lacks the release
@@ -737,16 +784,9 @@ else()
             continue()
         endif()
 
-        set(NC "${BUILD}/red/${TID}/results.json")
-        if(NOT EXISTS "${NC}")
-            list(APPEND NC_PROBLEMS "${TID}(no-negative-control; run make negative-control)")
-            continue()
-        endif()
-        file(READ "${NC}" NCJSON)
-        if(NOT NCJSON MATCHES "\"id\": \"${TID}\", \"test\": \"[^\"]*\", \"status\": \"(fail|timeout)\"")
-            list(APPEND NC_PROBLEMS "${TID}(mutant-not-detected)")
-        elseif(NOT NCJSON MATCHES "\"uvm_errors\": [1-9]")
-            list(APPEND NC_PROBLEMS "${TID}(no-uvm-error-on-mutant)")
+        riscv_nc_row_problem(NC_PROBLEM "${TID}" "${MROW}" "${BUILD}/red")
+        if(NOT NC_PROBLEM STREQUAL "")
+            list(APPEND NC_PROBLEMS "${NC_PROBLEM}")
         endif()
     endforeach()
 

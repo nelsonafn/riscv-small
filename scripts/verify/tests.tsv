@@ -19,6 +19,12 @@
 # tohost address is read from the ELF, never hardcoded) and requires both
 # `UVM_RESULT: PASS` and `SANITY: PASS` in the log.
 #
+# Optional 7th column, `spike:<image>`: the same image, simulated twice -- in the
+# DUT (+RETIRE_LOG) and in Spike -- and the two commit traces compared by commit
+# index (scripts/verify/spike_trace.cmake, CTest label `spike`). regress.cmake
+# does not declare these tests: the comparison is the test. The image is still
+# built by the same `compile_sanity_<image>` target the `sanity:` spelling uses.
+#
 # A test listed here must exist in tb/tests/<uvm_test>.sv. After adding a line,
 # re-run ./configure so CMake picks up the new sim_<uvm_test> target.
 #
@@ -78,3 +84,28 @@ T-44	riscv_small_monitor_model_test	8	-	300	mutant:retire-every-slot
 # fetches would pass it. T-45 runs a program whose taken forward branch skips two placed stores: 12 fetches, 10
 # commits, difference 2 == the discarded fetches, and the two skipped PCs must never appear in the commit stream.
 T-45	riscv_small_branch_model_test	8	-	300	mutant:retire-every-slot
+# wp 9 P1 (G-28 invariant): T-45's branch skips exactly the two words the front end
+# lets go on a taken branch, so fetch-commit == |skip_pc| passed by coincidence. T-46
+# skips three: 11 fetches, 9 commits, difference 2, and the checker must judge WHICH
+# pc was fetched (0x0c/0x10 fetched and skipped, 0x14 never fetched), not a count.
+T-46	riscv_small_skip3_model_test	9	-	300	mutant:retire-every-slot
+
+# wp 9 (G-04): the Trace tests. Each row runs the same image twice -- in the DUT
+# with +RETIRE_LOG and in Spike with --log-commits -- and compares the two commit
+# traces instruction by instruction (pc, rd, value and encoding, by commit
+# index). The 7th column is `spike:<image>`, not `sanity:<image>`: the test is the
+# comparison, declared by scripts/verify/spike_trace.cmake, and regress.cmake
+# deliberately does not declare it (a plain xsim row would assert nothing new).
+# The images are the ones T-43/T-12/T-15 already simulate; the claim is new.
+# What the comparison does NOT prove: a store writes no register, so its address
+# and data are not in the trace. A mutant that changes only the store data path
+# is invisible to the COMPARISON, not to the test: the test requires the DUT's
+# own `^UVM_RESULT: PASS` as well (measured on `store-width-cast`: 31 UVM_ERRORs,
+# trace 477/477 identical, test fails). The red cells below are the mutants that
+# make the TRACES diverge, so the comparison itself is what catches them:
+#   T-47 alu-ignore-rs2    -> count 47 vs 458, first divergence index 47
+#   T-48 negative-branch    -> no_cut:dut, the trace never reaches <tohost>
+#   T-49 store-lane-offset  -> count 52 vs 477, first divergence index 52
+T-47	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:alu-ignore-rs2	spike:rv32ui-p-add
+T-48	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:negative-branch	spike:rv32ui-p-beq
+T-49	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:store-lane-offset	spike:rv32ui-p-st_ld

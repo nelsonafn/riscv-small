@@ -4,3 +4,6 @@
 [submodule ".opencode"]
 	path = .opencode
 	url = git@github.com:nelsonafn/.opencode-riscv-small.git
+[submodule "src/riscv-isa-sim"]
+	path = src/riscv-isa-sim
+	url = git@github.com:riscv-software-src/riscv-isa-sim.git

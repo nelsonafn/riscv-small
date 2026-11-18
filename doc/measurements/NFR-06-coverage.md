@@ -44,8 +44,10 @@ make coverage COVERAGE_ARGS="--require-bins cp_inst.slti"               # red un
 
 ## Result
 
-Measured 2026-11-07 over all **41** manifest tests (`T-01`, `T-02`, `T-06`, `T-08`..`T-45`), at
-`rtl_digest` `sha256:120b211f…` and `tb_digest` `sha256:86bcd471…`
+Measured 2026-11-18 over the **42** manifest tests the coverage run executes (`T-01`, `T-02`, `T-06`,
+`T-08`..`T-46`; the three `spike:` rows `T-47`..`T-49` are trace comparisons and not coverage runs, so 42 of the
+45 manifest rows), at
+`rtl_digest` `sha256:120b211f…` and `tb_digest` `sha256:c8ba82d7…`
 (`build/cov_report/summary.json`):
 
 | Metric | Value |
@@ -61,7 +63,7 @@ WP-6 had taken the bar to 21/40 by decoding the width from `funct3` and closing 
 nineteen with one image per instruction — `jalr` (`T-17`, plus the local odd-target image `T-37`) and the
 eighteen `T-19`..`T-36` — and the bar is now full. `T-38`..`T-43` were added afterwards as `FR` evidence
 (`bne`, `ori`, `slli`, `lui`, `auipc`, `add`); they closed no bin, because those bins were already hit. No bin is hit by an accident: each one has a
-manifest row and a mutant that makes that row fail (check 11, 39 mutant-bearing rows).
+manifest row and a mutant that makes that row fail (check 11, 43 mutant-bearing rows).
 
 What a hit does **not** mean is unchanged: it is an accepted **fetch**, not a retire (`G-28` is closed but the
 collector is still fetch-based), and it
@@ -78,6 +80,7 @@ verifies no `FR` by itself (`G-04`). Closing `G-03` closes the *bins*; `A-09` st
 | 2026-11-05 | `sha256:f48ab029...` | 5 | 31/50 bins (`xcrg` score 74.3243 %; `cp_inst` 18/37, `cg_mem` 13/13) | **21/40** | WP-6: width decoded, `sb`/`sh`/`st_ld` tests added (TB `ae4e6c79...`) |
 | 2026-11-06 | `sha256:3541dfb8...` | 5 | 50/50 bins, `uncovered` empty (100 %; `cp_inst` 37/37) | **40/40** | WP-7: one image per instruction, 19 bins closed (TB `ae4e6c79...`) |
 | 2026-11-07 | `sha256:120b211f...` | 5 | 50/50 bins, `uncovered` empty (100 %; `cp_inst` 37/37) | **40/40** | WP-8: retire probe added; the collector filters retire events out of `cg_mem` (TB `86bcd471...`) |
+| 2026-11-18 | `sha256:120b211f...` | 5 | 50/50 bins, `uncovered` empty (100 %; `cp_inst` 37/37) | **40/40** | WP-9: re-measured unchanged; the three `spike:` manifest rows are trace comparisons and not coverage runs (TB `c8ba82d7...`) |
 
 The 2026-11-04 figure is not comparable with the 2026-11-05 one: the first measured four memory coverpoints and
 nothing of the instruction set, so it was true and flattering at the same time. From 2026-11-05 the headline is the

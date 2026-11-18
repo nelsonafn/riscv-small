@@ -7,7 +7,9 @@
 #   configure mode (included by CMakeLists.txt)
 #       declares one CTest test per line of scripts/verify/tests.tsv -- name,
 #       command, timeout, labels -- and the `regress` target that runs this same
-#       file with `cmake -P`;
+#       file with `cmake -P`. The exception is a `spike:<image>` row: its test is
+#       the trace comparison, declared by spike_trace.cmake, and this file only
+#       leaves the name free (see the loop below);
 #
 #   run mode (`cmake -P`, reached through `make regress`)
 #       runs the selection through CTest and writes the evidence the signoff
@@ -48,7 +50,23 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     endif()
 
     set(MANIFEST_TESTS "")
+    set(SPIKE_TESTS "")
     foreach(ROW IN LISTS ROWS)
+        # A `spike:<image>` row is not a plain simulation and is not declared
+        # here: T-47..T-49 are CTest tests declared by spike_trace.cmake, with
+        # the full command (xsim + commit dump + Spike + normalizer +
+        # comparator). Declaring them twice is a hard CTest error, and a plain
+        # xsim run under the same name would assert nothing new -- the
+        # assertion-free duplication G-11 criticises. They still carry the
+        # wp/class labels, so this file's `ctest -LE "^(cov|sanity)$"` picks
+        # them up from the other module and the regression counts them.
+        riscv_manifest_spike_image(SPIKE_IMAGE "${ROW}")
+        if(NOT SPIKE_IMAGE STREQUAL "")
+            riscv_tsv_cell(SPIKE_ID "${ROW}" 0)
+            list(APPEND SPIKE_TESTS "${SPIKE_ID}")
+            continue()
+        endif()
+
         string(REPLACE "|" ";" FIELDS "${ROW}")
         list(GET FIELDS 0 TID)
         list(GET FIELDS 1 TEST_CLASS)
@@ -89,6 +107,9 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         list(APPEND MANIFEST_TESTS "${TID}")
     endforeach()
     message(STATUS "Verification tests from tests.tsv: ${MANIFEST_TESTS}")
+    if(SPIKE_TESTS)
+        message(STATUS "Trace-comparison tests from tests.tsv (declared by spike_trace.cmake): ${SPIKE_TESTS}")
+    endif()
 
     # Elaboration belongs to the build system, so the target depends on it and
     # run mode asks the build system again: a direct `cmake -P` can never

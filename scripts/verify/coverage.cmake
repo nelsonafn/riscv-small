@@ -93,6 +93,16 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     riscv_manifest_rows(ROWS "${CMAKE_SOURCE_DIR}/scripts/verify/tests.tsv")
     set(COV_TESTS "")
     foreach(ROW IN LISTS ROWS)
+        # A `spike:<image>` row is the trace comparison (declared in
+        # spike_trace.cmake), not a coverage run. It is not skipped for
+        # convenience: it carries no `sanity:` image, so a COV-T-47 here would
+        # run the sanity class with no +HEX and die with a UVM_FATAL, and the
+        # images it runs are already measured by T-43/T-12/T-15 -- the row
+        # would add a simulation and no bin.
+        riscv_manifest_spike_image(SPIKE_IMAGE "${ROW}")
+        if(NOT SPIKE_IMAGE STREQUAL "")
+            continue()
+        endif()
         string(REPLACE "|" ";" FIELDS "${ROW}")
         list(GET FIELDS 0 TID)
         list(GET FIELDS 1 TEST_CLASS)

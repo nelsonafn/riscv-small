@@ -43,6 +43,13 @@
 // `trace` (+TRACE) prints one line per event. It is off by default because one
 // sanity image is thousands of fetches and the `SANITY:` verdict must stay
 // readable in the same log.
+//
+// `retire_log_fd` (+RETIRE_LOG=<file>, WP-9 P2) writes the canonical commit
+// trace: one line per retired instruction, in retire order, no header and no
+// cut at `tohost` (the comparator cuts, not the testbench). It is a publication
+// of what the monitor already observed -- it compares nothing, judges nothing
+// and does not know that Spike exists. Off by default: without the plusarg the
+// handle stays 0, so there is no file I/O and no new log line.
 // ============================================================================
 class riscv_small_monitor extends uvm_monitor;
   virtual riscv_small_interface.mon_mp vif;
@@ -60,6 +67,15 @@ class riscv_small_monitor extends uvm_monitor;
   int unsigned orphan_count = 0; // responses with nothing outstanding (published with captured_inst_orphan)
   int unsigned retire_count = 0; // published retire (commit) events
 
+  // Commit-trace dump (+RETIRE_LOG=<file>, WP-9 P2). The line is
+  //   `0x<pc:08x> <x<rd>|-> <0x<value>|-> 0x<inst:08x>`
+  // and `rd`/`value` are `-` when the instruction writes no register AND when
+  // the destination is x0 -- both producers suppress that write (measured:
+  // Spike prints no `xN` for rd = x0), so normalising both sides to `-` is what
+  // keeps the comparison from failing on a register the core never had.
+  string retire_log_path = "";
+  int    retire_log_fd   = 0;     // 0 = the dump is off; $fopen's failure value
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
@@ -72,6 +88,18 @@ class riscv_small_monitor extends uvm_monitor;
       `uvm_fatal("NO_RETIRE_VIF",{"virtual interface must be set for: ",get_full_name(),".retire_vif"});
     if (!uvm_config_db#(bit)::get(this, "", "trace", trace))
       trace = 0;
+
+    // +RETIRE_LOG=<file> turns the commit dump on. Absent (every target but the
+    // trace ones), nothing is opened and nothing is printed: the run is
+    // byte-identical to the run before the option existed.
+    retire_log_path = "";
+    if ($value$plusargs("RETIRE_LOG=%s", retire_log_path) && retire_log_path != "") begin
+      retire_log_fd = $fopen(retire_log_path, "w");
+      if (retire_log_fd == 0)
+        `uvm_fatal("RETIRE_LOG", $sformatf("cannot open retire log '%s' for writing", retire_log_path))
+      `uvm_info("RETIRE_LOG", $sformatf("commit trace dump enabled: %s", retire_log_path), UVM_LOW)
+    end
+
     mon2sb_port = new("mon2sb_port", this);
   endfunction
 
@@ -169,6 +197,17 @@ class riscv_small_monitor extends uvm_monitor;
         ret.retire_rd     = retire_vif.retire_rd;
         ret.retire_wdata  = retire_vif.retire_wdata;
         ret.retire_seq    = retire_count;
+        if (retire_log_fd != 0) begin
+          // One line per commit, in retire order, from the observation above:
+          // no comparison, no verdict. `x0` is suppressed on this side exactly
+          // as the reference suppresses it.
+          if (retire_vif.rd0_wr_en_wb && (retire_vif.retire_rd != 0))
+            $fdisplay(retire_log_fd, "0x%08x x%0d 0x%08x 0x%08x",
+              ret.retire_pc, ret.retire_rd, ret.retire_wdata, ret.retire_inst);
+          else
+            $fdisplay(retire_log_fd, "0x%08x - - 0x%08x",
+              ret.retire_pc, ret.retire_inst);
+        end
         if (trace)
           `uvm_info("RETIRE_MONITOR", $sformatf("RETIRE #%0d pc=0x%08h inst=0x%08h rd=x%0d wdata=0x%08h",
             retire_count, ret.retire_pc, ret.retire_inst, ret.retire_rd, ret.retire_wdata), UVM_LOW);
@@ -178,6 +217,15 @@ class riscv_small_monitor extends uvm_monitor;
   endtask
 
   function void report_phase(uvm_phase phase);
+    // The run is over, so the dump is complete: close it once. The counter and
+    // the path are reported only when the dump was on, so the default run keeps
+    // its exact log.
+    if (retire_log_fd != 0) begin
+      $fclose(retire_log_fd);
+      retire_log_fd = 0;
+      `uvm_info("RETIRE_LOG",
+        $sformatf("%0d commit line(s) written to %s", retire_count, retire_log_path), UVM_MEDIUM)
+    end
     `uvm_info(get_full_name(),
       $sformatf("fetch pair: %0d published, %0d request(s) still outstanding at the end of the run, %0d orphan response(s); %0d retire event(s)",
         fetch_count, fetch_pending.size(), orphan_count, retire_count),

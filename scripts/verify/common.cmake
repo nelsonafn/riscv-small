@@ -10,8 +10,10 @@
 #   riscv_tsv_cell(OUT <row> <index>)           one cell; `;` restored, spaces kept
 #   riscv_manifest_rows(OUT <tests.tsv>)        one row: T-id|uvm_test|wp|frs|timeout|red|extra
 #   riscv_manifest_extra(OUT <row>)             the optional 7th column (`sanity:<image>`)
+#   riscv_manifest_spike_image(OUT <row>)       the 7th column when it says `spike:<image>`
+#   riscv_manifest_row_image(OUT <row>)         either spelling: the image this row needs built
 #   riscv_manifest_wp_tests(OUT <manifest> <wp>) T-ids owned by a work package
-#   riscv_manifest_sanity_images(OUT <manifest>) images named by the 7th column
+#   riscv_manifest_sanity_images(OUT <manifest>) images named by `sanity:<image>` only
 #   riscv_manifest_sanity_targets(OUT <manifest> [TESTS <T-id>...])
 #                                               `compile_sanity_<image>` for each selected row
 #   riscv_junit_rows(OUT <junit.xml>)           CTest verdicts: T-id|pass|fail|timeout|skip|class
@@ -23,6 +25,7 @@
 #   riscv_parallel_jobs(OUT_VAR <raw>)          validate `--jobs`, default 1
 #   riscv_xsim_command(OUT ...)                 the one `bash -c` xsim command string
 #                                               (`SANITY_IMAGE` pins the verdict line)
+#   riscv_red_trace_verdict(OUT <log>)          a `spike:` red: guarded|diverged|matched|error|absent
 #   riscv_mutant_names(OUT <mutants.tsv>)       the `name` column of the catalogue
 #   riscv_patch_once(<file> <find> <replace> <why> [<label>])
 #                                               exact single-occurrence text patch
@@ -138,6 +141,37 @@ function(riscv_manifest_extra OUT_VAR ROW)
     set(${OUT_VAR} "${IMAGE}" PARENT_SCOPE)
 endfunction()
 
+# The 7th column has two spellings and they are two different questions.
+# `sanity:<image>` is the row the sanity harness simulates; `spike:<image>` is
+# the same simulation with the commit dump on, compared instruction by
+# instruction against Spike (scripts/verify/spike_trace.cmake). They are
+# separate functions on purpose: riscv_manifest_sanity_images() feeds the
+# sanity sweep, and a trace row must never silently add an image to it. This
+# pair answers the other question -- "which image does this row need built?" --
+# which the selected-image target collector and the gates that skip trace rows
+# ask.
+function(riscv_manifest_spike_image OUT_VAR ROW)
+    set(IMAGE "")
+    string(REPLACE "|" ";" FIELDS "${ROW}")
+    list(LENGTH FIELDS NF)
+    if(NF GREATER 6)
+        list(GET FIELDS 6 EXTRA)
+        if(EXTRA MATCHES "^spike:(.+)$")
+            set(IMAGE "${CMAKE_MATCH_1}")
+        endif()
+    endif()
+    set(${OUT_VAR} "${IMAGE}" PARENT_SCOPE)
+endfunction()
+
+# Either spelling: the image a manifest row simulates, or "" when it needs none.
+function(riscv_manifest_row_image OUT_VAR ROW)
+    riscv_manifest_extra(IMAGE "${ROW}")
+    if(IMAGE STREQUAL "")
+        riscv_manifest_spike_image(IMAGE "${ROW}")
+    endif()
+    set(${OUT_VAR} "${IMAGE}" PARENT_SCOPE)
+endfunction()
+
 function(riscv_manifest_sanity_images OUT_VAR MANIFEST)
     riscv_manifest_rows(ROWS "${MANIFEST}")
     set(IMAGES "")
@@ -171,7 +205,10 @@ endfunction()
 # `TESTS <T-id>...` restricts the list to the rows of the current selection, so a
 # `--test T-13` run builds the one image it will simulate instead of every image
 # the manifest names. No TESTS keeps the release path exactly as it was: every
-# image the manifest names, through riscv_manifest_sanity_images().
+# image the manifest names, through riscv_manifest_sanity_images() -- which is
+# why the `sanity:`-only reader is kept for it and the restricted path uses
+# riscv_manifest_row_image(): a `spike:` row selected with `--test T-47` needs
+# `compile_sanity_<image>` just as much, and the sweep must not gain it.
 function(riscv_manifest_sanity_targets OUT_VAR MANIFEST)
     cmake_parse_arguments(S "" "" "TESTS" ${ARGN})
     if(NOT S_TESTS)
@@ -192,7 +229,7 @@ function(riscv_manifest_sanity_targets OUT_VAR MANIFEST)
         if(TID_INDEX EQUAL -1)
             continue()
         endif()
-        riscv_manifest_extra(IMAGE "${ROW}")
+        riscv_manifest_row_image(IMAGE "${ROW}")
         if(IMAGE)
             list(APPEND TARGETS "compile_sanity_${IMAGE}")
         endif()
@@ -352,7 +389,7 @@ endfunction()
 #   SNAPSHOT <top_sim|top_sim_cov>  TEST <uvm class>  LOG <file>
 #   [SEED <n>] [SKIP_ENV RISCV_SANITY|RISCV_COVERAGE] [TRACE_ENV]
 #   [HEX <hex> TOHOST_FILE <tohost>] [COV_DB_DIR <dir> COV_DB_NAME <name>]
-#   [REQUIRE_SANITY [SANITY_IMAGE <image>]]
+#   [REQUIRE_SANITY [SANITY_IMAGE <image>]] [PLUSARGS <arg>...]
 # The command always requires `^UVM_RESULT: PASS`; REQUIRE_SANITY adds the
 # `^SANITY: PASS` grep. With SANITY_IMAGE that grep is pinned to the image under
 # test (`^SANITY: PASS image=<image>$`), so a log written by another image's run
@@ -362,7 +399,7 @@ endfunction()
 function(riscv_xsim_command OUT_VAR)
     set(DOLLAR "$")
     cmake_parse_arguments(X "REQUIRE_SANITY;TRACE_ENV"
-        "SNAPSHOT;TEST;LOG;SEED;SKIP_ENV;HEX;TOHOST_FILE;COV_DB_DIR;COV_DB_NAME;SANITY_IMAGE" "" ${ARGN})
+        "SNAPSHOT;TEST;LOG;SEED;SKIP_ENV;HEX;TOHOST_FILE;COV_DB_DIR;COV_DB_NAME;SANITY_IMAGE" "PLUSARGS" ${ARGN})
     if(X_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "riscv_xsim_command: unknown ${X_UNPARSED_ARGUMENTS}")
     endif()
@@ -418,6 +455,11 @@ function(riscv_xsim_command OUT_VAR)
     if(X_TRACE_ENV)
         string(APPEND CMD " ${DOLLAR}TRACE")
     endif()
+    # Verbatim extra argv for this test only (e.g. --testplusarg RETIRE_LOG=<file>).
+    # Default empty, so every existing caller's command string is unchanged.
+    foreach(PLUSARG IN LISTS X_PLUSARGS)
+        string(APPEND CMD " ${PLUSARG}")
+    endforeach()
     string(APPEND CMD " > ${X_LOG} 2>&1 && grep -q '^UVM_RESULT: PASS' ${X_LOG}")
     if(X_REQUIRE_SANITY)
         if(X_SANITY_IMAGE)
@@ -428,6 +470,58 @@ function(riscv_xsim_command OUT_VAR)
         endif()
     endif()
     set(${OUT_VAR} "${CMD}" PARENT_SCOPE)
+endfunction()
+
+# --- a red run's trace-comparison verdict ------------------------------------
+# A `spike:` manifest row asserts that the DUT's commit trace and Spike's agree,
+# by commit index, up to the first <tohost> store; the comparison IS the test, so
+# a red on such a row is judged on the COMPARATOR's evidence, not on the DUT's
+# own verdict. The traces diverged (`compare_rc=1` plus compare.py's own
+# `COMPARE: fail reason=` report) is the detection whether or not the DUT's
+# sanity checker also failed; a comparator that matched the two traces proves
+# nothing about the mutant, whatever the DUT said.
+#
+# Two layers ask this question and must answer it the same way: the judge that
+# runs a mutant (riscv_nc_judge in negative_control.cmake) and check 11 of the
+# release gate (riscv_nc_row_problem in signoff_check.cmake). The classification
+# therefore lives here, once; each layer only decides how to word the answer it
+# gets. A second copy of these patterns is exactly how the two layers drift apart.
+#
+# The identity guard is part of the classification, not beside it: a `spike:` run
+# whose log says the reference could not be identified exits before compare.py
+# starts, so the mutant was never measured and that red is a harness fault. It is
+# answered first -- the guard is a property of the harness, not of the test.
+#
+# Five answers, because confusing them would certify the wrong thing:
+#   guarded   the Spike identity guard fired; compare.py never ran
+#   diverged  compare.py ran and reported a divergence -- the detection
+#   matched   compare.py ran and matched the traces -- no teeth on the mutant
+#   error     compare.py ran and failed without a divergence (usage/IO)
+#   absent    no log, or no `compare_rc=` line: the run died before compare.py
+#
+# The CTest command prints `SPIKE: <T-id> xsim_rc=<n> compare_rc=<n>` after
+# compare.py returns, and compare.py prints `COMPARE: fail reason=<...>` when it
+# reports a divergence; the shape of the surrounding output is not part of this
+# contract, so a second identity line such as `spike: softfloat=... (pinned)`
+# changes nothing here.
+function(riscv_red_trace_verdict OUT_VAR LOG)
+    set(VERDICT "absent")
+    if(EXISTS "${LOG}")
+        file(READ "${LOG}" TEXT)
+        if(TEXT MATCHES "cannot be identified" OR TEXT MATCHES "records commit=")
+            set(VERDICT "guarded")
+        elseif(TEXT MATCHES "compare_rc=([0-9]+)")
+            set(RC "${CMAKE_MATCH_1}")
+            if(RC EQUAL 1 AND TEXT MATCHES "COMPARE: fail reason=")
+                set(VERDICT "diverged")
+            elseif(RC EQUAL 0)
+                set(VERDICT "matched")
+            else()
+                set(VERDICT "error")
+            endif()
+        endif()
+    endif()
+    set(${OUT_VAR} "${VERDICT}" PARENT_SCOPE)
 endfunction()
 
 # --- mutant catalogue --------------------------------------------------------

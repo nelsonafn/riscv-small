@@ -3,14 +3,14 @@
 | Field | Value |
 |---|---|
 | Status | draft |
-| Implements | [spec.md](spec.md) v0.8.1 |
-| Baseline | the post-WP-8 tree the citations were read from: `rtl_digest` `sha256:120b211f…ea3cf0` and `tb_digest` `sha256:86bcd471…fd10e8` (2026-11-07, `build/regress/2026-11-07T03-40-36Z/results.json`). The project forbids automatic commits, so the content digest is the evidence key; `spec.md` still names `bb789bb` as its v0.1 as-built baseline, with v0.2..v0.8 adding intent only |
+| Implements | [spec.md](spec.md) v0.8.2 |
+| Baseline | the post-WP-9 tree the citations were read from: `rtl_digest` `sha256:120b211f…ea3cf0` and `tb_digest` `sha256:c8ba82d7…fb224008` (2026-11-18, `build/regress/2026-11-18T03-04-38Z/results.json`). The project forbids automatic commits, so the content digest is the evidence key; `spec.md` still names `bb789bb` as its v0.1 as-built baseline, with v0.2..v0.8 adding intent only |
 | Scope | as built: this document describes `rtl/*.sv`, not the target rows of `spec.md` §4 and §7.1; a target obligation of `spec.md` that the RTL does not meet is written down as **target** and never as built |
 
 Everything below is read from the RTL. Where a `file:line` citation is missing, the sentence is a
 pointer to another section, not a behavioural claim. Where the target of `spec.md` differs from the
 code, the difference is named with its existing gap ID and the code is described as it is. The
-requirement table of `spec.md` v0.8.1 has 59 rows. The ten rows v0.7 added are target only: `FR-50`
+requirement table of `spec.md` v0.8.2 has 59 rows. The ten rows v0.7 added are target only: `FR-50`
 (the CSR file and its address map), `FR-51` (`mscratch`), `FR-52` (`mtval`), `FR-53` (debug mode with
 `dcsr`/`dpc`/`dscratch`), `FR-54` (run control), `FR-55` (abstract commands), `FR-56` (the program
 buffer), `FR-57` (`Sdtrig` triggers), `FR-58` (single step) and `FR-59` (`dbg_auth` strap). No module,
@@ -299,7 +299,7 @@ except in the rows marked **target**, which name signals the target adds and the
 | `csr_if` — target | `csrfile` | out | the CSR read value | target: the file answers the request | `spec.md` §6 (`FR-50`) |
 | `csr_if` — target | `control` | out | the trap-entry state (`mepc`, `mcause`, `mstatus`) | target: written by `control` as the trap is taken | `spec.md` §6 (`FR-23`, `FR-48`) |
 | `retire_if` | — (bind, no modport) | out | `valid_wb`, `pc_wb`, `inst_wb`, `rd0_wr_en_wb`, `rd0_addr_wb`, `rd0_data_wb`, `ma_wb_clk_en` | sampled on `posedge clk`; the probe derives `retire_valid = valid_wb && ma_wb_clk_en` | `tb/riscv_small_interface.sv:133-157` |
-| `retire_if` | — (bind, no modport) | in | `retire_valid`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` | read by the monitor at that same edge | `tb/riscv_small_interface.sv:143-155`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:163-176` |
+| `retire_if` | — (bind, no modport) | in | `retire_valid`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` | read by the monitor at that same edge | `tb/riscv_small_interface.sv:143-155`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:191-215` |
 
 Four interfaces (`id_ex_if`, `ex_ma_if`, `ma_wb_if`, `ctrl_if`) repeat §4.1 rather than duplicating a
 20-signal list four times; the payload is identical on both sides of a pipeline register by construction.
@@ -419,7 +419,7 @@ The probe derives the commit rule rather than reading one: `retire_valid = valid
 `rtl/`, because it is an observation and not a behaviour: a write-back slot held by the data-wait stall
 has `valid_wb` high for several cycles, and only counting the cycle in which the MA/WB register
 advances (`ma_wb_clk_en`) makes one instruction one event. The monitor reads the probe at the same
-`posedge clk` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:163-176`), so the sample is the
+`posedge clk` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:191-215`), so the sample is the
 value the register file commits at that edge. The probe is simulation-only: it is compiled only through
 `srclist/riscv_small_interface.srclist` (`srclist/riscv_small_interface.srclist:1-2`) and never through
 the DUT list, so it adds no port and the DUT's port count is still sixteen (§4.4).
@@ -1838,12 +1838,15 @@ probe, not in `rtl/`, for two reasons. `valid_wb` alone would count a slot sever
 MA/WB register is held by the data-wait stall while `ma_wb_clk_en` is low (`rtl/control.sv:287-293`);
 and a slot that never carried an instruction (`valid_wb = 0`) must advance without an event, which is
 how a flushed fetch is proven not to execute. The probe is read at the same `posedge clk` the register
-file commits on (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:163-176`), so the event and the
+file commits on (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:191-215`), so the event and the
 architectural write describe the same instruction, because the probe samples the pre-edge value the
 register file commits at that edge (`tb/riscv_small_interface.sv:119-124`). The monitor publishes it
-verbatim with `op_is_retire`,
-`retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` and `retire_seq` (`:166-171`); it does not pair a
-fetch with a commit.
+verbatim with `op_is_retire`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` and `retire_seq`
+(`:194-199`); it does not pair a fetch with a commit. When `+RETIRE_LOG=<file>` is passed on the
+simulator command line (`:70-77`, `:95-101`, `:223-228`), the monitor also writes one canonical commit
+line per retired instruction (`0x<pc:08x> <xN|-> <0xval|-> 0x<inst:08x>`, printing `- -` when
+`rd0_wr_en_wb == 0` or `retire_rd == 0`, `:200-210`); the plusarg is off by default (`retire_log_fd == 0`),
+so default runs do no file I/O and add no log lines (§10.2).
 
 **The model is fed by the monitor only.** `riscv_small_ref_model` has one input,
 `uvm_analysis_imp_mon` (`tb/env/ref_model/riscv_small_ref_model.sv:45`), and `write_mon` executes the
@@ -1859,9 +1862,10 @@ to it (`tb/env/top/riscv_small_env.sv:98-102`).
 `skip_pc` (`tb/env/ref_model/riscv_small_program_image.sv:32-50`). The test creates it and publishes it
 through `uvm_config_db` (`tb/tests/riscv_small_monitor_model_test.sv:44-45`,
 `tb/tests/riscv_small_basic_load_store_test.sv:41-43`); the sequence that owns the program fills it
-(`tb/tests/sequence_lib/riscv_small_basic_load_store_seq.sv:118`, `:132-140`), and the branch sequence
-also declares the two addresses its branch skips
-(`tb/tests/sequence_lib/riscv_small_branch_seq.sv:139-145`). The model reads it once, lazily at the
+(`tb/tests/sequence_lib/riscv_small_basic_load_store_seq.sv:118`, `:132-140`), and the branch sequences
+also declare the addresses their branches skip
+(`tb/tests/sequence_lib/riscv_small_branch_seq.sv:139-145`,
+`tb/tests/sequence_lib/riscv_small_skip3_seq.sv:43-147`). The model reads it once, lazily at the
 first retire, for the initial data memory (`tb/env/ref_model/riscv_small_ref_model.sv:82-94`). It is
 state written before the run and read afterwards, not an analysis stream: the model never receives the
 program as a transaction, and the two mechanisms that used to carry one — `program_port` and
@@ -1877,26 +1881,46 @@ The same driver left `inst_ready` high after the program's last fetch, so the co
 retire past the end of the program; it now waits for the last response and then deasserts `inst_ready`
 (`:192-198`). The retire observation found both, not a directed test.
 
-**Measured on the directed corpus.** `T-44` runs the straight-line program of `T-01` with the model fed
-only by the monitor: 72 commits for 72 instructions, 72 fetch pairs compared with 0 mismatch, and 31
-store predictions compared by the scoreboard (`build/regress/2026-11-07T03-40-36Z/T-44.log`). `T-45`
-runs the one directed program whose control flow does not execute every placed word — a taken `BEQ` at
-`0x08` skips the stores at `0x0c` and `0x10` — and measures 10 commits for 12 fetches: the difference
-is exactly the two discarded fetches, neither skipped PC ever retires, and the fetch-pair checker
-compares all 12 (`build/regress/2026-11-07T03-40-36Z/T-45.log`). `T-44` alone could not prove
-retire != fetch, because in a straight line the counts agree; `T-45` is what separates them.
+**Measured on the directed corpus and the set invariant.** `T-44` runs the straight-line program of
+`T-01` with the model fed only by the monitor: 72 commits for 72 instructions, 72 fetch pairs compared
+with 0 mismatch, and 31 store predictions compared by the scoreboard
+(`build/regress/2026-11-18T03-04-38Z/T-44.log`). `T-45` runs a taken `BEQ` at `0x08` that skips the two
+stores at `0x0c` and `0x10` and measures 10 commits for 12 fetches: the difference is the two discarded
+fetches, neither skipped PC ever retires, and the fetch-pair checker compares all 12
+(`build/regress/2026-11-18T03-04-38Z/T-45.log`). `T-44` alone could not prove retire != fetch, because
+in a straight line the counts agree; `T-45` separates them, but its two-word skip equals the two fetch
+slots the front end always discards on a taken branch (`rtl/instruction_fetch.sv:79-97`,
+`rtl/control.sv:265-274`), so `fetch_count == retire_count + |skip_pc|` held on `T-45` by coincidence.
+`T-46` (`tb/tests/riscv_small_skip3_model_test.sv:36-53`,
+`tb/tests/sequence_lib/riscv_small_skip3_seq.sv:43-147`) breaks that coincidence with a taken `BEQ` at
+`0x08` → `0x18` (12 words placed, 9 executed, 3 skipped at `0x0c`, `0x10` and `0x14`), measuring 11
+fetches and 9 commits (`build/regress/2026-11-18T03-04-38Z/T-46.log`): `0x0c` and `0x10` are fetched and
+flushed at IF/ID while `0x14` is never fetched, because the front end discards a fixed **2** words on a
+taken branch regardless of jump distance (measured across the corpus: `beq` `T-12` = 283 commits / 341
+fetches, `jalr` `T-17` = 107 / 137, `T-46` = 9 / 11). `riscv_small_retire_checker`
+(`tb/env/top/riscv_small_retire_checker.sv:62-283`) therefore replaced the unconditional
+`fetch_count == retire_count + |skip_pc|` with a **set** claim — every fetched PC inside the image is
+either executed (retired at least once) or in `skip_pc`, raising `RETIRE_FETCH_LOST` and naming the
+offending PC otherwise (`:201-224`) — plus a **gated count** claim
+(`fetch_count == retire_count + skipped_fetch_count`, raising `RETIRE_FETCH_COUNT` and naming the first
+unaccounted PC through `count_offender()`, `:171-178`, `:235-247`), asserted only when every fetched PC
+is inside the image and was fetched once (`unmapped_fetch_count == 0 && fetch_count == fetched_pc_order.size()`)
+and reported as `NOT asserted` when a loop or re-fetched target fetches a PC more than once (`:275-280`).
 
 The sanity harness is the one testbench path that does not come from a sequence of directed
 transactions, and it is split by responsibility rather than concentrated in the driver. The test owns
 the configuration, the objection and the timeout: `riscv_small_sanity_test` reads
-`+HEX`/`+TOHOST`/`+MAX_CYCLES`/`+TRACE` and publishes `sanity_mode`, `tohost`, `image_name` and
-`trace` through `uvm_config_db` (`tb/tests/riscv_small_sanity_test.sv:55-89`), then waits
-`+MAX_CYCLES` on `vif.clk` and calls `sanity_checker.report_timeout()` if no verdict has arrived
-(`:95-116`). The sequence owns the image: `riscv_small_sanity_seq` is the only component that calls
-`$readmemh`, builds the program item from the non-zero words as `program_addr[]`/`program_data[]`
-(`tb/tests/sequence_lib/riscv_small_sanity_seq.sv:30-56`) and sends the item on the sequencer
-(`:58-59`); this path configures no program image and builds no reference model, because its oracle is
-`+TOHOST`. The driver is a memory
+`+HEX`/`+TOHOST`/`+MAX_CYCLES`/`+TRACE`/`+RETIRE_LOG` and publishes `sanity_mode`, `tohost`,
+`image_name` and `trace` through `uvm_config_db` (`tb/tests/riscv_small_sanity_test.sv:70-109`), then
+waits `+MAX_CYCLES` on `vif.clk` and calls `sanity_checker.report_timeout()` if no verdict has arrived
+(`:115-141`). When `+RETIRE_LOG=<file>` is set (`commit_dump`, `:48-49`, `:92-96`), the test drains
+`RETIRE_DRAIN = 8` cycles (`:48`, `:135`) after `sanity_checker.done` before dropping the objection so
+the `tohost` store — whose verdict fires on the MA-stage data write — reaches WB and commits into the
+dump; when the dump is off, no extra cycle runs. The sequence owns the image: `riscv_small_sanity_seq`
+is the only component that calls `$readmemh`, builds the program item from the non-zero words as
+`program_addr[]`/`program_data[]` (`tb/tests/sequence_lib/riscv_small_sanity_seq.sv:30-56`) and sends
+the item on the sequencer (`:58-59`); this path configures no program image and builds no reference
+model, because its oracle is `+TOHOST`. The driver is a memory
 BFM and nothing else: `run_image_mode()` clears its 64K-word `mem`, loads the item word by word,
 completes the item and then hands the phase to `run_memory_responder()`, which answers the instruction
 and data ports for the rest of the phase
@@ -1905,8 +1929,8 @@ decodes no verdict address and raises no report error (`:17-19`). A store is a
 read-modify-write of the byte lanes its `data_wr_strb` names (`:74-92`, `:287-303`), so the BFM
 applies the DUT's strobes and neither judges nor derives them. The monitor publishes **both** the
 instruction fetch, the data transaction and the retire event on `mon2sb_port`, including the strobe
-(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:98-131`, `:140-158`, `:163-176`) and prints
-them only under `+TRACE` (`:123-124`, `:150-156`). The driver prints its own `TRACE[<cycle>] IFETCH`/`DREAD`/`DWRITE`
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:126-159`, `:168-186`, `:191-215`) and prints
+them only under `+TRACE` (`:151-152`, `:178-184`, `:211-213`). The driver prints its own `TRACE[<cycle>] IFETCH`/`DREAD`/`DWRITE`
 lines under the same `+TRACE` (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:266-267`,
 `:285-286`, `:304-305`); its `cycles` counter is zeroed and incremented in `run_memory_responder` and
 read only by those three prints (`:239`, `:247`), so it labels the trace and nothing else; `+MAX_CYCLES` is
@@ -1937,15 +1961,15 @@ this is RTL: the program item and the memory model live in the testbench, so eve
 of section 7 is unchanged. The harness, the image build and the measurement history are in
 [verification.md](verification.md) and `doc/measurements/NFR-05-riscv-tests.md`.
 
-The WP-8 run measured **42 pass / 1 fail of 43** at RTL `sha256:120b211f…ea3cf0` and TB
-`sha256:86bcd471…fd10e8` (`build/sanity/summary.json`, 2026-11-07T03:39:09Z); WP-7 measured the same
-42/1 at the previous digests. The 43 images are the 42 bundled
+The WP-9 run measured **42 pass / 1 fail of 43** at RTL `sha256:120b211f…ea3cf0` and TB
+`sha256:c8ba82d7…fb224008` (`build/sanity/summary.json`, 2026-11-18T03:04:15Z); WP-7 and WP-8 measured
+the same 42/1 at their respective TB digests. The 43 images are the 42 bundled
 `isa/rv32ui/*.S` plus one **project-local** image,
 `scripts/verify/sanity/local/rv32ui-p-jalr_unaligned.S`, which adds the odd-target `JALR` case the
 bundled suite never exercises. `scripts/verify/sanity.cmake` globs both directories
 (`scripts/verify/sanity.cmake:106-108`) and compiles a local file with the same project environment,
 so the image is built, run and counted by `make sanity` exactly like a bundled one, and `T-37` is its
-manifest row (`scripts/verify/tests.tsv:61`). It is not part of the vendored suite, so the measured
+manifest row (`scripts/verify/tests.tsv:67`). It is not part of the vendored suite, so the measured
 result is quoted twice: 42 of 43 for the run, and 41 of the 42 **bundled** images
 (`doc/measurements/NFR-05-riscv-tests.md`), which is the number `NFR-05` is judged on. The only
 failure is `rv32ui-p-ma_data` (`testnum=1`, `FR-42`/`G-22`), the misaligned split;
@@ -1969,10 +1993,12 @@ pass as a false positive of the pre-WP-6 alignment defect `G-29`, whose stale PC
 `testnum=2` under `G-30`; closing `G-30` with `branch_op_stall` lets it pass on the operand the load
 actually produced, and `T-16` is its row (section 11).
 
-The manifest has 41 rows: `T-01`, `T-02`, `T-06` (the directed tests, `T-06` the sub-word load test of
-`FR-12`), `T-09` (`riscv_small_passive_test`, the passive-agent topology), `T-44` and `T-45` (the
-monitor-fed model and the retire-versus-fetch separation, §10), and `T-08` plus
-`T-10`..`T-43`, the 35 sanity rows described above. `T-03`..`T-05` remain target and none of the three
+The manifest has 45 rows (`scripts/verify/tests.tsv:32-111`), all **45/45 passing** under `make regress`
+(`build/regress/2026-11-18T03-04-38Z/results.json`): `T-01`, `T-02`, `T-06` (the directed tests, `T-06`
+the sub-word load test of `FR-12`), `T-09` (`riscv_small_passive_test`, the passive-agent topology),
+`T-44`..`T-46` (the monitor-fed model and the retire-versus-fetch set and gated-count invariants, §10),
+`T-08` plus `T-10`..`T-43` (the 35 `sanity:<image>` rows described above), and `T-47`..`T-49` (the three
+`spike:<image>` commit-trace comparisons, §10.2). `T-03`..`T-05` remain target and none of the three
 exists; every row below is absent with the gap that keeps it absent.
 
 | ID | Scope | Status |
@@ -1991,7 +2017,7 @@ Coverage is collected by `riscv_small_coverage`, a `uvm_subscriber` on the monit
 (`tb/env/top/riscv_small_coverage.sv:19`). Every sample is an observed DUT port, never a value the
 reference model predicted: the monitor publishes an accepted fetch (`inst_rd_en && inst_ready`), every
 data transaction (`data_rd_en || data_wr_en`) and every retire event on the same port
-(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:98-131`, `:140-158`, `:163-176`). `write()`
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:126-159`, `:168-186`, `:191-215`). `write()`
 routes a fetch to `cg_inst` and returns, drops a retire event, and samples only a data transaction into
 `cg_mem` (`tb/env/top/riscv_small_coverage.sv:244-259`); that last filter is what keeps a retire event,
 which carries none of the data-port fields, from hitting the lane and direction bins with zeros.
@@ -2010,11 +2036,13 @@ monitor nor the reference model (`tb/env/top/riscv_small_coverage.sv:68-80`). A 
 opcode with no decode arm, an unlisted `funct3`, `FENCE`/`FENCE.I`, `ECALL`/`EBREAK`/`CSR*`) returns
 `INST_NONE = 6'h3f` (`:66`, `:140-142`), a value that names no bin, so such a fetch is counted by nothing
 instead of being folded into a neighbour (`:184-186`). The 37 bins are the instruction rows of
-`doc/spec.md:533-543`; the two no-operation rows of that table (`FENCE`, and `ECALL`/`EBREAK`/`CSR*`) carry no
+`doc/spec.md:539-549`; the two no-operation rows of that table (`FENCE`, and `ECALL`/`EBREAK`/`CSR*`) carry no
 bin, because the RTL decodes them as no-operations (`G-06`, `G-13`).
 
-Measured 2026-11-07 by `make coverage` over the 41 manifest tests at RTL `sha256:120b211f…ea3cf0`
-and TB `sha256:86bcd471…fd10e8` (`build/cov_report/summary.json`, 2026-11-07T03:40:29Z):
+Measured 2026-11-18 by `make coverage` over the 42 `COV-<T-id>` manifest databases (`T-01`, `T-02`,
+`T-06`, `T-08`..`T-46`; the three `spike:<image>` trace rows of §10.2 are excluded because they reuse
+the `T-43`/`T-12`/`T-15` simulations) at RTL `sha256:120b211f…ea3cf0` and TB
+`sha256:c8ba82d7…fb224008` (`build/cov_report/summary.json`, 2026-11-18T03:05:10Z):
 `coverpoints=5`,
 `bins_covered=50`, `bins_total=50`, `bins_parsed=50`, `percentages` `100`, `uncovered` empty, and an
 `xcrg` **score** of `100` for both covergroups
@@ -2037,14 +2065,14 @@ why the width port now carries the decoded value `2'b10` for a word
 
 **A hit is still a fetch, not a retire.** A `cp_inst` bin proves the instruction class **was accepted on
 the fetch handshake**, because the monitor samples `inst_rd_en && inst_ready`
-(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:98-131`); it does not prove execution, and it does
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:126-159`); it does not prove execution, and it does
 not prove the word entered IF/ID either, because `if_id_flush` zeroes `pc_id`/`inst_id` and clears
 `valid_id` in the same cycle (`rtl/instruction_fetch.sv:87-90`). A flush discards an accepted fetch on a
 taken branch, on the registered `branch_taken_q` and on `exception` (`rtl/control.sv:265-278`), after the
 monitor has already published it.
 
 What WP-8 changed is that the proof now exists beside the bins, not inside them. The retire stream is
-published on the same analysis port (`:163-176`) and `T-44`/`T-45` compare it against the program image
+published on the same analysis port (`:191-215`) and `T-44`..`T-46` compare it against the program image
 per commit, so a flushed fetch is proven not to execute (§10). The collector does not yet use it: `cg_inst`
 is sampled only from `op_is_inst` (`tb/env/top/riscv_small_coverage.sv:248-250`) and `write()` returns on
 `op_is_retire` before `cg_mem` (`:254`). The bins therefore still say "fetched", never "executed";
@@ -2062,13 +2090,85 @@ exit 1 (`:432-480`, `:515`). A report whose table yields no bin is a fatal parse
 (`\and`) compiles, but `xcrg` prints the backslash and the collector publishes bin names verbatim into
 `summary.json`, where a bare backslash is invalid JSON (`tb/env/top/riscv_small_coverage.sv:188-193`).
 
+### 10.2 External reference — Spike commit-trace comparison
+
+WP-9 adds an external, instruction-by-instruction commit-trace comparison against **Spike**
+(`riscv-software-src/riscv-isa-sim`, commit `118480991eb16c6a6f40b94fdc35acc9da2ceacd`, with
+`berkeley-softfloat-3` at `07ebd29db0cfb55723a79fbbffe99103ef38e305`; `--help` banner
+`Spike RISC-V ISA Simulator 1.1.1-dev`, recorded in `build/spike/version.txt` because `spike --version`
+does not exist, `scripts/verify/spike/build_spike.sh:17-19`, `:86-94`). Spike is built out-of-tree in
+`build/spike/` by `scripts/verify/spike/build_spike.sh` (`:74-84`) configured with
+`--enable-commitlog` (`:79-80`); the script is idempotent and provides a `--check` mode that verifies
+the binary and the `--log-commits` flag (`:46-60`).
+
+Spike is invoked as
+`spike --no-dm --disable-dtb -m0:0x40000 --isa=rv32i --log=<f> --log-commits <elf>`
+(`scripts/verify/spike/build_spike.sh:41-44`, `scripts/verify/spike_trace.cmake:102-103`, `:152`). The
+flags follow from the memory map: the sanity linker script places code at `0x0` to match the DUT's
+reset PC (`rtl/instruction_fetch.sv:104-107`), whereas Spike maps a built-in debug module at
+`[0x0, 0x1000)` (`--no-dm` removes it), a device-tree ROM at `[0x1000, 0x2000)` (`--disable-dtb`
+removes it), and CLINT at `[0x2000000, 0x200c000)` (the RAM region must end below `0x2000000`);
+`-m0:0x40000` (256 KiB) matches the testbench driver's 64K-word memory model
+(`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:44`).
+
+Both sides emit the same four-field canonical line,
+`0x<pc:08x> <xN|-> <0xval|-> 0x<inst:08x>`:
+
+- **DUT producer:** `+RETIRE_LOG=<file>` on `riscv_small_monitor` writes one line per retired
+  instruction from the WP-8 `riscv_small_retire_if` probe, printing `- -` when `rd0_wr_en_wb == 0` or
+  `rd0_addr_wb == 0` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:70-77`, `:95-101`,
+  `:200-210`), and `riscv_small_sanity_test` drains `RETIRE_DRAIN = 8` cycles after the `tohost` write
+  so the `tohost` store commits into the log (`tb/tests/riscv_small_sanity_test.sv:48-49`, `:92-96`,
+  `:135`).
+- **Spike adapter:** `scripts/verify/spike/normalize.py spike-log <in> <out>` (`:40-115`) parses
+  Spike's `core <hart>: <priv> 0x<pc> (0x<inst>) …` commit lines, formats the first register token or
+  `- -` (normalising `rd == 0` to `- -`), drops the `mem …` suffix (`:47-74`), and exits `1` on an
+  empty trace (`:94-103`).
+- **Cut and comparator:** `scripts/verify/spike/compare.py --dut <file> --spike <file> --cut-pcs <set> --out <json>`
+  (`:97-181`, `--selftest` at `:235-372`, 13 checks) cuts both traces **inclusively** at the first committed line whose PC
+  is in `--cut-pcs` (`:97-102`, `:130-147`), because Spike continues logging the `j .` pass loop up to
+  5000 lines after `tohost`. Each `build/sanity_tests/dump/<image>.dump` contains **two**
+  `sw …, <tohost>` instructions — the `fail` and `pass` epilogues (`rv32ui-p-add` `0x568,0x574`,
+  `rv32ui-p-beq` `0x348,0x354`, `rv32ui-p-st_ld` `0x774,0x784`, extracted from the objdump `<tohost>`
+  comments at run time by `scripts/verify/spike_trace.cmake:108`, `:149`) — and fails with `no_cut:dut`
+  or `no_cut:spike` if either trace never reaches the set (`compare.py:130-139`). The cut traces are
+  compared strictly by **commit index** on all four fields (`pc`, `rd`, `val`, `inst`, `:149-178`).
+
+The gate is `scripts/verify/spike_trace.cmake` (header `:1-64`; the tests are declared by the row loop
+at `:169-202`), target `make spike-trace`, CTest label
+`spike`. Rows `T-47`..`T-49` in `scripts/verify/tests.tsv` (`:109-111`) carry `spike:<image>` in the
+7th column so `spike_trace.cmake` owns the test name (`T-47`..`T-49`) instead of `regress.cmake`
+declaring a duplicate plain simulation (`scripts/verify/spike_trace.cmake:31-38`, `:169-202`), while
+requiring both the xsim `^UVM_RESULT: PASS` verdict and a zero comparator exit code (`:128-164`).
+
+| Test | Image | Red mutant | Compared commits | Cut PC (`--cut-pcs`) | Cite |
+|---|---|---|---|---|---|
+| `T-47` | `rv32ui-p-add` | `alu-ignore-rs2` | **458 / 458** | `0x00000574` (`0x568,0x574`) | `scripts/verify/tests.tsv:109`, `build/spike/runs/2026-11-18T02-57-49Z/results.json:11` |
+| `T-48` | `rv32ui-p-beq` | `negative-branch` | **284 / 284** | `0x00000354` (`0x348,0x354`) | `scripts/verify/tests.tsv:110`, `build/spike/runs/2026-11-18T02-57-49Z/results.json:12` |
+| `T-49` | `rv32ui-p-st_ld` | `store-lane-offset` | **477 / 477** | `0x00000784` (`0x774,0x784`) | `scripts/verify/tests.tsv:111`, `build/spike/runs/2026-11-18T02-57-49Z/results.json:13` |
+
+**What the comparison proves and does not prove.** For `rv32ui-p-add`, `rv32ui-p-beq` and
+`rv32ui-p-st_ld`, `T-47`..`T-49` prove the retired instruction sequence, PC order, instruction word and
+non-zero register destination/value against an independent ISS, and independently confirm that the WP-8
+retire stream counts commits rather than fetches. They **do not** prove four things (`G-04`, §11):
+(1) **store address and store data** — `normalize.py` drops the `mem …` suffix and stores write no
+register (`- -`), so a store data-path defect that leaves register state intact is invisible to the
+trace comparison (measured: the `store-width-cast` mutant produces an **identical 477/477 trace** on
+`rv32ui-p-st_ld`, failing only on the DUT's own `UVM_RESULT: FAIL`,
+`scripts/verify/spike_trace.cmake:52-64`, `scripts/verify/tests.tsv:100-104`); (2) **protocol
+properties `FR-20` and `FR-21`**, which are bus and control-flow pin properties absent from a commit
+trace; (3) **`FR-14` (`x0` hardwired to zero)**, because `rd = x0` is suppressed to `- -` in the dump by
+construction (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:204-209`,
+`scripts/verify/spike/normalize.py:71-73`); and (4) **breadth** across the suite, as 3 of 43 images are
+compared (`T-47`..`T-49`).
+
 ## 11. Open issues
 
 RTL-behaviour gaps, summarised from the canonical table in [verification.md](verification.md#gaps);
 owner and target are the commitments of `A-09`, confirmed by the designer on 2026-10-28 under `Q-12`,
 not proposals. The release blockers are `G-04` and `G-11` — the §9 *Release blockers* bullet of
-`doc/spec.md` and the *If false* cell of the `A-09` row, both re-worded by `spec.md` v0.8.1
-(`doc/spec.md:863` and `:903`) — because the `Q-11` signoff bar cannot be met without them: `G-04`
+`doc/spec.md` and the *If false* cell of the `A-09` row, both re-worded by `spec.md` v0.8.1 and extended in v0.8.2
+(`doc/spec.md:877` and `:917`) — because the `Q-11` signoff bar cannot be met without them: `G-04`
 leaves the model-checking half of every requirement open and `G-11` leaves `T-02` without stimulus.
 `G-03` left the list when WP-7 filled the coverage bar of `A-09`, and `G-07` when
 the `JALR` bit-0 mask landed; `Q-06`'s two ISA deviations are therefore both fixed. `G-08`'s store
@@ -2084,7 +2184,8 @@ them, and the canonical table's own rows are updated by its own author. `G-10` a
 `G-26`, `G-27` and `G-20` are closed 2026-11-04 by WP-4c, the work package that also found `G-19` in
 the open; `G-08`, `G-19` and `G-29` are closed 2026-11-05 by WP-6, which opened `G-30`; `G-03`, `G-07`
 and `G-30` are closed by WP-7, which also found and closed `G-31` inside the same work package; `G-28`
-and `G-32` are closed 2026-11-07 by WP-8. `G-23`
+and `G-32` are closed 2026-11-07 by WP-8, and WP-9 narrows `G-04` and adds the `T-46` set invariant on
+`G-28` without promoting an `FR`. `G-23`
 and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem of
 `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of `FR-57`.
 
@@ -2100,22 +2201,35 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   instruction bins — **17 of 40** against the bar — and WP-6 took it to **18 of 37** — **21 of 40**.
   WP-7's nineteen images took it to **37 of 37** — **40 of 40** with `cp_width` 3 of 3 and `cg_mem`
   13 of 13: 50 of 50 report bins, `percentages` 100, `uncovered` empty (§10.1; the same numbers stand
-  in `build/cov_report/summary.json`, the WP-8 run recorded 2026-11-07T03:40:29Z, which replaced the
-  WP-7 record of 2026-11-06). Consequence: closed; `NFR-06`'s bin target is met and the row leaves
+  in `build/cov_report/summary.json`, recorded 2026-11-18T03:05:10Z on WP-9). Consequence: closed; `NFR-06`'s bin target is met and the row leaves
   the release-blocker list of `Q-11`/`A-09`, which now names `G-04` and `G-11` only. The honest
   caveat stays and is not a blocker: the coverage source is still the accepted **fetch**, so a bin
   still says "fetched", not "executed"; §10.1 states what the WP-8 retire stream does and does not
   add. Owner: verification lead.
   Target: closed 2026-11-06.
-- **G-04** — the reference model and the scoreboard cover only the load/store subset (`LW`, `LB`, `LH`,
-  `LBU`, `LHU` and `SW`). Consequence: other opcodes have no architectural effect in the model, so they
-  are not checked, and the six as-built requirements outside the subset — `FR-13`, `FR-14`, `FR-15`,
-  `FR-19`, `FR-20` and `FR-21`, the `implemented` rows that cite this gap in the traceability table
-  (`doc/verification.md:79-81`, `:85-87`; the gap's own row is `:269`) — cannot become `verified`.
-  WP-8 **narrows** the row without closing it: the model no longer receives the program from the
-  sequence, so it executes only what the monitor observed retired
-  (`tb/env/ref_model/riscv_small_ref_model.sv:100-104`, §10), but the opcode subset it understands is
-  unchanged. It remains a release blocker. Owner: verification lead. Target: 2026-12-31.
+- **G-04** — the in-tree reference model and the scoreboard cover only the load/store subset (`LW`, `LB`,
+  `LH`, `LBU`, `LHU` and `SW`, `tb/env/ref_model/riscv_small_ref_model.sv:114-170`). Consequence: other
+  opcodes have no architectural effect in `riscv_small_ref_model`, and the six as-built requirements
+  outside the subset — `FR-13`, `FR-14`, `FR-15`, `FR-19`, `FR-20` and `FR-21`, the `implemented` rows
+  that cite this gap in the traceability table (`doc/verification.md`) — cannot become `verified`.
+  WP-8 narrowed the row by feeding `riscv_small_ref_model` only from the monitor's retire stream
+  (`tb/env/ref_model/riscv_small_ref_model.sv:100-104`, §10). WP-9 **narrows it further without closing
+  it** (no `FR` is promoted): `T-47` (`rv32ui-p-add`, 458/458 commits @`0x574`), `T-48` (`rv32ui-p-beq`,
+  284/284 @`0x354`) and `T-49` (`rv32ui-p-st_ld`, 477/477 @`0x784`) compare the DUT's committed
+  `(pc, rd, val, inst)` trace instruction-by-instruction against Spike
+  (`118480991eb16c6a6f40b94fdc35acc9da2ceacd`, `scripts/verify/spike_trace.cmake:40-64`,
+  `scripts/verify/spike/compare.py:97-181`, §10.2), proving
+  the retired instruction sequence, PC order, instruction encoding word and non-zero register
+  destination/value for those three images against an external ISS. Four residuals keep `G-04` open:
+  (1) **store address and store data** — `scripts/verify/spike/normalize.py` (`:47-74`) drops the
+  `mem …` suffix and stores write no register (`- -`), so a store data-path defect that leaves register
+  state intact does not change the trace (measured: `store-width-cast` gives an **identical 477/477
+  trace** on `rv32ui-p-st_ld`); (2) **protocol properties `FR-20` and `FR-21`**, which are not in a
+  commit trace; (3) **`FR-14` (`x0`)**, because `rd = x0` is suppressed to `- -` in the dump by
+  construction (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:204-209`,
+  `scripts/verify/spike/normalize.py:71-73`); and (4) **breadth** — 3 of 43 sanity images are compared,
+  and the in-tree reference model still decodes only the load/store subset. It remains a release
+  blocker. Owner: verification lead. Target: 2026-12-31.
 - **G-05** — no timing, area or power measurement exists. Consequence: `NFR-01` to `NFR-04` and `NFR-07`
   cannot be verified, and no frequency or part is recorded (`A-08`, `Q-08`). Owner: designer. Target:
   2026-12-31.
@@ -2271,19 +2385,22 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   `RVTEST_FAIL` path reports the true `testnum` again. Owner: designer. Target: closed 2026-11-04.
 - **G-28** — **closed 2026-11-07 by WP-8**: no retire/commit observation existed, so nothing at the DUT
   ports said an instruction was executed: the only instruction-level visibility was the accepted fetch
-  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:98-131`, `inst_rd_en && inst_ready`), and an
+  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:126-159`, `inst_rd_en && inst_ready`), and an
   accepted fetch can still be discarded by `if_id_flush` (`rtl/control.sv:265-278`). This was a
   **verification-architecture** gap, opened 2026-11-04 by `Q-43`/`C-16`. The fix is a `bind` probe,
   `riscv_small_retire_if`, inside `riscv_small` (`tb/riscv_small_interface.sv:133-157`,
   `tb/riscv_small_tb.sv:41-50`), which exposes `valid_wb`, `pc_wb`, `inst_wb`, the destination and
   `ma_wb_clk_en` and derives `retire_valid = valid_wb && ma_wb_clk_en` in the probe, not in the RTL.
-  The monitor publishes the event (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:163-176`) and
+  The monitor publishes the event (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:191-215`) and
   the reference model is driven only by it (`tb/env/ref_model/riscv_small_ref_model.sv:100-104`);
   `program_port`, `rm_export` and `publish_program()` are deleted. Consequence: (a) the retire stream is
-  the program on `T-44` — 72 commits for 72 instructions — and differs from the fetch stream exactly by
-  the instructions the control flow skips on `T-45` — 10 commits for 12 fetches, difference 2, neither
-  skipped PC ever retired — while the `retire-every-slot` mutant sends the flush bubble to write-back
-  and both tests fail on it under check 11. (b) The coverage collector still samples the fetch:
+  the program on `T-44` — 72 commits for 72 instructions — and differs from the fetch stream by the two
+  discarded fetches on a taken branch (`T-45`: 10 commits for 12 fetches on a 2-word skip; `T-46`: 9
+  commits for 11 fetches on a 3-word skip, where `riscv_small_retire_checker` asserts the set claim and
+  the gated count claim, `tb/env/top/riscv_small_retire_checker.sv:201-247`, §10), while the
+  `retire-every-slot` mutant sends the flush bubble to write-back and `T-44`..`T-46` fail on it under
+  check 11, and `T-47`..`T-49` independently confirm the retire stream against Spike (§10.2). (b) The
+  coverage collector still samples the fetch:
   `cp_inst` is not a retire bin and retire events are dropped before `cg_mem`
   (`tb/env/top/riscv_small_coverage.sv:244-259`), so §10.1's caveat stands even though the observation
   now exists. It was not a release blocker in the `Q-11` sense. Owner: verification lead.
@@ -2327,23 +2444,23 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   to the previous address; a `pc → word` table built on it would have executed the wrong instruction.
   The fix correlates by handshake instead of sampling two pins: a request (`inst_rd_en`, behind the
   `clk_en` gate the monitor applies) pushes its address, and a response (`inst_ready`) pops the oldest
-  and publishes `(address, word)` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:98-131`).
+  and publishes `(address, word)` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:126-159`).
   A response with nothing outstanding is an orphan, and the monitor only observes it: it publishes the
   response with the transaction field `captured_inst_orphan` set
   (`tb/env/agents/riscv_small_agent/riscv_small_transaction.sv:31-37`,
-  `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:102-116`) and counts it (`:60`, `:108`,
-  `:180-185`); the monitor raises no `uvm_error`. `riscv_small_fetch_pair_checker` turns that
+  `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:130-145`) and counts it (`:67`, `:136`,
+  `:230-232`); the monitor raises no `uvm_error`. `riscv_small_fetch_pair_checker` turns that
   observation into `UVM_ERROR [FETCH_ORPHAN]`
   (`tb/env/top/riscv_small_fetch_pair_checker.sv:68-74`), compares every published pair against the
   program image and raises `FETCH_PAIR` on a mismatch (`:93-98`). A request still outstanding when the
   phase ends is reported, never raised: the monitor prints the pending count in `report_phase`
-  (`riscv_small_monitor.sv:180-185`, `:33-41`) and the checker leaves it alone
+  (`riscv_small_monitor.sv:229-233`, `:33-41`) and the checker leaves it alone
   (`riscv_small_fetch_pair_checker.sv:26-29`), because the testbench stops answering once the program
   item completes, so a `FETCH_LOST` error would be an artefact of the run ending. Consequence:
-  closed; `T-44` compares 72 of 72 pairs and `T-45` 12 of 12, both with 0 mismatch
-  (`build/regress/2026-11-07T03-40-36Z/T-44.log`, `T-45.log`). The data port is still sampled at level
+  closed; `T-44` compares 72 of 72 pairs, `T-45` 12 of 12 and `T-46` 11 of 11, all with 0 mismatch
+  (`build/regress/2026-11-18T03-04-38Z/T-44.log`, `T-45.log`, `T-46.log`). The data port is still sampled at level
   rather than by handshake; the monitor says so in the code and `G-18`/`E8` own that change
-  (`riscv_small_monitor.sv:133-139`). Owner: verification lead. Target: closed 2026-11-07.
+  (`riscv_small_monitor.sv:161-167`). Owner: verification lead. Target: closed 2026-11-07.
 
 ### 11.1 Observed while writing this document
 

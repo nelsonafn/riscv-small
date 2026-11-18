@@ -164,6 +164,17 @@ endif()
 riscv_mutant_names(CATALOGUE "${MUTANT_TABLE}")
 
 riscv_manifest_rows(ROWS "${MANIFEST}")
+# Which rows are trace comparisons. A `spike:` row's red must come from the
+# comparator; the identity guard runs before it and its failure says nothing
+# about the mutant, so the judge has to know the difference.
+set(SPIKE_TIDS "")
+foreach(ROW IN LISTS ROWS)
+    riscv_manifest_spike_image(SPIKE_IMAGE "${ROW}")
+    if(NOT SPIKE_IMAGE STREQUAL "")
+        riscv_tsv_cell(SPIKE_TID "${ROW}" 0)
+        list(APPEND SPIKE_TIDS "${SPIKE_TID}")
+    endif()
+endforeach()
 # The work-package selection is one manifest read, shared with the regression's
 # image filter: a WP owns the rows whose `wp` column names it.
 set(WP_TESTS "")
@@ -273,11 +284,42 @@ endif()
 # --- the verdict of one mutant ----------------------------------------------
 # Three callers ask the same question -- the serial run, a shard after its own
 # run, the master after the merge -- so the predicate is defined once. The
-# mutant must have produced a red record *and* a UVM error: a build failure or a
-# tool crash is missing evidence, never a detected defect.
-function(riscv_nc_judge OUT_VAR TID NAME RESULT)
+# mutant must have produced a red record *and* evidence of the defect: a build
+# failure or a tool crash is missing evidence, never a detected defect.
+#
+# What counts as evidence depends on what the test asserts, so the judge has two
+# rules and the manifest row decides which one applies:
+#
+#   * an ordinary row is judged by the DUT's own verdict -- a UVM error (or a
+#     fatal) is the test saying it saw the defect;
+#   * a `spike:` row is judged by the COMPARATOR, not by the DUT's verdict. The
+#     test fails when the two commit traces diverge (`compare_rc=1` plus
+#     compare.py's own `COMPARE: fail reason=` report), and that divergence IS
+#     the detection whether or not the DUT's sanity checker also failed. The
+#     `uvm_errors` proxy answers a different question ("did the DUT notice?") and
+#     would credit a sanity failure whose comparator matched (proving nothing
+#     about this row's claim) while rejecting a comparator-only detection (the
+#     strongest evidence these rows can produce). A row whose comparator matched
+#     (`compare_rc=0`) therefore has no teeth on its mutant and is rejected.
+#
+# The classification of a `spike:` red -- guard, divergence, match, comparator
+# error, or silence -- is riscv_red_trace_verdict() in common.cmake, not a
+# predicate of this file: check 11 of the release gate asks the same question
+# about the same stored log, and two copies of that rule would drift. This judge
+# only words the answer it gets.
+function(riscv_nc_judge OUT_VAR TID NAME RESULT LOG SPIKE)
     set(PROBLEM "")
-    if(NOT EXISTS "${RESULT}")
+    set(TRACE "")
+    if(SPIKE)
+        riscv_red_trace_verdict(TRACE "${LOG}")
+    endif()
+    if(TRACE STREQUAL "guarded")
+        # The identity guard is a property of the harness, not of the test: the
+        # reference could not be identified, so compare.py never ran and the
+        # mutant was never measured. Checked before anything else.
+        # No semicolon: the master appends this to a CMake list.
+        set(PROBLEM "${TID}: the red fired on the Spike identity guard, not on a trace divergence -- the reference could not be identified, so the comparator never measured the mutant (see ${LOG}), run scripts/verify/spike/build_spike.sh")
+    elseif(NOT EXISTS "${RESULT}")
         set(PROBLEM "${TID}: no results.json for mutant '${NAME}' (build failure or a shard that never ran it)")
     else()
         file(READ "${RESULT}" JSON)
@@ -285,6 +327,18 @@ function(riscv_nc_judge OUT_VAR TID NAME RESULT)
             set(PROBLEM "${TID}: the mutant run was not recorded as red")
         elseif(NOT JSON MATCHES "\"id\": \"${TID}\", \"test\": \"[^\"]*\", \"status\": \"(fail|timeout)\"")
             set(PROBLEM "${TID} PASSED on mutant '${NAME}': the test does not catch this defect")
+        elseif(SPIKE)
+            # A trace comparison is judged on the comparator's evidence. The
+            # DUT's own verdict is deliberately not consulted: these rows assert
+            # a divergence, and a comparator-only detection (xsim_rc=0, zero UVM
+            # errors) is the cleanest form of it.
+            if(TRACE STREQUAL "matched")
+                set(PROBLEM "${TID}: mutant '${NAME}' did not diverge the trace -- the comparator matched the DUT against Spike (compare_rc=0), so this row has no teeth on this defect")
+            elseif(TRACE STREQUAL "absent")
+                set(PROBLEM "${TID}: the red on mutant '${NAME}' carries no comparator verdict -- ${LOG} has no compare_rc= line, so compare.py never ran to completion, and a build or tool failure is not a divergence")
+            elseif(TRACE STREQUAL "error")
+                set(PROBLEM "${TID}: the comparator on mutant '${NAME}' exited without a divergence (see the compare_rc= line in ${LOG}) -- a comparator error is not a detection")
+            endif()
         elseif(NOT JSON MATCHES "\"uvm_errors\": [1-9]")
             set(PROBLEM "${TID}: failed on mutant '${NAME}' without a UVM error; a build or tool failure is not a verdict")
         endif()
@@ -405,7 +459,13 @@ if(SHARDS GREATER 1 AND SHARD STREQUAL "")
         string(REPLACE "|" ";" CELL "${ENTRY}")
         list(GET CELL 0 TID)
         list(GET CELL 1 NAME)
-        riscv_nc_judge(PROBLEM "${TID}" "${NAME}" "${OUT}/${TID}/results.json")
+        if(TID IN_LIST SPIKE_TIDS)
+            set(IS_SPIKE TRUE)
+        else()
+            set(IS_SPIKE FALSE)
+        endif()
+        riscv_nc_judge(PROBLEM "${TID}" "${NAME}" "${OUT}/${TID}/results.json"
+            "${OUT}/${TID}/${TID}.log" "${IS_SPIKE}")
         if(PROBLEM)
             # The judge's text carries a semicolon; a bare list(APPEND) would
             # split it into two problems and count the failure twice.
@@ -456,6 +516,26 @@ foreach(ENTRY IN LISTS SELECTED)
               "${ROOT}/CMakeLists.txt" "${ROOT}/configure" DESTINATION "${SCRATCH}")
     file(CREATE_LINK "${ROOT}/src" "${SCRATCH}/src" SYMBOLIC)
 
+    # A `spike:` row needs the reference simulator, which is built once in the
+    # real build tree (`scripts/verify/spike/build_spike.sh`) and is not part of
+    # the source tree the mutant compiles. Link the install tree in, so the
+    # scratch measures the mutant instead of failing on a missing tool -- a
+    # missing tool is not a verdict, and riscv_nc_judge rejects it.
+    if(EXISTS "${ROOT}/build/spike/install")
+        file(MAKE_DIRECTORY "${SCRATCH}/build/spike")
+        file(CREATE_LINK "${ROOT}/build/spike/install" "${SCRATCH}/build/spike/install" SYMBOLIC)
+    endif()
+    # The identity travels with the tool. Every `spike:` test asserts that
+    # build/spike/version.txt names the commit build_spike.sh pins, so a scratch
+    # holding only the install tree fails on that guard before Spike runs -- a
+    # harness fault, not a divergence, and riscv_nc_judge rejects it. Link the
+    # record beside the tool, under the same guard, so the scratch measures the
+    # mutant with an identified reference.
+    if(EXISTS "${ROOT}/build/spike/version.txt")
+        file(MAKE_DIRECTORY "${SCRATCH}/build/spike")
+        file(CREATE_LINK "${ROOT}/build/spike/version.txt" "${SCRATCH}/build/spike/version.txt" SYMBOLIC)
+    endif()
+
     # One mechanism for every mutant: an exact single-occurrence text patch on
     # the copy, which aborts if the row no longer matches the tree. Its `why` is
     # a STATUS line, so the gate output says which defect was rebuilt.
@@ -491,7 +571,13 @@ foreach(ENTRY IN LISTS SELECTED)
         OUTPUT_FILE "${SCRATCH}/negative.log"
         ERROR_FILE "${SCRATCH}/negative.log")
 
-    riscv_nc_judge(PROBLEM "${TID}" "${NAME}" "${SCRATCH}/build/red/results.json")
+    if(TID IN_LIST SPIKE_TIDS)
+        set(IS_SPIKE TRUE)
+    else()
+        set(IS_SPIKE FALSE)
+    endif()
+    riscv_nc_judge(PROBLEM "${TID}" "${NAME}" "${SCRATCH}/build/red/results.json"
+        "${SCRATCH}/build/regress/${TID}.log" "${IS_SPIKE}")
     if(PROBLEM)
         message(FATAL_ERROR "${PROBLEM}; see build/mutants/${TID}/negative.log")
     endif()

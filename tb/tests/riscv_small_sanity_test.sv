@@ -9,6 +9,16 @@
 //   +MAX_CYCLES=<n>    cycle budget before the run is declared a timeout
 //   +TRACE             print every fetch and every data operation
 //
+// With `+RETIRE_LOG=<file>` on (the monitor's commit dump, WP-9 P2) the run
+// drains RETIRE_DRAIN cycles after the checker's verdict. The verdict is decided
+// on the data write that reaches `tohost`, which happens in MA: the instruction
+// that performs it retires on the next edge, and the loop instruction behind it
+// on the one after. Without the drain the dump would stop one commit BEFORE the
+// `tohost` store -- the very line the trace comparison cuts both sides at -- and
+// the comparison would fail on the run's window instead of on the DUT. The drain
+// is gated on the plusarg so the run, its log and its end time are unchanged
+// when the dump is off.
+//
 // Author: Nelson Alves nelsonafn@gmail.com
 // Date  : October 2026
 //------------------------------------------------------------------------------
@@ -32,6 +42,11 @@ class riscv_small_sanity_test extends riscv_small_base_test;
   int unsigned tohost;
   int unsigned max_cycles = 200000;
   bit          trace;
+
+  // Commit-trace configuration (+RETIRE_LOG, WP-9 P2). Only the drain below
+  // depends on it; the dump itself belongs to the monitor.
+  localparam int RETIRE_DRAIN = 8;
+  bit            commit_dump;
 
   /*
    * Register with factory
@@ -74,6 +89,11 @@ class riscv_small_sanity_test extends riscv_small_base_test;
       got_cycles = $value$plusargs("MAX_CYCLES=%d", max_cycles);
     end
     trace = $test$plusargs("TRACE");
+    begin
+      string retire_log;
+      retire_log = "";
+      commit_dump = ($value$plusargs("RETIRE_LOG=%s", retire_log) && retire_log != "");
+    end
     image_name = image_name_of(hex_file);
 
     if (!uvm_config_db#(virtual riscv_small_interface)::get(this, "", "intf", vif))
@@ -108,6 +128,11 @@ class riscv_small_sanity_test extends riscv_small_base_test;
       begin
         seq.start(env.riscv_small_agnt.sequencer);
         env.sanity_checker.done.wait_on();
+        // The verdict is decided on the tohost write, which is an MA-stage data
+        // write: the instruction that performs it has not retired yet. When the
+        // commit dump is on, drain so the dump contains that commit (see the
+        // file banner). Off by default: no extra cycle, no log difference.
+        if (commit_dump) repeat (RETIRE_DRAIN) @(posedge vif.clk);
       end
     join_any
     disable fork;
