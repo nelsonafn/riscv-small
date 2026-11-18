@@ -12,7 +12,8 @@
 //   sanity    the sequence item carries the program image (program_addr/
 //             program_data). The driver loads it into its memory, completes the
 //             item and then answers every fetch/data access until the phase
-//             ends.
+//             ends. Addresses are absolute (the image lives at RESET_VECTOR);
+//             `mem` is indexed from `mem_base`, so the model stays 0-based.
 //
 // The driver never reads a plusarg, never decodes the pass/fail address, never
 // decides PASS/FAIL, never raises a report error and never feeds the reference
@@ -43,6 +44,14 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
   bit          trace;
   logic [31:0] mem [0:65535];   // 64K words = 256 KiB of image space
 
+  // The address of `mem[0]`. It is the value the testbench top published from
+  // the DUT's elaborated RESET_VECTOR (FR-41, Q-33) -- the same configuration
+  // key the reset checker compares against, never a second copy of the spec's
+  // default. Every image-mode access is indexed relative to it, so the memory
+  // model stays 0-based while the core addresses the program absolutely.
+  logic [31:0] mem_base;
+  localparam logic [31:0] MEM_WORDS = 32'h0000_FFFF;
+
   bit warned_imem_range;
   bit warned_dmem_range;
   bit warned_zero_strb;
@@ -60,6 +69,12 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       mem_mode = 0;
     if (!uvm_config_db#(bit)::get(this, "", "trace", trace))
       trace = 0;
+    // The image base is configuration, and it must exist: without it an
+    // absolute address has no index, and guessing 0 is the defect this WP
+    // removes. The top owns the single source (`duv.RESET_VECTOR`).
+    if (!uvm_config_db#(bit [31:0])::get(this, "", "reset_vector", mem_base))
+      `uvm_fatal("NO_MEM_BASE",
+        "no reset_vector was published by the testbench top: the memory BFM cannot index an absolute address")
   endfunction
 
   // TODO: Move to fv_utils_pkg package
@@ -186,6 +201,12 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
         // Synchronously poll on the clock edge instead of wait() to avoid simulator evaluation issues
         forever begin
           @(posedge vif.clk);
+          // A request presented while reset is low is not a program fetch: `pc`
+          // resets to RESET_VECTOR, so during reset the pins can already present
+          // the program's last address. Completing the item there would stop the
+          // BFM before it ever answered the first fetch (measured on T-50: the
+          // item ended at 15 ns and no fetch pair was published).
+          if (!vif.rst_n) continue;
           if (vif.inst_rd_en && (vif.inst_addr == last_addr)) break;
         end
 
@@ -224,9 +245,11 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
   task run_image_mode();
     seq_item_port.get_next_item(req);
     foreach (mem[i]) mem[i] = '0;
+    // The sequence emits absolute addresses (it lays the program out at
+    // RESET_VECTOR); `mem` is indexed from `mem_base`, which is that address.
     foreach (req.program_addr[i])
-      mem[req.program_addr[i] >> 2] = req.program_data[i];
-    `uvm_info("PROGRAM_DRV", $sformatf("loaded %0d program words", req.program_addr.size()), UVM_LOW)
+      mem[(req.program_addr[i] - mem_base) >> 2] = req.program_data[i];
+    `uvm_info("PROGRAM_DRV", $sformatf("loaded %0d program words at base 0x%08h", req.program_addr.size(), mem_base), UVM_LOW)
     seq_item_port.item_done();
     run_memory_responder();
   endtask
@@ -249,8 +272,10 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       // --- instruction port: identical protocol to the directed driver ------
       vif.inst_ready <= #OUTPUT_DELAY 0;
       if (vif.inst_rd_en) begin
-        idx = vif.inst_addr >> 2;
-        if (idx <= 32'h0000_FFFF) begin
+        // Absolute address -> image index. Anything below the base wraps to a
+        // huge unsigned index and takes the out-of-range branch below.
+        idx = (vif.inst_addr - mem_base) >> 2;
+        if (idx <= MEM_WORDS) begin
           word = mem[idx];
         end else begin
           word = NOP;
@@ -258,7 +283,8 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
           // bury the log under one warning per cycle.
           if (!warned_imem_range) begin
             warned_imem_range = 1;
-            `uvm_warning("IMEM_RANGE", $sformatf("INST_OUT_OF_RANGE: PC='h%0h (mem is 0x0..0x3ffff); further out-of-range fetches are silent", vif.inst_addr))
+            `uvm_warning("IMEM_RANGE", $sformatf("INST_OUT_OF_RANGE: PC='h%0h (mem is 0x%08h..0x%08h); further out-of-range fetches are silent",
+              vif.inst_addr, mem_base, mem_base + (MEM_WORDS << 2)))
           end
         end
         vif.inst_data.memory_w <= #OUTPUT_DELAY word;
@@ -270,14 +296,15 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       // --- data port --------------------------------------------------------
       vif.data_ready <= #INPUT_DELAY 0;
       if (vif.data_rd_en) begin
-        idx = vif.data_addr.u_data >> 2;
-        if (idx <= 32'h0000_FFFF) begin
+        idx = (vif.data_addr.u_data - mem_base) >> 2;
+        if (idx <= MEM_WORDS) begin
           word = mem[idx];
         end else begin
           word = '0;
           if (!warned_dmem_range) begin
             warned_dmem_range = 1;
-            `uvm_warning("DMEM_RANGE", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h (mem is 0x0..0x3ffff); further out-of-range data accesses are silent", vif.data_addr.u_data))
+            `uvm_warning("DMEM_RANGE", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h (mem is 0x%08h..0x%08h); further out-of-range data accesses are silent",
+              vif.data_addr.u_data, mem_base, mem_base + (MEM_WORDS << 2)))
           end
         end
         vif.data_rd.u_data <= #INPUT_DELAY word;
@@ -285,11 +312,11 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
         if (trace)
           $display("TRACE[%0d] DREAD  addr=0x%08h data=0x%08h", cycles, vif.data_addr.u_data, word);
       end else if (vif.data_wr_en) begin
-        idx = vif.data_addr.u_data >> 2;
+        idx = (vif.data_addr.u_data - mem_base) >> 2;
         // Byte strobes are the DUT's contract: only the lanes it drives change,
         // so a byte or halfword store is a read-modify-write here exactly as it
         // is in a real memory (FR-11, Q-28).
-        if (idx <= 32'h0000_FFFF) begin
+        if (idx <= MEM_WORDS) begin
           mem[idx] = apply_strobes(mem[idx],
                                    vif.data_wr.u_data,
                                    vif.data_wr_strb,
@@ -297,7 +324,8 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
         end else begin
           if (!warned_dmem_range) begin
             warned_dmem_range = 1;
-            `uvm_warning("DMEM_RANGE", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h (mem is 0x0..0x3ffff); further out-of-range data accesses are silent", vif.data_addr.u_data))
+            `uvm_warning("DMEM_RANGE", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h (mem is 0x%08h..0x%08h); further out-of-range data accesses are silent",
+              vif.data_addr.u_data, mem_base, mem_base + (MEM_WORDS << 2)))
           end
         end
         vif.data_ready <= #INPUT_DELAY 1;

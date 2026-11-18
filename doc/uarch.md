@@ -442,7 +442,7 @@ assertion, which is `G-21`. One further part of `FR-41` is target, not as built:
 address after reset is the build-time parameter `RESET_VECTOR`, default `0x8000_0000`, whose value is
 fixed by `Q-33` and which software cannot move because it is not a CSR (`FR-41`, `Q-33`, `spec.md`
 §5.2). As built there is no such parameter and `pc` resets to 0, so the first fetch leaves at address 0
-(`rtl/instruction_fetch.sv:104-107`).
+(`rtl/instruction_fetch.sv:104-107`, `G-33`).
 
 The asynchronous reset appears in eight `always_ff` blocks, all with the same sensitivity list
 `posedge clk or negedge rst_n`:
@@ -2003,7 +2003,7 @@ exists; every row below is absent with the gap that keeps it absent.
 
 | ID | Scope | Status |
 |---|---|---|
-| `T-03` | target: the `FR-50` address map, `misa`, `mepc`/`mcause`/`mtval`, `mscratch`, the reset vector | target, absent (`G-13`) |
+| `T-03` | target: the `FR-50` address map, `misa`, `mepc`/`mcause`/`mtval`, `mscratch`, the reset vector | target, absent (`G-13`, `G-33`) |
 | `T-04` | target: `mtip`/`meip`/`msip`, `mie`/`mip`/`mstatus`, the entry stack and the priority order | target, absent (`G-14`) |
 | `T-05` | target: hart-side run control, abstract commands, the program buffer, triggers, single step and the `dbg_auth` strap; it needs a Debug Module model | target, absent (`G-23`) |
 
@@ -2105,11 +2105,18 @@ Spike is invoked as
 `spike --no-dm --disable-dtb -m0:0x40000 --isa=rv32i --log=<f> --log-commits <elf>`
 (`scripts/verify/spike/build_spike.sh:41-44`, `scripts/verify/spike_trace.cmake:102-103`, `:152`). The
 flags follow from the memory map: the sanity linker script places code at `0x0` to match the DUT's
-reset PC (`rtl/instruction_fetch.sv:104-107`), whereas Spike maps a built-in debug module at
-`[0x0, 0x1000)` (`--no-dm` removes it), a device-tree ROM at `[0x1000, 0x2000)` (`--disable-dtb`
-removes it), and CLINT at `[0x2000000, 0x200c000)` (the RAM region must end below `0x2000000`);
-`-m0:0x40000` (256 KiB) matches the testbench driver's 64K-word memory model
-(`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:44`).
+reset PC (`rtl/instruction_fetch.sv:104-107`, `scripts/verify/sanity/link.ld:22`), whereas Spike maps a
+built-in debug module at `[0x0, 0x1000)` (`--no-dm` removes it), a device-tree ROM at
+`[0x1000, 0x2000)` (`--disable-dtb` removes it), and CLINT at `[0x2000000, 0x200c000)` (the RAM region
+must end below `0x2000000`); `-m0:0x40000` (256 KiB) matches the testbench driver's 64K-word memory
+model (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:44`). None of the three flags is a Spike
+requirement, and none of them describes how a standard RISC-V platform is mapped: the convention, and
+`riscv-tests`' own `src/riscv-tests/env/p/link.ld:6`, puts DRAM at `0x8000_0000`. They exist to present **the platform
+this DUT actually implements** — reset and image both at `0x0` — to the reference model, so that both
+sides execute the same addresses; the `0x0` base is the known divergence from `FR-41`/`Q-33` recorded
+as **`G-33`**, not a design decision of the reference model. When `RESET_VECTOR` lands with its
+specified default the images move to `0x8000_0000` and all three flags disappear, because the
+collisions they work around are a property of the low addresses alone.
 
 Both sides emit the same four-field canonical line,
 `0x<pc:08x> <xN|-> <0xval|-> 0x<inst:08x>`:
@@ -2178,14 +2185,14 @@ lane. `G-28` was never one of them — its consequence cell called it **not a re
 `Q-11` sense — and WP-8 closed it together with `G-32`; the gate's `release-blocker gaps:` field once
 listed `G-28`, and that was a substring-match defect (`scripts/verify/signoff_check.cmake:620-632`,
 the negated claim stripped at `:627`), not a status. Every other gap is a dated commitment. All
-thirty-two rows — `G-01` to `G-32` — are canonical in `doc/verification.md`; this summary mirrors
+thirty-three rows — `G-01` to `G-33` — are canonical in `doc/verification.md`; this summary mirrors
 them, and the canonical table's own rows are updated by its own author. `G-10` and `G-25` are closed
 2026-10-30 by WP-4;
 `G-26`, `G-27` and `G-20` are closed 2026-11-04 by WP-4c, the work package that also found `G-19` in
 the open; `G-08`, `G-19` and `G-29` are closed 2026-11-05 by WP-6, which opened `G-30`; `G-03`, `G-07`
 and `G-30` are closed by WP-7, which also found and closed `G-31` inside the same work package; `G-28`
-and `G-32` are closed 2026-11-07 by WP-8, and WP-9 narrows `G-04` and adds the `T-46` set invariant on
-`G-28` without promoting an `FR`. `G-23`
+and `G-32` are closed 2026-11-07 by WP-8, and WP-9 narrows `G-04`, adds the `T-46` set invariant on
+`G-28` and opens `G-33` without promoting an `FR`. `G-23`
 and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem of
 `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of `FR-57`.
 
@@ -2461,6 +2468,17 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   (`build/regress/2026-11-18T03-04-38Z/T-44.log`, `T-45.log`, `T-46.log`). The data port is still sampled at level
   rather than by handshake; the monitor says so in the code and `G-18`/`E8` own that change
   (`riscv_small_monitor.sv:161-167`). Owner: verification lead. Target: closed 2026-11-07.
+- **G-33** — no `RESET_VECTOR` parameter, and a hardcoded reset to zero: `pc <= 'b0`
+  (`rtl/instruction_fetch.sv:106`) and `grep RESET_VECTOR rtl/` is empty, while `FR-41`, `Q-33` and the
+  parameter table of `spec.md` §5.2 specify a build-time `RESET_VECTOR` defaulting to `0x8000_0000`, so
+  the first fetch leaves at `0x0` (section 5). Consequence: `FR-41`'s reset-vector clause cannot become
+  `verified` while its reset-style clause stays with `G-21` — the two halves of one requirement fail for
+  unrelated reasons and neither closes the row. It was invisible because both harness legs work around
+  it: the sanity flow links every image at `0x0` *because* the DUT resets there
+  (`scripts/verify/sanity/link.ld:1-22`), and the Spike invocation moves the reference to the same base
+  (§10.2), so the 42 passing images and the three `T-47`..`T-49` trace comparisons say nothing about the
+  reset address. A conformance commitment, not a `Q-11` release blocker — the `G-21` precedent. Owner:
+  designer. Target: 2026-12-31.
 
 ### 11.1 Observed while writing this document
 

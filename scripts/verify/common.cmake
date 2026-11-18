@@ -75,10 +75,28 @@ endif()
 # file(STRINGS) splits a line at every non-ASCII byte (measured: "emdash—tail"
 # becomes two items), and the specification tables put the status in the last
 # column -- so 35 of the 59 FR rows lost it. Read the whole file and split on
-# newlines only; `;` is CMake's list separator, so neutralise it first.
+# newlines only.
+#
+# Two characters break that split and are neutralised before it, because they
+# are not text to CMake but syntax:
+#   `;`  the list separator -- every `;` would become an element boundary;
+#   `[`  starts a bracket argument -- an *unbalanced* `[` makes CMake stop
+#        treating `;` as a separator from that point on, so the rest of the file
+#        collapses into one element (measured: doc/spec.md parsed to 58 elements
+#        and 0 FR rows, because its G-33 revision row writes the half-open
+#        address ranges `[0,0x1000)` and `[0x1000,0x2000)` -- two `[` and no
+#        `]` -- and the FR table below it disappeared; a 5-line probe file with
+#        one such line yields 2 elements instead of 5). `]` is escaped with it
+#        so the pair is symmetric.
+# riscv_tsv_cell() is the accessor that restores the literal characters; a
+# consumer of a whole line (a Markdown table row) never needs them back, because
+# it matches IDs and statuses, not punctuation. table_rows() therefore fails
+# loudly on a zero-row answer instead of looping over nothing.
 function(riscv_read_lines OUT_VAR FILE)
     file(READ "${FILE}" TEXT)
     string(REPLACE ";" "@SEMI@" TEXT "${TEXT}")
+    string(REPLACE "[" "@LBR@" TEXT "${TEXT}")
+    string(REPLACE "]" "@RBR@" TEXT "${TEXT}")
     string(REPLACE "\n" ";" LINES "${TEXT}")
     set(${OUT_VAR} "${LINES}" PARENT_SCOPE)
 endfunction()
@@ -107,7 +125,11 @@ function(riscv_tsv_rows OUT_VAR FILE)
     set(${OUT_VAR} "${ROWS}" PARENT_SCOPE)
 endfunction()
 
-# 0-based cell. An absent column is ""; spaces are never stripped.
+# 0-based cell. An absent column is ""; spaces are never stripped. The literal
+# characters riscv_read_lines() neutralised are restored here, so a mutant's
+# `find`/`replace` payload keeps its SystemVerilog part-selects (`u_data[1:0]`:
+# six rows of mutants.tsv carry one, and without this the patch would look for a
+# string that occurs zero times).
 function(riscv_tsv_cell OUT_VAR ROW INDEX)
     string(REPLACE "|" ";" CELLS "${ROW}")
     list(LENGTH CELLS N)
@@ -117,6 +139,8 @@ function(riscv_tsv_cell OUT_VAR ROW INDEX)
     endif()
     list(GET CELLS ${INDEX} CELL)
     string(REPLACE "@SEMI@" ";" CELL "${CELL}")
+    string(REPLACE "@LBR@" "[" CELL "${CELL}")
+    string(REPLACE "@RBR@" "]" CELL "${CELL}")
     set(${OUT_VAR} "${CELL}" PARENT_SCOPE)
 endfunction()
 

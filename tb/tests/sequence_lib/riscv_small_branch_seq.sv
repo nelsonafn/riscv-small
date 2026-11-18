@@ -13,6 +13,10 @@
 //   0x18  SW  x2, 0x50c(x0)     executed
 //   0x1c..0x2c  NOP x5
 //
+// The map above is relative to the program base: the words are emitted at
+// base+offset, where the base is RESET_VECTOR (0x8000_0000 by default), because
+// that is where the core fetches. The branch offset stays a relative +12.
+//
 // Two facts make this program the evidence that the observation is a RETIRE and
 // not a fetch:
 //   - the commit count is 10, not 12, while the fetch count is 12: the two
@@ -68,6 +72,8 @@ class riscv_small_branch_seq extends riscv_small_basic_load_store_seq;
   virtual task body();
     int idx;
 
+    mem_base = riscv_small_seq_mem_base(m_sequencer);
+
     req = riscv_small_transaction::type_id::create("req");
     req.instruction_addr = new[BODY_WORDS + TAIL];
     req.instruction_list = new[BODY_WORDS + TAIL];
@@ -83,44 +89,44 @@ class riscv_small_branch_seq extends riscv_small_basic_load_store_seq;
     req.data_addr[3] = STORE_B; req.data_list[3] = 'x;
 
     idx = 0;
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_load(3'b010, 5'd1, SRC_A);
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h LW   x1, 'h%0h(x0)", idx, idx*4, SRC_A), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h LW   x1, 'h%0h(x0)", idx, mem_base + idx*4, SRC_A), UVM_LOW)
     idx++;
 
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_load(3'b010, 5'd2, SRC_B);
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h LW   x2, 'h%0h(x0)", idx, idx*4, SRC_B), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h LW   x2, 'h%0h(x0)", idx, mem_base + idx*4, SRC_B), UVM_LOW)
     idx++;
 
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_beq(5'd0, 5'd0, 13'(BRANCH_OFF));
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h BEQ  x0, x0, +%0d  -> taken, skips 0x%02h and 0x%02h",
-      idx, idx*4, BRANCH_OFF, (idx+1)*4, (idx+2)*4), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h BEQ  x0, x0, +%0d  -> taken, skips 0x%02h and 0x%02h",
+      idx, mem_base + idx*4, BRANCH_OFF, (mem_base + (idx+1)*4), (mem_base + (idx+2)*4)), UVM_LOW)
     idx++;
 
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_sw(5'd1, SKIPPED_0);
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h SW   x1, 'h%0h(x0)  SKIPPED", idx, idx*4, SKIPPED_0), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h SW   x1, 'h%0h(x0)  SKIPPED", idx, mem_base + idx*4, SKIPPED_0), UVM_LOW)
     idx++;
 
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_sw(5'd2, SKIPPED_1);
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h SW   x2, 'h%0h(x0)  SKIPPED", idx, idx*4, SKIPPED_1), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h SW   x2, 'h%0h(x0)  SKIPPED", idx, mem_base + idx*4, SKIPPED_1), UVM_LOW)
     idx++;
 
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_sw(5'd1, STORE_A);
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h SW   x1, 'h%0h(x0)", idx, idx*4, STORE_A), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h SW   x1, 'h%0h(x0)", idx, mem_base + idx*4, STORE_A), UVM_LOW)
     idx++;
 
-    req.instruction_addr[idx] = idx * 4;
+    req.instruction_addr[idx] = mem_base + idx * 4;
     req.instruction_list[idx] = enc_sw(5'd2, STORE_B);
-    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%02h SW   x2, 'h%0h(x0)", idx, idx*4, STORE_B), UVM_LOW)
+    `uvm_info("BRANCH", $sformatf("[%0d] pc=0x%08h SW   x2, 'h%0h(x0)", idx, mem_base + idx*4, STORE_B), UVM_LOW)
     idx++;
 
     for (int t = 0; t < TAIL; t++) begin
-      req.instruction_addr[idx] = idx * 4;
+      req.instruction_addr[idx] = mem_base + idx * 4;
       req.instruction_list[idx] = 32'h00000033; // NOP: ADD x0, x0, x0
       idx++;
     end
@@ -141,7 +147,7 @@ class riscv_small_branch_seq extends riscv_small_basic_load_store_seq;
     if (!uvm_config_db#(riscv_small_program_image)::get(m_sequencer, "", "program_image", image))
       return;
     for (int i = 3; i <= 4; i++)
-      image.add_skip(i * 4);
+      image.add_skip(mem_base + i * 4);
   endfunction
 
 endclass

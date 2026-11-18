@@ -12,18 +12,27 @@
 # the build is `build/spike/` (gitignored) so nothing generated lands in the
 # source tree.
 #
-# Two facts measured on this machine (2026-11-17) that the flags encode:
+# Two facts measured on this machine that the invocation encodes:
 #
 #   1. `spike --version` does not exist in this build. The identity is the
 #      submodule commit plus the first line of `--help`
 #      ("Spike RISC-V ISA Simulator 1.1.1-dev"); both go to build/spike/version.txt.
 #
-#   2. `-m0:<size>` collides with two built-in devices: the debug module at
-#      [0x0, 0x1000) and the device-tree ROM at [0x1000, 0x2000). `--no-dm` and
-#      `--disable-dtb` remove them. The CLINT stays at [0x2000000, 0x200c000),
-#      so the memory region must end below 0x2000000; the default here is 256 KiB,
-#      the same window as the testbench's memory model, which keeps the comparison
-#      like-for-like. The ELF does not need re-linking.
+#   2. There are NO memory-map flags. The image is linked at RESET_VECTOR
+#      (0x8000_0000, FR-41) and Spike maps its default 2048 MiB of DRAM there, so
+#      the payload's entry point is a valid load address and the default map is
+#      already the platform. The three flags that used to be here --
+#      `-m0:0x40000`, `--no-dm` and `--disable-dtb` -- existed only because the
+#      harness linked the images at 0, where the debug module ([0,0x1000)) and
+#      the device-tree ROM ([0x1000,0x2000)) live. Away from 0 they are gone and
+#      nothing replaces them.
+#
+# With the device tree enabled Spike still boots through its own reset ROM at
+# 0x1000 (five commits ending in a jump to the ELF entry) before the payload.
+# That prefix is the reference's host-side boot, not target code: the DUT has no
+# counterpart for it, so scripts/verify/spike/normalize.py drops it by matching
+# the payload entry (`--entry`, fed from the sanity dump) and fails when the
+# payload is never reached.
 #
 # Usage: scripts/verify/spike/build_spike.sh [--check]
 #   --check   verify an existing build instead of building it
@@ -39,9 +48,10 @@ SPIKE="$PREFIX/bin/spike"
 JOBS=${JOBS:-$(nproc)}
 
 # The invocation every gate must use. Keep in sync with spike_trace.cmake.
+# The default memory map is the platform: the image and Spike's DRAM both live
+# at RESET_VECTOR (0x8000_0000), so there is no -m/-no-dm/--disable-dtb.
 SPIKE_ISA="rv32i"
-SPIKE_MEM="-m0:0x40000"          # 256 KiB at 0: below the CLINT, same as the TB model
-SPIKE_FLAGS="--no-dm --disable-dtb"
+SPIKE_FLAGS=""
 
 # The reference may not float. A comparison against "whatever master was that
 # day" cannot be reproduced from this repository, so the source is checked out at
@@ -132,7 +142,7 @@ make install || exit 1
     echo "commit=$(git -C "$SRC" rev-parse HEAD)"
     echo "softfloat=$(git -C "$SRC/berkeley-softfloat-3" rev-parse HEAD 2>/dev/null)"
     echo "banner=$("$SPIKE" --help 2>&1 | head -1)"
-    echo "flags=$SPIKE_FLAGS --isa=$SPIKE_ISA $SPIKE_MEM"
+    echo "flags=$SPIKE_FLAGS --isa=$SPIKE_ISA"
     echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > version.txt
 
@@ -142,7 +152,7 @@ check_build || exit 1
 ELF="$ROOT/build/sanity_tests/isa/rv32ui-p-add"
 if [ -f "$ELF" ]; then
     # shellcheck disable=SC2086
-    "$SPIKE" $SPIKE_FLAGS $SPIKE_MEM --isa="$SPIKE_ISA" "$ELF"
+    "$SPIKE" $SPIKE_FLAGS --isa="$SPIKE_ISA" "$ELF"
     rc=$?
     if [ $rc -ne 0 ]; then
         echo "spike: rv32ui-p-add exited $rc (expected 0: tohost=1)"

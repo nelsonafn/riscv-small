@@ -150,3 +150,11 @@ auipc-no-pc	rtl/execution.sv	alu_data1 = pc;	alu_data1 = rs1; // negative contro
 # to write-back, where the probe publishes it and the retire checker reports it
 # as not the program's next instruction.
 retire-every-slot	rtl/instruction_decode.sv	valid_ex <= valid_id && !flush;	valid_ex <= 1'b1; // negative control: every pipeline slot retires	a flushed slot retires as if it were an instruction (G-28)
+#
+# T-50 (FR-41 / G-33): the reset branch of the PC register. Reverting it to the
+# pre-WP-11 `pc <= 'b0` makes the first fetch after reset present 0x0 while the
+# harness places the program at RESET_VECTOR (0x8000_0000), so the BFM answers
+# nothing, the monitor publishes no fetch and the reset checker's claim is never
+# measured -- the test's clock timeout raises the UVM_ERROR. This is the defect
+# G-33 records, not a synthetic one.
+reset-vector-zero	rtl/instruction_fetch.sv	pc <= RESET_VECTOR;	pc <= 'b0; // negative control: the reset vector is not applied	the first fetch after reset presents 0x0 instead of RESET_VECTOR (G-33)

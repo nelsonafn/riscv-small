@@ -13,6 +13,11 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
   localparam int BUBBLE_COUNT = 5;
   localparam int FLUSH_CYCLES = 5;
 
+  // Program base: the address the first fetch presents (RESET_VECTOR). body()
+  // sets it from configuration; the subclasses that build their own program at
+  // the same base inherit it.
+  protected bit [31:0] mem_base;
+
   function new (string name = "riscv_small_basic_load_store_seq");
     super.new(name);
   endfunction
@@ -22,6 +27,8 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     int rand_wr_addr[];
     int rand_data[];
     int regs[];
+
+    mem_base = riscv_small_seq_mem_base(m_sequencer);
 
     req = riscv_small_transaction::type_id::create("req");
     
@@ -64,7 +71,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     // opcode = 7'b0000011 = LW opcode
     for (int i=0; i<N; i++) begin
       bit [11:0] rd_imm = rand_rd_addr[i];
-      req.instruction_addr[i] = i * 4;
+      req.instruction_addr[i] = mem_base + i * 4;
       req.instruction_list[i] = { rd_imm, 5'd0, 3'b010, 5'(regs[i]), 7'b0000011 };
       `uvm_info("LOAD", $sformatf("LOAD: x%0d, 'h%0h(x0) == 'h%0h → x%0d <= DMEM[x0 + 'h%0h] → x%0d <= 'h%h", regs[i], rd_imm, req.instruction_list[i], regs[i], rd_imm, regs[i], rand_data[i]), UVM_LOW);
     end
@@ -72,7 +79,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     // Phase 2: Drainage - NOPs to drain the pipeline — ensures WB of all LWs before SWs
     for (int b = 0; b < BUBBLE_COUNT; b++) begin
       int idx = N + b;
-      req.instruction_addr[idx] = idx * 4;
+      req.instruction_addr[idx] = mem_base + idx * 4;
       req.instruction_list[idx]  = 32'h00000033; // NOP (ADD x0, x0, x0)
     end
 
@@ -98,7 +105,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
         begin
           bit [11:0] wr_imm = rand_wr_addr[i];
           int idx = N + BUBBLE_COUNT + i;
-          req.instruction_addr[idx] = idx * 4;
+          req.instruction_addr[idx] = mem_base + idx * 4;
           req.instruction_list[idx] = { wr_imm[11:5], 5'(regs[i]), 5'd0, 3'b010, wr_imm[4:0], 7'b0100011 };
           `uvm_info("STORE", $sformatf("STORE: x%0d, x0('h%0h) == 'h%0h → DMEM[x0 + 'h%0h] <= 0x%0h → DMEM[x0 + 'h%0h] <= 'h%0h", regs[i], wr_imm, req.instruction_list[idx], wr_imm, regs[i], wr_imm, rand_data[i]), UVM_LOW);
         end
@@ -108,7 +115,7 @@ class riscv_small_basic_load_store_seq extends uvm_sequence #(riscv_small_transa
     // Final flush
     for (int f = 0; f < FLUSH_CYCLES; f++) begin
       int idx = N + BUBBLE_COUNT + N + f;
-      req.instruction_addr[idx] = idx * 4;
+      req.instruction_addr[idx] = mem_base + idx * 4;
       req.instruction_list[idx]  = 32'h00000033;
     end
 

@@ -144,9 +144,22 @@ else()
 endif()
 
 file(MAKE_DIRECTORY "${OUT}")
+# A gate that dies must not leave the previous verdict standing: report.md is
+# rewritten at the end of every run, and a run that aborts before that point
+# (the zero-row parse guard below, a missing document) would otherwise leave an
+# older, possibly `signoff-ready`, report on disk next to the failure.
+file(REMOVE "${OUT}/report.md")
 
 # --- helpers -----------------------------------------------------------------
 # Rows of a Markdown table whose first cell starts with <prefix>: "ID;status".
+#
+# A zero-row answer is a reader failure, never an empty table, and it is fatal:
+# every check that loops over these rows would otherwise pass over nothing. That
+# is not hypothetical -- doc/spec.md's G-33 rows write the half-open address
+# ranges `[0,0x1000)` and `[0x1000,0x2000)`, whose unbalanced `[` collapsed the
+# rest of the file into one element, so this function returned 0 FR rows and
+# check 3 reported `ok` while validating zero of them. The guard names the file
+# and the two characters that cause it.
 function(table_rows OUT_VAR FILE PREFIX)
     riscv_read_lines(LINES "${FILE}")
     set(ACC "")
@@ -166,6 +179,18 @@ function(table_rows OUT_VAR FILE PREFIX)
             list(APPEND ACC "${ID}::${STATUS}")
         endif()
     endforeach()
+    list(LENGTH ACC N_ROWS)
+    if(N_ROWS EQUAL 0)
+        message(FATAL_ERROR
+            "table_rows(): 0 rows with prefix '${PREFIX}' parsed from ${FILE}.\n"
+            "The document does have such rows, so the reader is broken; a check that\n"
+            "loops over these rows would pass while observing nothing (check 3 once\n"
+            "reported ok with 0 FR rows, exactly this way).\n"
+            "Likely cause: an unbalanced '[' or ']' before the table -- a half-open\n"
+            "range such as '[0,0x1000)' -- or an unescaped ';'. riscv_read_lines()\n"
+            "escapes both, because CMake stops splitting the file into list elements\n"
+            "at such a character. See scripts/verify/common.cmake.")
+    endif()
     set(${OUT_VAR} "${ACC}" PARENT_SCOPE)
 endfunction()
 
@@ -391,6 +416,11 @@ endforeach()
 if(GHOST)
     list(JOIN GHOST " " GHOST_TEXT)
     add_row("03::verified FRs name a real test::blocked::${GHOST_TEXT}")
+elseif(N_VERIFIED EQUAL 0)
+    # `ok` here would state that "0 verified rows resolve to the manifest": a
+    # vacuous truth, and the exact shape of the failure the table_rows() guard
+    # above prevents. `skipped` says what happened without inventing a pass.
+    add_row("03::verified FRs name a real test::skipped::0 verified FR rows among the ${N_SPEC} parsed; nothing to resolve")
 else()
     add_row("03::verified FRs name a real test::ok::${N_VERIFIED} verified row(s) resolve to the manifest")
 endif()

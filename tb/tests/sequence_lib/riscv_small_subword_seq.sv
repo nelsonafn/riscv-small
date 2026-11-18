@@ -36,6 +36,9 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
 
   localparam int N_CASES = 12;
 
+  // Program base, set in body() from the value the top published (FR-41).
+  protected bit [31:0] mem_base;
+
   function new (string name = "riscv_small_subword_seq");
     super.new(name);
   endfunction
@@ -68,6 +71,9 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
 
     req = riscv_small_transaction::type_id::create("req");
 
+    // The program lives at the address the DUT fetches first (RESET_VECTOR).
+    mem_base = riscv_small_seq_mem_base(m_sequencer);
+
     last = N_CASES * (1 + BUBBLE + 1);
     req.instruction_addr = new[last + TAIL];
     req.instruction_list = new[last + TAIL];
@@ -91,7 +97,7 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
       bit [11:0] la = 12'(SRC_WORD + off[k]);
       bit [11:0] sa = 12'(DST_BASE + 4 * k);
 
-      req.instruction_addr[idx] = idx * 4;
+      req.instruction_addr[idx] = mem_base + idx * 4;
       req.instruction_list[idx] = enc_load(f3[k], rd, la);
       `uvm_info("SUBWORD",
         $sformatf("LOAD %s x%0d, 'h%0h(x0)  ->  SW x%0d, 'h%0h(x0)",
@@ -99,18 +105,18 @@ class riscv_small_subword_seq extends uvm_sequence #(riscv_small_transaction);
       idx++;
 
       for (int b = 0; b < BUBBLE; b++) begin
-        req.instruction_addr[idx] = idx * 4;
+        req.instruction_addr[idx] = mem_base + idx * 4;
         req.instruction_list[idx] = 32'h00000033; // NOP: ADD x0, x0, x0
         idx++;
       end
 
-      req.instruction_addr[idx] = idx * 4;
+      req.instruction_addr[idx] = mem_base + idx * 4;
       req.instruction_list[idx] = enc_sw(rd, sa);
       idx++;
     end
 
     for (int i = 0; i < TAIL; i++) begin
-      req.instruction_addr[idx] = idx * 4;
+      req.instruction_addr[idx] = mem_base + idx * 4;
       req.instruction_list[idx] = 32'h00000033;
       idx++;
     end

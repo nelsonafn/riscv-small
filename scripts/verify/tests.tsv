@@ -109,3 +109,4 @@ T-46	riscv_small_skip3_model_test	9	-	300	mutant:retire-every-slot
 T-47	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:alu-ignore-rs2	spike:rv32ui-p-add
 T-48	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:negative-branch	spike:rv32ui-p-beq
 T-49	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:store-lane-offset	spike:rv32ui-p-st_ld
+T-50	riscv_small_reset_vector_test	11	FR-41,G-33	300	mutant:reset-vector-zero

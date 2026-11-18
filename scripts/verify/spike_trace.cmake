@@ -130,10 +130,21 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     endif()
 
     # The Spike invocation, kept in sync with scripts/verify/spike/build_spike.sh:
-    # 256 KiB at address 0 (below the CLINT), debug module and DTB ROM off, RV32I
-    # only. -m0:0x40000 is the same window as the testbench's memory model.
+    # the default memory map is the platform (FR-41). The image and Spike's DRAM
+    # both live at RESET_VECTOR (0x8000_0000), so `-m0:0x40000`, `--no-dm` and
+    # `--disable-dtb` -- which existed because the harness linked the images at 0,
+    # next to the debug module and the DTB ROM -- are gone.
+    # With the device tree enabled Spike first executes its own reset ROM at
+    # 0x1000 (five commits) and jumps to the ELF entry; normalize.py drops that
+    # prefix by matching the payload entry computed below, so the comparison
+    # starts where the program does.
     set(RISCV_SPIKE_BIN "${CMAKE_BINARY_DIR}/spike/install/bin/spike")
-    set(RISCV_SPIKE_FLAGS "--no-dm --disable-dtb -m0:0x40000 --isa=rv32i")
+    set(RISCV_SPIKE_FLAGS "--isa=rv32i")
+
+    # The payload's first pc: the label of the first disassembled symbol in the
+    # sanity dump (`_start`, at the entry). It comes from the same ELF Spike
+    # executes, so it is never a second copy of RESET_VECTOR.
+    set(RISCV_ENTRY_AWK [=[/^[0-9a-f]+ <[^>]*>:[[:space:]]*$/ { print "0x" $1; exit }]=])
 
     # The identity each test asserts: the pin, parsed from build_spike.sh (never
     # copied here), and the file the build records it in.
@@ -190,12 +201,16 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
             "test -f '${RISCV_SANITY_DIR}/isa/${IMAGE}' || { echo 'spike: missing ELF build/sanity_tests/isa/${IMAGE}: build the compile_sanity_${IMAGE} target' | tee -a '${TEST_LOG}'; exit 1; }; "
             "test -f '${RISCV_SANITY_DIR}/dump/${IMAGE}.dump' || { echo 'spike: missing dump build/sanity_tests/dump/${IMAGE}.dump: build the compile_sanity_${IMAGE} target' | tee -a '${TEST_LOG}'; exit 1; }; "
             # The cut set is data derived from the ELF, so it is derived at run
-            # time: a configure on a fresh tree has no dump yet.
+            # time: a configure on a fresh tree has no dump yet. The payload
+            # entry is derived from the same dump, for the reference's boot
+            # prefix (see normalize.py).
+            "ENTRY=${D}(awk '${RISCV_ENTRY_AWK}' '${RISCV_SANITY_DIR}/dump/${IMAGE}.dump'); "
+            "test -n \"${D}ENTRY\" || { echo 'spike: build/sanity_tests/dump/${IMAGE}.dump names no symbol label: no payload entry, no comparison' | tee -a '${TEST_LOG}'; exit 1; }; "
             "CUTPCS=${D}(awk '${RISCV_TOHOST_AWK}' '${RISCV_SANITY_DIR}/dump/${IMAGE}.dump'); "
             "test -n \"${D}CUTPCS\" || { echo 'spike: build/sanity_tests/dump/${IMAGE}.dump names no <tohost> store: no cut set, no comparison' | tee -a '${TEST_LOG}'; exit 1; }; "
-            "echo \"SPIKE: ${TID} image=${IMAGE} cut-pcs=${D}CUTPCS dut=${RETIRE_LOG}\" | tee -a '${TEST_LOG}'; "
+            "echo \"SPIKE: ${TID} image=${IMAGE} entry=${D}ENTRY cut-pcs=${D}CUTPCS dut=${RETIRE_LOG}\" | tee -a '${TEST_LOG}'; "
             "'${RISCV_SPIKE_BIN}' ${RISCV_SPIKE_FLAGS} --log=spike.log --log-commits '${RISCV_SANITY_DIR}/isa/${IMAGE}' 2>&1 | tee -a '${TEST_LOG}' "
-            "&& python3 '${RISCV_SPIKE_SCRIPTS}/normalize.py' spike-log spike.log spike.trace 2>&1 | tee -a '${TEST_LOG}' "
+            "&& python3 '${RISCV_SPIKE_SCRIPTS}/normalize.py' spike-log --entry \"${D}ENTRY\" spike.log spike.trace 2>&1 | tee -a '${TEST_LOG}' "
             # The digests travel in the environment, so a plain `ctest -R T-47`
             # still runs and the gate's evidence names the tree it measured.
             "&& python3 '${RISCV_SPIKE_SCRIPTS}/compare.py' --dut '${RETIRE_LOG}' --spike spike.trace "

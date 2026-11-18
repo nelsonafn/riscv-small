@@ -8,7 +8,9 @@
 #      scripts/verify/sanity/local/*.S image -- with the project's own
 #      environment (scripts/verify/sanity/riscv_test.h + link.ld) -- no
 #      autoconf, no out-of-tree configure, no suite Makefile;
-#   2. convert the ELF to a Verilog hex and extract `tohost` from the ELF;
+#   2. convert the ELF to a Verilog hex -- rebased to 0 for the testbench's
+#      memory model, while the ELF symbols stay absolute -- and extract
+#      `tohost` from the ELF;
 #   3. declare one CTest test per image (label `sanity`) and the `sanity`
 #      target, which runs this same file with `cmake -P`.
 #
@@ -180,12 +182,22 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
             # No --reverse-bytes: `--reverse-bytes=4` byte-swaps every word and
             # the TB would fetch 0x2320300c instead of 0x0c302023. The image is
             # little-endian, exactly as the core fetches it.
+            #
+            # --change-addresses=-0x80000000 is the ONE rebase: link.ld places
+            # the image at RESET_VECTOR (0x8000_0000, FR-41) because that is
+            # where the DUT fetches it, and this moves every section down to its
+            # offset so the testbench memory model -- 0-based by design -- loads
+            # word 0 at index 0 with `$readmemh`. The ELF itself is not touched:
+            # `tohost` is still extracted from it by `nm`, absolute, and the
+            # sanity checker compares that absolute value with the DUT's
+            # absolute `data_addr` (no mask). With the sections at their offsets
+            # the first record is @00000000 by construction, so there is no
+            # line rewriting here to hide a second adjustment.
             COMMAND ${RISCV_OBJCOPY} -O verilog
                     -j .text.init -j .text -j .tohost -j .data
                     --gap-fill 00000000 --set-start=0 --verilog-data-width 4
+                    --change-addresses=-0x80000000
                     "${SANITY_ELF}" "${SANITY_HEX}"
-            COMMAND sed -i.bak "1 s/.*/@00000000/" "${SANITY_HEX}"
-            COMMAND ${CMAKE_COMMAND} -E remove "${SANITY_HEX}.bak"
             DEPENDS "${SANITY_ELF}"
             COMMENT "Converting ${SANITY_IMAGE} to a hex image..."
             VERBATIM

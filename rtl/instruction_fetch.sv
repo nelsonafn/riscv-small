@@ -41,7 +41,11 @@
 
 module instruction_fetch 
 import riscv_definitions_pkg::*;
-(
+#(
+    /* Reset vector: the address the first fetch after reset presents on
+     * inst_addr (FR-41, Q-33). */
+    parameter dataBus_t RESET_VECTOR = 32'h8000_0000
+)(
     input logic clk,    // Clock
     input logic clk_en, // Clock Enable
     input logic rst_n,  // Asynchronous reset active low
@@ -103,7 +107,7 @@ import riscv_definitions_pkg::*;
      */
     always_ff @(posedge clk or negedge rst_n) begin: proc_pc
         if(~rst_n) begin
-            pc <= 'b0;
+            pc <= RESET_VECTOR;
         end else if(clk_en) begin
             case (pc_sel) inside
                 PC_PLUS4: begin

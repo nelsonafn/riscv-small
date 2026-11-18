@@ -37,7 +37,11 @@
  
 module riscv_small 
 import riscv_definitions_pkg::*;
-(
+#(
+    /* Reset vector: the address the first fetch after reset presents on
+     * inst_addr (FR-41, Q-33). A build-time input, not a CSR. */
+    parameter dataBus_t RESET_VECTOR = 32'h8000_0000
+)(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
@@ -131,7 +135,9 @@ import riscv_definitions_pkg::*;
 
 
     
-    instruction_fetch u_instruction_fetch (
+    instruction_fetch #(
+        .RESET_VECTOR (RESET_VECTOR)// Reset vector, FR-41 (Q-33)
+    ) u_instruction_fetch (
         .clk          (clk), // Clock
         .clk_en       (if_id_clk_en),// Clock Enable
         .rst_n        (rst_n),// Asynchronous reset active low

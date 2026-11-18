@@ -19,6 +19,14 @@
 # and emits that one line. It does not cut, compare or know what `tohost` is --
 # the cut belongs to compare.py alone, so the rule is implemented exactly once.
 #
+# With the device tree enabled Spike executes its own reset ROM at DEFAULT_RSTVEC
+# (0x1000) before jumping to the payload's entry point: five commits at
+# 0x1000..0x1010, the reference's host-side boot. The DUT has no counterpart for
+# them, so the gate names the payload entry (`--entry`, read from the sanity
+# dump) and the prefix before the first commit at that address is dropped -- by
+# ADDRESS, never by a count. A log that never reaches the entry is an error, not
+# an empty comparison.
+#
 # Measured on the reference machine (2026-11-17, P3 build 11848099):
 #   * a store prints `mem 0xADDR 0xVAL` with no register token;
 #   * a load prints the register token AND a `mem 0xADDR` suffix;
@@ -74,7 +82,7 @@ def normalize_line(line):
     return canonical(pc, rd, val, inst)
 
 
-def spike_log(infile, outfile):
+def spike_log(infile, outfile, entry=None):
     try:
         with open(infile, "r", encoding="utf-8", errors="replace") as handle:
             lines = handle.readlines()
@@ -90,6 +98,23 @@ def spike_log(infile, outfile):
         parsed = normalize_line(line)
         if parsed is not None:
             out.append(parsed)
+
+    dropped = 0
+    if entry is not None:
+        first = next(
+            (i for i, line in enumerate(out) if int(line.split(" ", 1)[0], 16) == entry),
+            None,
+        )
+        if first is None:
+            print(
+                "normalize: the payload entry 0x%08x is not in %s (%d commit(s)); "
+                "the reference never reached the program, so there is no start"
+                % (entry, infile, len(out)),
+                file=sys.stderr,
+            )
+            return 1
+        dropped = first
+        out = out[first:]
 
     if not out:
         # A vacuous trace must never look like a pass: zero commits is a defect
@@ -110,7 +135,14 @@ def spike_log(infile, outfile):
         print("normalize: cannot write %s: %s" % (outfile, exc), file=sys.stderr)
         return 1
 
-    print("normalize: %d commit line(s) -> %s" % (len(out), outfile))
+    print(
+        "normalize: %d commit line(s) -> %s%s"
+        % (
+            len(out),
+            outfile,
+            "" if entry is None else " (entry 0x%08x, %d boot commit(s) dropped)" % (entry, dropped),
+        )
+    )
     return 0
 
 
@@ -120,12 +152,18 @@ def main(argv):
     )
     sub = parser.add_subparsers(dest="command", required=True)
     log = sub.add_parser("spike-log", help="<in> <out>: Spike log -> canonical trace")
+    log.add_argument(
+        "--entry",
+        type=lambda text: int(text, 16),
+        default=None,
+        help="payload entry pc: drop the reference's boot commits before it",
+    )
     log.add_argument("infile")
     log.add_argument("outfile")
     args = parser.parse_args(argv)
 
     if args.command == "spike-log":
-        return spike_log(args.infile, args.outfile)
+        return spike_log(args.infile, args.outfile, args.entry)
     return 2
 
 

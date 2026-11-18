@@ -80,6 +80,12 @@ module riscv_small_tb;
     uvm_config_db#(virtual riscv_small_interface)::set(uvm_root::get(), "*", "intf", intf);
     // The bound probe is read through a virtual interface, exactly like intf.
     uvm_config_db#(virtual riscv_small_retire_if)::set(uvm_root::get(), "*", "retire_vif", duv.u_retire);
+    // FR-41 / G-33: publish the value the DUT actually elaborated with. This is
+    // the ONE source of the expected reset vector in the testbench -- T-50
+    // compares against it and no test or checker repeats the spec default. A
+    // second elaboration with another RESET_VECTOR changes the expectation
+    // without touching the testbench.
+    uvm_config_db#(bit [31:0])::set(uvm_root::get(), "*", "reset_vector", 32'(duv.RESET_VECTOR));
   end
 
 endmodule

@@ -17,6 +17,9 @@
 // observation they were configured for (no program image, no traffic), so they
 // are built in both modes and never stall an image run.
 //
+// The reset checker (FR-41) is inert unless a test enables the claim, so every
+// run that does not ask for it reports `NONE compared` and raises nothing.
+//
 // In sanity mode there is no reference model and no scoreboard: the sanity
 // checker component watches the monitor and owns the verdict.
 //
@@ -39,6 +42,7 @@ class riscv_small_environment extends uvm_env;
   riscv_small_strb_checker       strb_checker;
   riscv_small_fetch_pair_checker fetch_pair_checker;
   riscv_small_retire_checker     retire_checker;
+  riscv_small_reset_checker      reset_checker;
   riscv_small_sanity_checker     sanity_checker;
 
   // The image path has no directed transaction for the ISS to predict, and the
@@ -74,6 +78,10 @@ class riscv_small_environment extends uvm_env;
     fetch_pair_checker = riscv_small_fetch_pair_checker::type_id::create("fetch_pair_checker", this);
     // G-28 commit stream: same shape, same inertness rule.
     retire_checker = riscv_small_retire_checker::type_id::create("retire_checker", this);
+    // FR-41 reset vector: the first fetch the monitor publishes is the first
+    // fetch after reset. Inert unless a test enables the claim, so it runs in
+    // BOTH agent modes and never disturbs a run that does not ask for it.
+    reset_checker = riscv_small_reset_checker::type_id::create("reset_checker", this);
     if (!sanity_mode) begin
       ref_model = riscv_small_ref_model::type_id::create("ref_model", this);
       sb = riscv_small_scoreboard::type_id::create("sb", this);
@@ -95,6 +103,8 @@ class riscv_small_environment extends uvm_env;
     riscv_small_agnt.monitor.mon2sb_port.connect(fetch_pair_checker.analysis_export);
     // And for the commit stream (inert without a program image).
     riscv_small_agnt.monitor.mon2sb_port.connect(retire_checker.analysis_export);
+    // FR-41: the first fetch after reset, judged only when the test asks.
+    riscv_small_agnt.monitor.mon2sb_port.connect(reset_checker.analysis_export);
     if (!sanity_mode) begin
       // Only the monitor feeds the model (C-16). This is the whole input.
       riscv_small_agnt.monitor.mon2sb_port.connect(ref_model.mon_export);

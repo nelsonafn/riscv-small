@@ -31,6 +31,7 @@ package riscv_small_test_list_pkg;
   `include "riscv_small_monitor_model_test.sv"
   `include "riscv_small_branch_model_test.sv"
   `include "riscv_small_skip3_model_test.sv"
+  `include "riscv_small_reset_vector_test.sv"
 
 endpackage 
 
