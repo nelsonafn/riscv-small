@@ -1,40 +1,48 @@
 # ==============================================================================
 # Script: run_synth.tcl
-# Description: Automates project synthesis in Vivado
-# Usage: vivado -mode batch -source scripts/fpga/run_synth.tcl
-# Created by Nelson Alves Ferreira Neto (nelson.neto@fieb.org.br)
+# Description: Runs synthesis on the project's top. The project, the top and the
+#              build directory are arguments; the script names no product.
+#
+# Usage: vivado -mode batch -source scripts/fpga/run_synth.tcl \
+#            -tclargs <project> <top> <build_dir>
 # ==============================================================================
 
-# 1. Define paths relative to the script's location
-set script_dir [file normalize [file dirname [info script]]]
-set root_dir [file normalize [file join $script_dir ".." ".."]]
+if {[llength $argv] < 3} {
+    error "usage: run_synth.tcl <project> <top> <build_dir>"
+}
+lassign $argv project_name top_name build_dir
 
-set project_name "cvqkd_topsoc"
-set build_dir     [file join $root_dir "build" "fpga"]
-set project_file  [file join $build_dir "${project_name}.xpr"]
-
-# 2. Open project
+set project_file [file join $build_dir "fpga" "${project_name}.xpr"]
 if {![file exists $project_file]} {
-    error "ERROR: Vivado project file not found at: $project_file. Run create_project.tcl first."
+    error "ERROR: project not found: $project_file (run create_fpga first)"
 }
 open_project $project_file
 
-# 3. Run Synthesis
-puts "INFO: Resetting previous synthesis runs..."
+puts "INFO: synthesising top: $top_name"
+
+# The design is synthesised out of context: it is a block, not a bonded part.
+set_property top $top_name [current_fileset]
+catch {set_property top_file "" [current_fileset]}
 reset_run synth_1
 
-puts "INFO: Launching synthesis run (synth_1)..."
+puts "INFO: launching synth_1"
 launch_runs synth_1 -jobs 4
 wait_on_run synth_1
 
-# 4. Validate Status
 set run_status [get_property STATUS [get_runs synth_1]]
 set run_progress [get_property PROGRESS [get_runs synth_1]]
-puts "INFO: Synthesis Status: $run_status ($run_progress)"
+puts "INFO: synth_1 status: $run_status ($run_progress)"
 
 if {$run_progress ne "100%"} {
-    error "ERROR: Synthesis did not complete successfully!"
+    close_project
+    error "ERROR: synthesis did not complete for $top_name ($run_status)"
 }
 
-puts "SUCCESS: Synthesis completed successfully!"
+# Report the numbers a timing/area measurement needs, without inventing them.
+catch {
+    set wns [get_property SLACK [get_timing_paths -delay_type max]]
+    puts "SYNTH_SUMMARY: top=$top_name wns=$wns status=$run_status"
+}
+
+puts "SUCCESS: synthesis completed for $top_name"
 close_project

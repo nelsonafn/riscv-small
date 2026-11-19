@@ -1,102 +1,101 @@
 # ==============================================================================
 # Script: create_project.tcl
-# Description: Automates Vivado project creation for CV-QKD Top-Level SoC RTL IP
-# Usage: vivado -mode batch -source scripts/fpga/create_project.tcl
-# Created by Nelson Alves Ferreira Neto (nelson.neto@fieb.org.br)
+# Description: Creates or refreshes the Vivado project for one top of this
+#              repository. Everything specific to a product -- project name,
+#              top, part, source list, board files -- arrives as an argument,
+#              so the same script drives any top.
+#
+# Usage: vivado -mode batch -source scripts/fpga/create_project.tcl \
+#            -tclargs <project> <top> <part> <filelist> <build_dir> <root_dir>
+#
+#   <filelist>  one absolute .sv/.svh path per line, expanded by
+#               riscv_srclist_files() in scripts/fpga/fpga_targets.cmake from
+#               srclist/<top>.srclist -- the same files the simulation compiles.
 # ==============================================================================
 
-# 1. Define paths relative to the script's location (Tcl Best Practice)
-set script_dir [file normalize [file dirname [info script]]]
-set root_dir [file normalize [file join $script_dir ".." ".."]]
-
-# 2. Project configuration variables
-set project_name  "cvqkd_topsoc"
-set target_board  ""                                  ;# Generic part configuration
-set fallback_part "xczu3eg-sbva484-1-i"               ;# Standard Zynq UltraScale+ MPSoC (Free License)
-set build_dir     [file join $root_dir "build" "fpga"]
-
-# Create build directory if it doesn't exist
-file mkdir $build_dir
-
-# 3. Handle Custom Board Files (RFSoC 4x2 BSP Submodule)
-# Check for local board file paths inside the workspace submodule
-set bsp_board_files [file join $root_dir "submodules" "RFSoC4x2-BSP" "board_files"]
-
-if {[file exists $bsp_board_files]} {
-    # Dynamically point Vivado to our custom board repository
-    set_param board.repoPaths [list $bsp_board_files]
-    puts "INFO: Configured board.repoPaths with: $bsp_board_files"
-} else {
-    puts "WARNING: Board files directory not found at '$bsp_board_files'."
+# 1. Arguments
+if {[llength $argv] < 6} {
+    error "usage: create_project.tcl <project> <top> <part> <filelist> <build_dir> <root_dir>"
 }
+lassign $argv project_name top_name part filelist build_dir root_dir
 
-# 4. Create or Open the Vivado Project
-set project_file [file join $build_dir "${project_name}.xpr"]
+set output_dir [file join $build_dir "fpga"]
+set project_file [file join $output_dir "${project_name}.xpr"]
+
+puts "INFO: project    = $project_name"
+puts "INFO: top        = $top_name"
+puts "INFO: part       = $part"
+puts "INFO: filelist   = $filelist"
+
+file mkdir $output_dir
+
+# The source list is the contract with the build: refuse to synthesise
+# something the simulation never compiled.
+if {![file exists $filelist]} {
+    error "ERROR: filelist not found: $filelist (run ./configure first)"
+}
+set fp [open $filelist r]
+set rtl_files {}
+foreach line [split [read $fp] "\n"] {
+    set line [string trim $line]
+    if {$line ne ""} { lappend rtl_files $line }
+}
+close $fp
+if {[llength $rtl_files] == 0} {
+    error "ERROR: the filelist $filelist names no source file"
+}
+puts "INFO: [llength $rtl_files] source file(s) from the srclist expansion"
+
+# 2. Project
 if {[file exists $project_file]} {
-    puts "INFO: Project already exists. Opening existing project: $project_file"
+    puts "INFO: opening existing project: $project_file"
     open_project $project_file
 } else {
-    puts "INFO: Creating new Vivado project at: $project_file"
-    create_project $project_name $build_dir -part $fallback_part
-
-    # Set project-level board repository path so it scans immediately
-    if {[file exists $bsp_board_files]} {
-        set_property board_part_repo_paths [list $bsp_board_files] [current_project]
-    }
-
-    # Apply board part if recognized by Vivado
-    if {[get_boards -quiet $target_board] ne ""} {
-        set_property board_part $target_board [current_project]
-        puts "INFO: Project configured with Board Part: $target_board"
-    } else {
-        puts "WARNING: Board part '$target_board' was not found in Vivado's board database."
-        puts "         Project remains configured with the raw device part: [get_property part [current_project]]"
-        puts "         To use the board configuration, make sure the submodule is initialized and updated:"
-        puts "         git submodule update --init --recursive"
-    }
-
-    # Set project properties (e.g., target language is Verilog)
+    puts "INFO: creating project: $project_file"
+    create_project $project_name $output_dir -part $part
     set_property target_language Verilog [current_project]
     set_property simulator_language Mixed [current_project]
 }
 
-# 5. Add Design Sources (RTL)
-# Add files from the main rtl/ directory
-set rtl_files [glob -nocomplain [file join $root_dir "rtl" "*.{v,sv,vhd}"]]
-if {[llength $rtl_files] > 0} {
-    add_files $rtl_files
-    puts "INFO: Added RTL source files: $rtl_files"
+# 3. Board files are optional: a repository that does not ship them still
+#    synthesises on the raw part.
+set bsp_board_files [file join $root_dir "submodules"]
+if {[file exists $bsp_board_files]} {
+    set boards [glob -nocomplain [file join $bsp_board_files "*" "board_files"]]
+    if {[llength $boards] > 0} {
+        set_param board.repoPaths $boards
+        set_property board_part_repo_paths $boards [current_project]
+        puts "INFO: board repository paths: $boards"
+    }
+} else {
+    puts "INFO: no board files in this repository; using the raw part $part"
 }
 
-# Add files from submodules (recursive search under submodules/*/rtl/)
-set submodule_rtl [glob -nocomplain [file join $root_dir "submodules" "*" "rtl" "*.{v,sv,vhd}"]]
-if {[llength $submodule_rtl] > 0} {
-    add_files $submodule_rtl
-    puts "INFO: Added submodule RTL files: $submodule_rtl"
-}
+# 4. Design sources -- exactly the filelist, nothing globbed
+add_files -norecurse $rtl_files
+puts "INFO: added [llength $rtl_files] source file(s)"
 
-# Ensure all Verilog files (.v) are compiled as SystemVerilog in Vivado
-set verilog_files [get_files -filter {FILE_TYPE == "Verilog"}]
+# SystemVerilog must not be inferred from the extension order
+set verilog_files [get_files -quiet -filter {FILE_TYPE == "Verilog"}]
 if {[llength $verilog_files] > 0} {
     set_property file_type SystemVerilog $verilog_files
-    puts "INFO: Set file type of Verilog files to SystemVerilog: $verilog_files"
 }
 
-# 6. Add Constraints (.xdc)
-set constraint_files [glob -nocomplain [file join $root_dir "fpga" "constraints" "*.xdc"]]
-if {[llength $constraint_files] > 0} {
-    add_files -fileset constrs_1 $constraint_files
-    puts "INFO: Added constraint files: $constraint_files"
+# 5. Constraints and IP are optional directories
+foreach {dir fileset kind} [list "fpga/constraints" "constrs_1" "xdc" \
+                                 "fpga/ip" "" "xci"] {
+    set pattern [file join $root_dir $dir "*" "*.$kind"]
+    set found [glob -nocomplain $pattern]
+    if {[llength $found] > 0} {
+        if {$kind eq "xdc"} {
+            add_files -fileset $fileset $found
+        } else {
+            read_ip $found
+        }
+        puts "INFO: added $kind: $found"
+    }
 }
 
-# 7. Read/Import Xilinx IPs (.xci)
-set ip_files [glob -nocomplain [file join $root_dir "fpga" "ip" "*" "*.xci"]]
-if {[llength $ip_files] > 0} {
-    read_ip $ip_files
-    puts "INFO: Imported Xilinx IPs: $ip_files"
-}
-
-# 8. Update compile order automatically
 update_compile_order -fileset sources_1
-
-puts "SUCCESS: Vivado project created successfully at: [file join $build_dir ${project_name}.xpr]"
+puts "INFO: project ready: $project_file"
+close_project

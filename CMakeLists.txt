@@ -47,9 +47,17 @@ project(AdderTemplate NONE)
 # Configuration parameters for specifying simulation parameters. 
 # These variables can be overridden from the command line using -D<VAR>=<VALUE>.
 # Example: cmake -DTOP_NAME=riscv_small_tb -DTEST_NAME=my_test ..
-set(TOP_NAME "adder_tb_top" CACHE STRING "Specify the exact top module name to be simulated")
-set(TEST_NAME "adder_basic_test" CACHE STRING "Specify the default UVM or SystemVerilog test name to run")
+set(TOP_NAME "riscv_small_tb" CACHE STRING "Specify the exact top module name to be simulated")
+set(TEST_NAME "riscv_small_basic_load_store_test" CACHE STRING "Specify the default UVM or SystemVerilog test name to run")
 set(VIVADO_PARMS "--R" CACHE STRING "Pass extra Vivado parameters for xsim (e.g. --R for run all)")
+
+# --- FPGA/synthesis flow (scripts/fpga/) --------------------------------------
+# The flow is parametrised, not tied to one product: these three values are the
+# only product-specific inputs, and the source list is derived from
+# srclist/${FPGA_TOP}.srclist -- the same files the simulation compiles.
+set(FPGA_TOP "riscv_small" CACHE STRING "Top module synthesised by the FPGA flow (its file list comes from srclist/${FPGA_TOP}.srclist)")
+set(FPGA_PROJECT_NAME "${FPGA_TOP}" CACHE STRING "Vivado project name for the FPGA flow")
+set(FPGA_PART "xczu3eg-sbva484-1-i" CACHE STRING "Part for the FPGA flow (the part is recorded in the measurement)")
 
 # ==============================================================================
 # 2. Environment Validation

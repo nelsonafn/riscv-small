@@ -10,8 +10,8 @@
 ## Method
 
 The first synthesis of `riscv_small` on the target part, reading the achieved frequency from the timing summary.
-No frequency is invented before that report exists (`A-08`, `Q-08`), and no part is assumed: the FPGA flow in
-`scripts/fpga/` still targets a different SoC (`cvqkd_topsoc`) and adds every `rtl/*.sv` unconditionally, so it does
+No frequency is invented before that report exists (`A-08`, `Q-08`), and no part is assumed: the legacy flow in
+`scripts/fpga/` still targets a different SoC and adds every `rtl/*.sv` unconditionally, so it does
 not synthesise this core yet.
 
 ## Command

@@ -1,43 +1,51 @@
 # ==============================================================================
 # Script: run_impl.tcl
-# Description: Automates project implementation and bitstream generation in Vivado
-# Usage: vivado -mode batch -source scripts/fpga/run_impl.tcl
-# Created by Nelson Alves Ferreira Neto (nelson.neto@fieb.org.br)
+# Description: Runs implementation and bitstream generation on the project's
+#              top. The project, the top and the build directory are arguments;
+#              the script names no product.
+#
+# Usage: vivado -mode batch -source scripts/fpga/run_impl.tcl \
+#            -tclargs <project> <top> <build_dir>
 # ==============================================================================
 
-# 1. Define paths relative to the script's location
+if {[llength $argv] < 3} {
+    error "usage: run_impl.tcl <project> <top> <build_dir>"
+}
+lassign $argv project_name top_name build_dir
+
 set script_dir [file normalize [file dirname [info script]]]
-set root_dir [file normalize [file join $script_dir ".." ".."]]
-
-set project_name "cvqkd_topsoc"
-set build_dir     [file join $root_dir "build" "fpga"]
-set project_file  [file join $build_dir "${project_name}.xpr"]
-
-# 2. Open project
+set project_file [file join $build_dir "fpga" "${project_name}.xpr"]
 if {![file exists $project_file]} {
-    error "ERROR: Vivado project file not found at: $project_file. Run create_project.tcl first."
+    error "ERROR: project not found: $project_file (run create_fpga first)"
 }
 open_project $project_file
 
-# 3. Run Implementation & Write Bitstream
-puts "INFO: Resetting previous implementation runs..."
+puts "INFO: implementing top: $top_name"
+
+set_property top $top_name [current_fileset]
 reset_run impl_1
 
-# Configure DRC pre-hook script for write_bitstream step to allow bitstream generation without I/O constraints
-set_property STEPS.WRITE_BITSTREAM.TCL.PRE [file join $script_dir "drc_warnings.tcl"] [get_runs impl_1]
+# A block synthesised out of context has no package pins, so the bitstream DRC
+# would stop on unconstrained I/O that does not describe this design. The
+# pre-hook downgrades exactly those, and nothing else.
+set drc_hook [file join $script_dir "drc_warnings.tcl"]
+if {[file exists $drc_hook]} {
+    set_property STEPS.WRITE_BITSTREAM.TCL.PRE $drc_hook [get_runs impl_1]
+}
 
-puts "INFO: Launching implementation and bitstream generation (impl_1)..."
+puts "INFO: launching impl_1"
 launch_runs impl_1 -to_step write_bitstream -jobs 4
 wait_on_run impl_1
 
-# 4. Validate Status
 set run_status [get_property STATUS [get_runs impl_1]]
 set run_progress [get_property PROGRESS [get_runs impl_1]]
-puts "INFO: Implementation Status: $run_status ($run_progress)"
+puts "INFO: impl_1 status: $run_status ($run_progress)"
 
 if {$run_progress ne "100%"} {
-    error "ERROR: Implementation/Bitstream generation did not complete successfully!"
+    close_project
+    error "ERROR: implementation did not complete for $top_name ($run_status)"
 }
 
-puts "SUCCESS: Implementation and bitstream generation completed successfully!"
+puts "IMPL_SUMMARY: top=$top_name status=$run_status"
+puts "SUCCESS: implementation completed for $top_name"
 close_project
