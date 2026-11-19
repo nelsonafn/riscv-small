@@ -55,6 +55,8 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
   bit warned_imem_range;
   bit warned_dmem_range;
   bit warned_zero_strb;
+  bit warned_iaddr_oor;   // directed path: first fetch outside the program only
+  bit program_entered;    // directed path: a program address has been answered
 
   function new (string name, uvm_component parent);
     super.new(name, parent);
@@ -117,6 +119,12 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       return;
     end
 
+    // Once per run, not per cycle: a core that runs away (the reset-vector
+    // mutant fetches 0x0, 0x4, 0x8, ...) would otherwise bury the log under one
+    // warning per fetch and hide the checker's verdict.
+    warned_iaddr_oor = 0;
+    program_entered  = 0;
+
     // 1. Get initial test sequence transaction
     seq_item_port.get_next_item(req);
     req.print();
@@ -153,14 +161,36 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
             if (req.instruction_addr[i] == vif.inst_addr) begin
               vif.inst_data.memory_w <= #OUTPUT_DELAY req.instruction_list[i];
               vif.inst_ready <= #OUTPUT_DELAY 1;
+              program_entered = 1;
               `uvm_info("IFETCH_DRV", $sformatf("READ_INST: PC='h%0h INST='h%0h", vif.inst_addr, req.instruction_list[i]), UVM_LOW);
               found = 1;
               break;
             end
           end
           if (!found) begin
+            // An address outside the program is answered with a NOP. Before the
+            // program has been entered the handshake is completed too: a core
+            // that resets elsewhere never presents a program address at all, so
+            // writing the word without raising `inst_ready` stalls it forever,
+            // the monitor never publishes the fetch and no checker can judge the
+            // address -- a stalled BFM turns "the core fetched the wrong
+            // address" into a timeout, which is not the claim (T-50's mutant).
+            //
+            // Once the program has started, the same address is the pipeline
+            // tail and keeps its historical behaviour: the fetch is not
+            // answered, the core freezes and the item completes. Completing it
+            // there as well (the image path does, because its memory covers
+            // every address) publishes four extra pairs past the image and costs
+            // T-06/T-46 their asserted `fetch - commit == |skip_pc|` count form
+            // (riscv_small_retire_checker.sv:235) -- measured, not assumed. The
+            // warning is emitted once; it names the whole program so the log
+            // stays diagnosable.
             vif.inst_data.memory_w <= #OUTPUT_DELAY NOP;
-            `uvm_warning("IADDR_OOR_DRV", $sformatf("INST_OUT_OF_RANGE: PC='h%0h, INST_ADDREs=%s, INST_VECTOR=%s", vif.inst_addr, to_hex_list(req.instruction_addr), to_hex_list(req.instruction_list)));
+            if (!program_entered) vif.inst_ready <= #OUTPUT_DELAY 1;
+            if (!warned_iaddr_oor) begin
+              warned_iaddr_oor = 1;
+              `uvm_warning("IADDR_OOR_DRV", $sformatf("INST_OUT_OF_RANGE: PC='h%0h, INST_ADDRs=%s, INST_VECTOR=%s; further out-of-range fetches are silent", vif.inst_addr, to_hex_list(req.instruction_addr), to_hex_list(req.instruction_list)));
+            end
           end
         end
       end

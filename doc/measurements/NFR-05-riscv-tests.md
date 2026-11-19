@@ -56,16 +56,25 @@ make compile_sanity_images                    # same build step, from CMake
 `make sanity` exits 0 when it produced a verdict and 1 when an image failed. The signoff gate runs the
 same measurement through `sanity-evidence` (`--allow-fail`).
 
-## Result - 2026-11-18 (WP-9)
+## Result - 2026-11-18 (WP-11, re-measured after the reset-vector harness change)
 
 | Field | Value |
 |---|---|
-| RTL digest | `sha256:120b211ff9c9f769c870fa43a4b8bfa626ffc749133287107c2efe08c9ea3cf0` |
-| TB digest | `sha256:c8ba82d75adaf0ec899c4ca3301b51ec30301678de4c9c5f90c9f671fb224008` |
+| RTL digest | `sha256:b914f2e10cf3b7ebffc992e38e15f3ef33fe881000011d58990c32e2ad54c774` |
+| TB digest | `sha256:066dce857e4371895b8aa9a7f111da06bf078e66f706ed752126a713bfc8a7af` |
 | Images | 43 = 42 bundled + 1 project-local (`rv32ui-p-jalr_unaligned`) |
 | Pass | 42 (41 bundled + the local image) |
 | Fail | 1 (`rv32ui-p-ma_data`) |
 | Artefacts | `build/sanity/summary.json`, `build/sanity/<image>.log` |
+
+WP-9 measured the same 42 pass / 1 fail earlier the same day at RTL `sha256:120b211f…` and TB
+`sha256:c8ba82d7…` (History below); WP-11 re-ran it because every image is now linked at `0x80000000`
+instead of `0x0`, so the verdict was re-established rather than carried over. `T-50` is the new directed
+reset-vector test and not a sanity image, which is why the image count stays 43.
+
+The directed-driver fix landed afterwards and the run was repeated a second time the same day — TB
+`sha256:c4bad285…` → `sha256:066dce85…`, RTL unmoved — with the verdict unchanged, so the digest cells above
+name that later run.
 
 | Image | Status | Verdict | Triage group |
 |---|---|---|---|
@@ -151,3 +160,5 @@ measurement regardless.
 | 2026-11-06 | `sha256:3541dfb8465edb0be8e976bf5fe0802285165b9e67855a718acda96ec287cd80` | 43 (42 + 1 local) | 42 | 1 | WP-7: `G-07`/`G-30`/`G-31` closed, `G-15` re-attributed; `T-16`..`T-43` green; `jalr_unaligned` added (TB `ae4e6c79...`) |
 | 2026-11-07 | `sha256:120b211f...` | 43 (42 + 1 local) | 42 | 1 | WP-8: retire probe + monitor-fed model (`G-28` closed); same one failure `ma_data` (`FR-42`) (TB `86bcd471...`) |
 | 2026-11-18 | `sha256:120b211f...` | 43 (42 + 1 local) | 42 | 1 | WP-9: same one failure `ma_data` (`FR-42`); the `spike:` rows `T-47`/`T-48`/`T-49` run their images through the commit-trace comparison instead of a plain sanity run, so the sanity count is unchanged (TB `c8ba82d7...`) |
+| 2026-11-18 | `sha256:b914f2e1...` | 43 (42 + 1 local) | 42 | 1 | WP-11: re-established after `scripts/verify/sanity/link.ld` moved every image to `0x80000000`; same one failure `ma_data` (`FR-42`), and `T-50` is a directed test, not an image (TB `c4bad285...`) |
+| 2026-11-18 | `sha256:b914f2e1...` | 43 (42 + 1 local) | 42 | 1 | Re-run after the driver fix in `tb/env/agents/riscv_small_agent/riscv_small_driver.sv` (an unmatched fetch is answered with `inst_ready` before the program is entered, and warns once instead of 196 times); verdict unchanged, same one failure `ma_data` (`FR-42`), and the RTL digest did not move — only the testbench's (TB `066dce85...`) |

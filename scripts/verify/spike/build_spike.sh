@@ -146,7 +146,7 @@ make install || exit 1
     echo "built=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > version.txt
 
-# --- 4. gate: the flag exists and a real image passes at address 0 -----------
+# --- 4. gate: the flag exists and a real image passes at RESET_VECTOR --------
 check_build || exit 1
 
 ELF="$ROOT/build/sanity_tests/isa/rv32ui-p-add"
