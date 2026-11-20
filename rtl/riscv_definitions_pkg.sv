@@ -282,6 +282,20 @@ package riscv_definitions_pkg;
         endcase
     endfunction
 
+    /*
+     * Number of bytes an access of that size occupies. The split condition is
+     * derived from it (addr[1:0] + bytes > 4, FR-42/G-22) instead of
+     * enumerating the misaligned cases one by one.
+     */
+    function automatic logic [2:0] access_bytes(accessSize_e size);
+        case (size)
+            ACCESS_BYTE: access_bytes = 3'd1;
+            ACCESS_HALF: access_bytes = 3'd2;
+            ACCESS_WORD: access_bytes = 3'd4;
+            default:     access_bytes = 3'd4;
+        endcase
+    endfunction
+
 
     /* 
      * R-type instruction definition.

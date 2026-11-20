@@ -44,6 +44,24 @@
 // sanity image is thousands of fetches and the `SANITY:` verdict must stay
 // readable in the same log.
 //
+// The DATA port is published once per BEAT, not once per cycle and not once per
+// access (WP-13 P3, FR-38/G-18; P6b, FR-42/G-22). The access begins at the first
+// cycle the enable is presented, it is granted in a cycle in which `data_ready`
+// is high, and it ends when the enable goes away or the request changes with no
+// grant in between. Each publication carries `captured_data_grant`, so a
+// consumer can tell a store the memory granted from one the core abandoned --
+// which is exactly the observation FR-38 needs and the level rule could not make.
+//
+// Since P6b an access whose lane plus width crosses the word boundary is TWO
+// word-aligned beats (rtl/misaligned_split.sv), so the publication carries
+// `captured_data_beat` / `captured_data_beats`. The beat boundary is the request
+// signature: a new signature inside a split access is the second beat. A split
+// beat is never granted on its first cycle -- the RTL holds each beat at least
+// one cycle before it consumes `data_ready`, so a high level there is the
+// previous beat's grant still standing (and `data_rd` still carries the previous
+// beat's word). A repeated signature after that publication is the same beat
+// still on the bus, not a new access.
+//
 // `retire_log_fd` (+RETIRE_LOG=<file>, WP-9 P2) writes the canonical commit
 // trace: one line per retired instruction, in retire order, no header and no
 // cut at `tohost` (the comparator cuts, not the testbench). It is a publication
@@ -66,6 +84,40 @@ class riscv_small_monitor extends uvm_monitor;
   int unsigned fetch_count  = 0; // published (address, word) pairs
   int unsigned orphan_count = 0; // responses with nothing outstanding (published with captured_inst_orphan)
   int unsigned retire_count = 0; // published retire (commit) events
+
+  // ---- Data-access assembly (WP-13 P3, FR-38/G-18) -------------------------
+  // Core clock cycles, 1-based: incremented on every edge the core actually
+  // clocks after reset, so a published cycle number is a number a reader can
+  // reproduce from a waveform of the DUT's clock.
+  int unsigned cycle = 0;
+
+  bit          da_pending     = 0; // a beat is on the bus and not published
+  bit          da_is_read     = 0;
+  bit          da_is_write    = 0;
+  logic [31:0] da_addr        = '0;
+  logic [31:0] da_wr          = '0;
+  logic [31:0] da_rd          = '0;
+  logic [31:0] da_ctrl        = '0;
+  logic [3:0]  da_strb        = '0;
+  int unsigned da_first_cycle = 0; // the cycle the beat was first presented
+  int unsigned da_cycles      = 0; // how many cycles the beat has been presented
+
+  int unsigned data_count       = 0; // published beats
+  int unsigned data_withheld    = 0; // beats published without a grant
+  int unsigned data_waited      = 0; // beats that stayed on the bus > 1 cycle
+  int unsigned data_split_beats = 0; // published beats that belong to a split access
+  int unsigned data_split_accesses = 0; // second beats published (one per split access)
+
+  // ---- Beats of a split access (WP-13 P6b, FR-42/G-22) ---------------------
+  // The access in progress, when it crosses the word boundary, is two beats.
+  // `da_beat` is the index of the beat the da_* fields describe; `da_beats` is
+  // how many the access has. `da_beat_done` records that the current split beat
+  // has been published while its signature is still on the bus, which is the
+  // same beat held one more cycle -- never a new access.
+  bit          da_split     = 0;
+  int unsigned da_beat      = 0;
+  int unsigned da_beats     = 1;
+  bit          da_beat_done = 0;
 
   // Commit-trace dump (+RETIRE_LOG=<file>, WP-9 P2). The line is
   //   `0x<pc:08x> <x<rd>|-> <0x<value>|-> 0x<inst:08x>`
@@ -103,6 +155,91 @@ class riscv_small_monitor extends uvm_monitor;
     mon2sb_port = new("mon2sb_port", this);
   endfunction
 
+  // The request fields the CORE drives. The read data is deliberately not part
+  // of it: it is the memory's answer, and it changes between the first cycle of
+  // a load and the cycle it is granted -- including it would make one load look
+  // like two accesses. It is also what delimits a beat inside a split access:
+  // beat 2 has a different address (and strobe/data), so a signature change
+  // inside a split is the next beat, and an unchanged signature is the same one.
+  function bit da_same_access();
+    if (da_is_read != vif.data_rd_en) return 1'b0;
+    if (da_is_write != vif.data_wr_en) return 1'b0;
+    if (da_addr != vif.data_addr.u_data) return 1'b0;
+    if (!da_is_write) return 1'b1;
+    return (da_strb == vif.data_wr_strb) && (da_wr == vif.data_wr.u_data);
+  endfunction
+
+  // Width (the DUT's data_rd_wr_ctrl) -> byte count. 2'b11 is not a width this
+  // core emits; treating it as one byte keeps an unknown encoding from being
+  // classified as a split by accident.
+  function automatic int unsigned width_bytes(logic [1:0] width);
+    case (width)
+      2'b00: return 1;
+      2'b01: return 2;
+      2'b10: return 4;
+      default: return 1;
+    endcase
+  endfunction
+
+  // FR-42/G-22: the access crosses the word boundary when its byte lane plus its
+  // width passes the fourth byte -- the same rule rtl/misaligned_split.sv
+  // derives from access_size(funct3). SB/LB never cross, SH/LH only at lane 3,
+  // SW/LW at every lane but 0.
+  function bit da_crosses(logic [31:0] addr, logic [1:0] width);
+    return ((addr[1:0] + width_bytes(width)) > 3'd4);
+  endfunction
+
+  // Fields as they stand in the cycle being sampled. Called on every cycle of
+  // the beat, so the published event describes it at its completion: a load's
+  // data is only valid in the cycle the memory grants it (for beat 2 that is the
+  // second cycle, never the first, which still carries beat 1's word).
+  function void da_capture();
+    da_is_read  = vif.data_rd_en;
+    da_is_write = vif.data_wr_en;
+    da_addr     = vif.data_addr.u_data;
+    da_rd       = vif.data_rd.u_data;
+    da_wr       = vif.data_wr.u_data;
+    da_ctrl     = vif.data_rd_wr_ctrl;
+    da_strb     = vif.data_wr_strb;
+  endfunction
+
+  // One publication per beat. `granted` says a cycle of the beat coincided with
+  // the memory's grant; it is not a verdict. riscv_small_store_grant_checker
+  // decides what a write that ended without one means (FR-38 says it is a
+  // store the core accepted before the grant).
+  function void da_publish(bit granted);
+    riscv_small_transaction trans = riscv_small_transaction::type_id::create("trans");
+
+    trans.op_is_data_read       = da_is_read;
+    trans.op_is_data_write      = da_is_write;
+    trans.captured_data_addr    = da_addr;
+    trans.captured_data_rd      = da_rd;
+    trans.captured_data_wr      = da_wr;
+    trans.captured_data_wr_ctrl = da_ctrl;
+    trans.captured_data_wr_strb = da_strb;
+    trans.captured_data_grant   = granted;
+    trans.captured_data_cycle   = da_first_cycle;
+    trans.captured_data_wait    = da_cycles;
+    trans.captured_data_beat    = da_beat;
+    trans.captured_data_beats   = da_beats;
+
+    data_count++;
+    if (da_cycles > 1) data_waited++;
+    if (!granted) data_withheld++;
+    if (da_beats > 1) data_split_beats++;
+    if (da_beats > 1 && da_beat == 2) data_split_accesses++;
+
+    if (trace)
+      `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h WIDTH=%0d STRB=0b%04b GRANT=%0d CYCLES=%0d@%0d BEAT=%0d/%0d",
+        da_is_write ? "WRITE" : "READ",
+        da_addr,
+        da_is_write ? da_wr : da_rd,
+        da_ctrl,
+        da_strb,
+        granted, da_cycles, da_first_cycle, da_beat, da_beats), UVM_LOW);
+    mon2sb_port.write(trans);
+  endfunction
+
   virtual task run_phase(uvm_phase phase);
     forever begin
       @(posedge vif.clk);
@@ -120,8 +257,17 @@ class riscv_small_monitor extends uvm_monitor;
         // not here. Pushing it here too would pair one address with two
         // responses and shift every later pair.
         fetch_pending.delete();
+        // A data access the reset cut in half never completed: it is not an
+        // access the core accepted, so nothing is published for it.
+        da_pending   = 0;
+        da_split     = 0;
+        da_beat      = 0;
+        da_beats     = 1;
+        da_beat_done = 0;
         continue;
       end
+
+      cycle++;
 
       // Response accepted (R4): the word on the bus now belongs to the oldest
       // outstanding request. Pop before pushing, so a request offered and
@@ -158,31 +304,103 @@ class riscv_small_monitor extends uvm_monitor;
       // with the response that is still to come.
       if (vif.inst_rd_en) fetch_pending.push_back(vif.inst_addr);
 
-      // Capture every data transaction. NOTE (wp-8 §1): this is level, not
-      // handshake, and it stays that way in this WP. The flat data port has no
-      // per-access completion pulse: a stalled load holds data_rd_en high and
-      // the driver's data_ready is a level echo of it, so neither a level rule
-      // nor a queue can tell one access with a two-cycle enable from two
-      // accesses. Fixing it needs the req/rsp form of the data port, which is
-      // E8's scope (G-18) -- reported, not guessed.
-      if(vif.data_rd_en || vif.data_wr_en) begin
-        riscv_small_transaction trans = riscv_small_transaction::type_id::create("trans");
-        trans.op_is_data_read = vif.data_rd_en;
-        trans.op_is_data_write = vif.data_wr_en;
-        trans.captured_data_addr = vif.data_addr.u_data;
-        trans.captured_data_rd = vif.data_rd.u_data;
-        trans.captured_data_wr = vif.data_wr.u_data;
-        trans.captured_data_wr_ctrl = vif.data_rd_wr_ctrl;
-        trans.captured_data_wr_strb = vif.data_wr_strb;
-
-        if (trace)
-          `uvm_info("DATA_MONITOR", $sformatf("DATA %s: ADDR=0x%0h DATA=0x%0h WIDTH=%0d STRB=0b%04b",
-            trans.op_is_data_write ? "WRITE" : "READ",
-            trans.captured_data_addr,
-            trans.op_is_data_write ? trans.captured_data_wr : trans.captured_data_rd,
-            trans.captured_data_wr_ctrl,
-            trans.captured_data_wr_strb), UVM_LOW);
-        mon2sb_port.write(trans);
+      // Data port: ONE publication per BEAT (WP-13 P3 FR-38/G-18; P6b
+      // FR-42/G-22).
+      //
+      // The flat data port has no per-access completion pulse: a stalled load
+      // holds data_rd_en high and the memory's data_ready is a level echo of
+      // it, so a level rule (publish once per cycle the enable is high) cannot
+      // tell one access held for two cycles from two accesses -- G-32, and E8's
+      // scope for the port itself. What it CAN do without a new port is observe
+      // the handshake: an access begins at the first cycle the enable is
+      // presented, it is granted in a cycle in which data_ready is high, and it
+      // ends when the enable goes away or the request changes without one. So
+      // the monitor assembles the access and publishes it once, with
+      // `captured_data_grant` saying whether a grant cycle happened. That is
+      // what makes "the store the core held" one store rather than one per
+      // cycle, which the scoreboard's one-prediction-per-store pairing
+      // requires; and it is the only way to observe a store the core ABANDONED
+      // before the grant, because that access is never granted and so would
+      // have no publication at all under a grant-only rule.
+      //
+      // P6b splits that unit once more. An access whose lane plus width crosses
+      // the word boundary is executed as two word-aligned beats, and the beat is
+      // what the port carries: beat 1 at the address the core computed, beat 2
+      // at (addr & ~3) + 4. The beat boundary is the REQUEST SIGNATURE, so a
+      // signature change inside a split access is its second beat.
+      //
+      // A split beat is never granted on its first cycle. rtl/misaligned_split.sv
+      // keeps each beat on the bus for at least one cycle before it consumes
+      // data_ready (SPLIT_BEAT1 and SPLIT_BEAT2/SPLIT_BEAT2_GRANT); the port has
+      // no falling edge between the two beats, so the high level the monitor
+      // samples in beat 2's first cycle is beat 1's grant still standing -- and
+      // data_rd still carries beat 1's word there. Publishing it would count the
+      // beat twice and publish the wrong load data (measured: 3 publications per
+      // crossing store, 99 STRB_WIDTH errors). A non-split access keeps the P3
+      // rule exactly: it is one beat, and a grant in its first cycle is its own.
+      //
+      // Read the grant status with the read path in mind: this core consumes a
+      // load's data_ready one stage later (rtl/control.sv:288 checks the WB
+      // slot's mux select), so a load's request is already off the bus in the
+      // grant cycle and it is published with grant=0. That is a fact about the
+      // port, not a verdict, and it is why the FR-38 claim is scoped to writes
+      // (riscv_small_store_grant_checker) and why T-53 withholds writes only.
+      if (vif.data_rd_en || vif.data_wr_en) begin
+        if (da_pending && da_same_access()) begin
+          da_cycles++;
+          da_capture();
+          if (vif.data_ready && (!da_split || (da_cycles > 1))) begin
+            da_publish(1'b1);
+            da_pending   = 0;
+            da_beat_done = da_split; // a split beat may still be on the bus
+          end
+        end else if (da_beat_done && da_same_access()) begin
+          // The split beat was already published and its signature is still on
+          // the bus: that is the SAME beat held for one more cycle (the core
+          // advances on the next edge), not a new access.
+          da_cycles++;
+        end else begin
+          // A different request. If a beat was still ungranted the core moved
+          // on, so it was accepted without the grant: publish it as withdrawn
+          // and start the next one.
+          if (da_pending) da_publish(1'b0);
+          da_pending   = 0;
+          da_beat_done = 0;
+          if (da_split && (da_beat == 1)) begin
+            // The next distinct signature of a split access in progress is its
+            // second beat. The monitor reports the beat index it OBSERVED; it
+            // does not require the address to be the expected one -- judging
+            // the two beats against each other is riscv_small_strb_checker's
+            // claim, and a monitor that silently reclassified a wrong second
+            // address as a new access would hide it.
+            da_beat = 2;
+          end else begin
+            da_split = da_crosses(vif.data_addr.u_data, vif.data_rd_wr_ctrl[1:0]);
+            da_beats = da_split ? 2 : 1;
+            da_beat  = 1;
+          end
+          da_pending     = 1;
+          da_first_cycle = cycle;
+          da_cycles      = 1;
+          da_capture();
+          if (vif.data_ready && (!da_split || (da_cycles > 1))) begin
+            da_publish(1'b1);
+            da_pending   = 0;
+            da_beat_done = da_split;
+          end
+        end
+      end else begin
+        if (da_pending) begin
+          // The request left the bus with data_ready low in every cycle of it:
+          // the beat was accepted before the grant.
+          da_publish(1'b0);
+          da_pending = 0;
+        end
+        // No access on the bus: the access and its beats are over.
+        da_split     = 0;
+        da_beat      = 0;
+        da_beats     = 1;
+        da_beat_done = 0;
       end
 
       // Retire (commit) event (G-28). The probe derives retire_valid; the
@@ -229,6 +447,10 @@ class riscv_small_monitor extends uvm_monitor;
     `uvm_info(get_full_name(),
       $sformatf("fetch pair: %0d published, %0d request(s) still outstanding at the end of the run, %0d orphan response(s); %0d retire event(s)",
         fetch_count, fetch_pending.size(), orphan_count, retire_count),
+      UVM_MEDIUM)
+    `uvm_info(get_full_name(),
+      $sformatf("data port: %0d beat(s) published (%0d of a split access, %0d split access(es)), %0d waited more than one cycle, %0d with a grant cycle, %0d without one, %0d left pending at the end of the run",
+        data_count, data_split_beats, data_split_accesses, data_waited, data_count - data_withheld, data_withheld, da_pending),
       UVM_MEDIUM)
   endfunction
 

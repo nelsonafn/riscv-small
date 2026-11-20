@@ -23,8 +23,11 @@
 #
 # T-06 (FR-12): the pre-fix core ignored the address low bits and always
 # extended the byte at the highest address, so 8 of the 12 T-06 cases stored
-# the wrong value. Pinning the lane to 3 reproduces exactly that.
-T-06	rtl/memory_access.sv	assign ld_lane = alu_wb.u_data[1:0];	assign ld_lane = 2'b11; // negative control: lane never selected	the sub-word lane is not selected from the address (pre-fix FR-12)
+# the wrong value. Pinning the lane to 3 reproduces exactly that. Since WP-13 P6
+# the lane expression starts with the split-load override (`split_wb` puts the
+# assembled word at lane 0), so the row pins the ADDRESS half and leaves the
+# override alone: the defect is the missing addr[1:0] select, not the split.
+T-06	rtl/memory_access.sv	assign ld_lane = split_wb ? 2'd0 : alu_wb.u_data[1:0];	assign ld_lane = split_wb ? 2'd0 : 2'b11; // negative control: lane never selected	the sub-word lane is not selected from the address (pre-fix FR-12)
 #
 # T-08 (NFR-05): rv32ui-p-simple has no test case; the verdict rests on ADDI
 # producing 1 and the store reaching tohost. Ignoring the second operand turns
@@ -48,15 +51,18 @@ forward-rs1	rtl/execution.sv	assign alu_ex = alu_result;	assign alu_ex = 'x; // 
 # branch to the 0x200000-family; rv32ui-p-beq times out.
 negative-branch	rtl/jump_decision.sv	jump_addr = base_addr + imm;	jump_addr = base_addr + imm[20:0]; // negative control: zero-extended offset	a negative branch/jump offset is zero-extended (G-20)
 #
-# T-13 (FR-11 / G-08): rv32ui-p-sb walks every byte lane. Dropping the lane
-# shift leaves the stored byte at lane 0 while the strobe selects the addressed
-# byte, so every SB above lane 0 writes a zero.
-store-lane-offset	rtl/execution.sv	rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1:0], 3'b000};	rs2_lane.u_data = rs2_pipeline.u_data; // negative control: byte store ignores the lane	the byte value is not placed in the addressed lane (G-08)
+# T-13 (FR-11 / G-08): rv32ui-p-sb walks every byte lane. The lane shift line is
+# shared with the halfword arm since WP-13 P2 (both are byte-granular), so a
+# single-line `find` cannot name it any more. The defect is introduced one line
+# down instead: the data stays lane-placed, but the strobe always claims lane 0,
+# so every SB above lane 0 stores data[7:0] -- which is zero after the rotation
+# -- into byte 0 and writes nothing to the addressed byte.
+store-lane-offset	rtl/execution.sv	data_wr_strb_ex = 4'b0001 << alu_result.u_data[1:0];	data_wr_strb_ex = 4'b0001; // negative control: byte strobe ignores the lane	the byte strobe always claims lane 0, so a byte store above lane 0 writes nothing (G-08)
 #
 # T-14 (FR-11 / G-22): rv32ui-p-sh stores at offsets 0 and 2. A halfword
 # strobe of 4'b1111 contradicts the halfword width and claims two bytes the
 # store did not drive.
-store-strb-all	rtl/execution.sv	data_wr_strb_ex = 4'b0011 << {alu_result.u_data[1], 1'b0};	data_wr_strb_ex = 4'b1111; // negative control: halfword strobe drives all four bytes	a halfword store announces four bytes (G-22)
+store-strb-all	rtl/execution.sv	data_wr_strb_ex = 4'b0011 << alu_result.u_data[1:0];	data_wr_strb_ex = 4'b1111; // negative control: halfword strobe drives all four bytes	a halfword store announces four bytes (G-22)
 #
 # T-15 (FR-11 / G-08, G-22): rv32ui-p-st_ld mixes byte, half and word. Forcing
 # the width port to byte makes every halfword/word store report 2'b00 next to a
@@ -158,3 +164,33 @@ retire-every-slot	rtl/instruction_decode.sv	valid_ex <= valid_id && !flush;	vali
 # measured -- the test's clock timeout raises the UVM_ERROR. This is the defect
 # G-33 records, not a synthetic one.
 reset-vector-zero	rtl/instruction_fetch.sv	pc <= RESET_VECTOR;	pc <= 'b0; // negative control: the reset vector is not applied	the first fetch after reset presents 0x0 instead of RESET_VECTOR (G-33)
+#
+# T-51 (FR-11 / FR-12 / G-34): a halfword is byte-granular since WP-13 P2, so
+# offset 1 occupies bytes 1-2. Both halves of the defect are named here because
+# `riscv_mutant_apply()` applies every row of a given name: the load lane and the
+# store strobe each round addr[0] away. Reverting both reproduces the pre-fix
+# halfword-granular lane (16 * addr[1]) on the read and the write path at once --
+# LH at offset 1 returns bytes 0-1 and SH at offset 1 strobes 0011 instead of
+# 0110.
+halfword-lane-ignore-bit0	rtl/memory_access.sv	assign ld_lane_half = (ld_lane == 2'd3) ? 2'd2 : ld_lane;	assign ld_lane_half = {ld_lane[1], 1'b0}; // negative control: the load halfword lane ignores bit 0	the halfword lane is halfword-granular, so offset 1 reads and strobes bytes 0-1 instead of 1-2 (G-34)
+halfword-lane-ignore-bit0	rtl/execution.sv	data_wr_strb_ex = 4'b0011 << alu_result.u_data[1:0];	data_wr_strb_ex = 4'b0011 << {alu_result.u_data[1], 1'b0}; // negative control: the store halfword strobe ignores bit 0	the halfword lane is halfword-granular, so offset 1 reads and strobes bytes 0-1 instead of 1-2 (G-34)
+#
+# T-53 (FR-38 / G-18): the pre-fix stall was `if (!data_ready && mux_sel_rd_wb)`,
+# so a store drove its strobe for one cycle whatever the grant did. The fix's
+# line contains `||`, and a TSV cell may not (it is the table separator: splice
+# the fix's condition into a row and the reader splits the `find` at the pipes,
+# measured -- the `find` came back as `(!data_ready && (mux_sel_rd_wb ` and every
+# later column shifted, so the row would abort as incomplete). As in T-39/T-42 the
+# defect is therefore introduced one token over: tying the store term of the
+# condition to 1'b0 leaves exactly `!data_ready && mux_sel_rd_wb` -- the pre-fix
+# expression -- and the `data_wr_en_ma` port the fix added goes unused, as it was.
+store-grant-ignored	rtl/control.sv	data_wr_en_ma)) begin	1'b0)) begin // negative control: the store does not wait for the grant	a store that does not wait for the grant drives its strobe for one cycle whatever data_ready does, so a withholding memory loses it (G-18)
+#
+# T-52 (FR-42 / G-22): P6 landed the two-beat split (rtl/misaligned_split.sv):
+# an access whose lane plus width crosses the word is presented as two
+# word-aligned beats, so `rv32ui-p-ma_data` reaches its own pass ceremony. Tying
+# the detection to 0 reverts it to the pre-P6 world: one beat at the unaligned
+# address, which the image rejects at MISALIGNED_LOAD_TEST(3, lw, s0, 1). The
+# `find` is line 108 verbatim; it contains no `|`, so the row parses to five
+# cells (the `store-grant-ignored` limitation above does not apply here).
+no-misaligned-split	rtl/misaligned_split.sv	assign split_needed = access_ma && (({1'b0, lane_ma} + bytes_ma) > 3'd4);	assign split_needed = 1'b0; // negative control: the split is disabled	a crossing access is presented as one beat at the unaligned address (FR-42/G-22)

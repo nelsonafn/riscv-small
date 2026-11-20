@@ -40,6 +40,7 @@ class riscv_small_environment extends uvm_env;
   riscv_small_coverage           coverage;
   riscv_small_scoreboard         sb;
   riscv_small_strb_checker       strb_checker;
+  riscv_small_store_grant_checker store_grant_checker;
   riscv_small_fetch_pair_checker fetch_pair_checker;
   riscv_small_retire_checker     retire_checker;
   riscv_small_reset_checker      reset_checker;
@@ -73,6 +74,12 @@ class riscv_small_environment extends uvm_env;
     // FR-11 strobe/width invariant: no reference model needed, so it runs in
     // both modes and the image path witnesses the byte/halfword arms.
     strb_checker = riscv_small_strb_checker::type_id::create("strb_checker", this);
+    // FR-38/G-18 store grant: the observation is one transaction per beat (a
+    // non-split access is one beat, and FR-38's claim is enabled only on
+    // non-split stores), so this is also a property of one publication. Inert
+    // unless a test enables the claim, so it runs in both modes and never
+    // disturbs a run without it.
+    store_grant_checker = riscv_small_store_grant_checker::type_id::create("store_grant_checker", this);
     // G-32 fetch pairing: also a property of one observation, so it runs in
     // both modes. It is inert unless a program image was configured.
     fetch_pair_checker = riscv_small_fetch_pair_checker::type_id::create("fetch_pair_checker", this);
@@ -99,6 +106,8 @@ class riscv_small_environment extends uvm_env;
     riscv_small_agnt.monitor.mon2sb_port.connect(coverage.analysis_export);
     // The strobe invariant is a property of one observation, not of a prediction.
     riscv_small_agnt.monitor.mon2sb_port.connect(strb_checker.analysis_export);
+    // Same for the store grant (FR-38/G-18): one observation per data access.
+    riscv_small_agnt.monitor.mon2sb_port.connect(store_grant_checker.analysis_export);
     // Same for the fetch pair: the oracle is configuration, not the model.
     riscv_small_agnt.monitor.mon2sb_port.connect(fetch_pair_checker.analysis_export);
     // And for the commit stream (inert without a program image).

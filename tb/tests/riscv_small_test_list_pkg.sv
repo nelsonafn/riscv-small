@@ -26,6 +26,8 @@ package riscv_small_test_list_pkg;
   `include "riscv_small_basic_load_store_test.sv"
   `include "riscv_small_corner_test.sv"
   `include "riscv_small_subword_access_test.sv"
+  `include "riscv_small_halfword_lane_test.sv"
+  `include "riscv_small_store_grant_test.sv"
   `include "riscv_small_sanity_test.sv"
   `include "riscv_small_passive_test.sv"
   `include "riscv_small_monitor_model_test.sv"

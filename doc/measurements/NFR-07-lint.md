@@ -134,7 +134,8 @@ is the synthesis view of a gap this document already carries.
 | 2026-11-18 | `sha256:b914f2e1…` | `xczu3eg-sbva484-1-i` | `0` | `0` | `make lint_fpga`, Vivado 2024.1, out-of-context, default settings; 4069 cells, 1405 flip-flops, no linter error |
 | 2026-10-28 | `sha256:34db4d37...` | - | `none` | `none` | `G-05` - no lint or synthesis flow targeted this core, so no count was recorded at all |
 
-The 2026-10-28 row never carried a number: it recorded that the flow targeted a different SoC (`G-05`). Its two
-placeholder cells read `none` here because the signoff gate (`signoff_check.cmake`, check 9) treats the literal
-phrase the earlier file used as "this requirement has no evidence yet", and the file now has evidence. The date, the
+The 2026-10-28 row never carried a number: it recorded that the flow the tree then carried was pointed at the SoC it
+was borrowed from (`G-05`). Its two placeholder cells read `none` here because the signoff gate
+(`signoff_check.cmake`, check 9) treats the literal phrase the earlier file used as "this requirement has no evidence
+yet", and the file now has evidence. The date, the
 digest and the reason are unchanged.

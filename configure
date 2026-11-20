@@ -16,8 +16,8 @@ while [[ "$#" -gt 0 ]]; do
         -h|--help) 
             echo "Usage: ./configure [options]"
             echo "Options:"
-            echo "  --top <name>       Specify the top module name (default: adder_tb_top)"
-            echo "  --test <name>      Specify the test name (default: adder_basic_test)"
+            echo "  --top <name>       Specify the top module name (default: riscv_small_tb)"
+            echo "  --test <name>      Specify the test name (default: riscv_small_basic_load_store_test)"
             echo "  --seed <value>     Specify the default SV randomization seed (default: 1)"
             echo "  --vivado <params>  Pass Vivado parameters (default: --R)"
             exit 0

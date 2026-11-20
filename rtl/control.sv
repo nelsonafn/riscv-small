@@ -53,7 +53,9 @@ import riscv_definitions_pkg::*; // import package into $unit space
     input logic rd0_wr_en_wb,//[in] Reg destination (rd) write enable to pipeline
     input logic data_rd_en_ex, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
 	input logic data_rd_en_ma, //[in] Data memory read enable (wb_mux_sel) to be used with funct3
+    input logic data_wr_en_ma, //[in] Data memory write enable to be used with funct3
     input logic data_wr_en_ex,  //[in] Data memory write enable to be used with funct3
+    input logic split_stall, //[in] A misaligned access holds MA for its second beat (FR-42)
     input logic mux_sel_rd_wb, //[in] Data memory read enable (wb_mux_sel) 
     input logic cond_jump, // Used to indicate a conditional branch have been decoded
     input logic jalr, //[in] Indicates a JALR, whose target reads rs1
@@ -285,11 +287,44 @@ import riscv_definitions_pkg::*; // import package into $unit space
         end
 
         //Pause pipeline if there is not data available from Memory Access stage
-        if (!data_ready && mux_sel_rd_wb) begin
+        /* FR-38/G-18: a store completes only in a cycle the data memory grants
+         * it, so the store is held while it occupies MA -- the stage that
+         * presents it on data_wr/data_addr/data_wr_strb. Delaying the write back
+         * instead (the load's shape) would leave the store on the bus for one
+         * cycle and act one cycle after it is gone. */
+        if (!data_ready && (mux_sel_rd_wb || data_wr_en_ma)) begin
             if_id_clk_en = '0;// Run IF_ID
             id_ex_clk_en = '0;// Run ID_EX
             ex_ma_clk_en = '0;// Run EX_MA
             ma_wb_clk_en = '0;// Run MA_WB
+        end
+
+        /* FR-42/G-22: an access that crosses the word boundary is split into
+         * two word-aligned beats and the access is held in MA until both are
+         * granted. Freeze the whole pipeline for the beats; split_stall is low
+         * on the edge that completes the second beat, and that is the only one
+         * that advances. */
+        if (split_stall) begin
+            if_id_clk_en = '0;// Pause IF_ID
+            id_ex_clk_en = '0;// Pause ID_EX
+            ex_ma_clk_en = '0;// Pause EX_MA
+            ma_wb_clk_en = '0;// Pause MA_WB
+        end
+
+        /* A flush clears its register on the edge whatever that register's
+         * clock enable says -- the ID/EX and EX/MA flushes are in the reset
+         * branch of their always_ff, not behind clk_en. While a data access
+         * holds the pipeline, the instruction in EX is frozen and cannot reach
+         * MA, so the flush a dependent branch asks for would destroy it instead
+         * of killing the instruction behind it: measured on the store cases of
+         * rv32ui-p-ma_data, where the read-back load behind a store waiting for
+         * the grant was cleared out of EX and the branch then compared against
+         * the stale register. Hold both registers and let the flush fire on the
+         * edge that releases the hold; an exception keeps its flush, because it
+         * aborts the access. */
+        if (((!data_ready && (mux_sel_rd_wb || data_wr_en_ma)) || split_stall) && !exception) begin
+            id_ex_flush = '0;
+            ex_ma_flush = '0;
         end
 
     end: proc_forward_ctrl

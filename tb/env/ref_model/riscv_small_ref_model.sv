@@ -3,7 +3,24 @@
 //------------------------------------------------------------------------------
 // The model is an ISS for the load/store subset (G-04): it executes the
 // instruction the RETIRE event carries, in its own register file and its own
-// data memory, and publishes one store prediction per SW.
+// data memory, and publishes one store prediction per retired store -- the byte
+// address, the byte strobes and the lane-placed data word the data port must
+// carry.
+//
+// Lane granularity (WP-13 P1, G-34): the halfword lane is selected by BOTH
+// address bits, `8 * lane`, exactly as FR-12 requires of the DUT. It used to be
+// `16 * lane[1]`, the same defect the DUT had, so a LH/LHU at an odd offset was
+// predicted with the wrong lane and the scoreboard agreed with the defect
+// instead of with the requirement. A checker that shares the bug is not
+// evidence.
+//
+// A halfword at lane 3 spans bytes 3 and 4, i.e. it crosses the word boundary
+// (the split, FR-42/G-22, T-52). The model does not split beats, but its
+// ARCHITECTURAL state is exact there as well: the load reads the second byte
+// from the next word and the store writes each byte to the word its address
+// names. What it cannot predict is a second bus beat, so a crossing store's
+// prediction describes the first (or only) beat; T-52 is the ma_data image and
+// it runs with no model.
 //
 // What it does NOT receive:
 //   - the program (no program feed, no analysis FIFO, no export of its own).
@@ -113,7 +130,8 @@ class riscv_small_ref_model extends uvm_component;
 
     // --- Loads (I-Type, opcode=0000011) -------------------------------------
     // LW, LB, LH, LBU, LHU. The lane comes from the low address bits, which is
-    // exactly what FR-12 requires of the DUT.
+    // exactly what FR-12 requires of the DUT: a byte from `8 * lane`, a
+    // halfword from the same byte offset (lane 0, 1 or 2 stay inside the word).
     if (opcode == 7'b0000011) begin
       bit [4:0]  rd       = inst[11:7];
       bit [4:0]  rs1      = inst[19:15];
@@ -124,7 +142,17 @@ class riscv_small_ref_model extends uvm_component;
       bit [1:0]  lane      = byte_addr[1:0];
       bit [31:0] word      = iss_mem.exists(word_addr) ? iss_mem[word_addr] : 0;
       bit [7:0]  b         = word[8 * lane +: 8];
-      bit [15:0] h         = word[16 * lane[1] +: 16];
+      bit [15:0] h;
+      // A halfword at lane 3 spans bytes 3 and 4, i.e. the low byte of the next
+      // word. The architectural result is defined whatever the number of bus
+      // beats (FR-42 splits it); the model reads the second byte from its own
+      // memory, so it predicts the value and not a guess.
+      if (lane == 2'd3) begin
+        bit [31:0] next_word = iss_mem.exists(word_addr + 1) ? iss_mem[word_addr + 1] : 0;
+        h = {next_word[7:0], word[31:24]};
+      end else begin
+        h = word[8 * lane +: 16];
+      end
 
       if (rd != 0) begin
         case (funct3)
@@ -141,29 +169,84 @@ class riscv_small_ref_model extends uvm_component;
           UVM_HIGH)
       end
 
-    // --- SW (S-Type, opcode=0100011) ----------------------------------------
+    // --- Stores (S-Type, opcode=0100011) ------------------------------------
+    // SB, SH and SW are executed at byte granularity: the lane comes from the
+    // low address bits and each byte goes to the word its own address names.
+    // Every store publishes exactly ONE prediction, so the Scoreboard's
+    // one-prediction-per-observed-write pairing stays 1:1 -- a store the model
+    // does not predict would consume the prediction of the next one and turn a
+    // value comparison into a stream-shift artefact.
     end else if (opcode == 7'b0100011) begin
       bit [4:0]  rs2      = inst[24:20];
       bit [4:0]  rs1      = inst[19:15];
+      bit [2:0]  funct3   = inst[14:12];
       bit [11:0] imm      = {inst[31:25], inst[11:7]};
-      int        word_addr = (reg_file[rs1] + $signed(imm)) >> 2;
-      int        byte_addr = word_addr << 2;
+      int        byte_addr = reg_file[rs1] + $signed(imm);
+      int        word_addr = byte_addr >> 2;
+      bit [1:0]  lane      = byte_addr[1:0];
+      bit [31:0] value     = reg_file[rs2];
+      bit [31:0] word;      // the addressed word after the write, for the log
+      int        nbytes;
 
-      iss_mem[word_addr] = reg_file[rs2];
+      case (funct3)
+        3'b000:  nbytes = 1; // SB
+        3'b001:  nbytes = 2; // SH
+        3'b010:  nbytes = 4; // SW
+        default: nbytes = 4;
+      endcase
+
+      // Byte-addressed write: every byte of the access goes to the word its own
+      // address names, so a halfword at lane 3 lands in two words exactly as
+      // the architecture requires (FR-42 splits it into two beats; the memory
+      // result is the same). T-51 is lane 1, which stays inside one word.
+      for (int b = 0; b < nbytes; b++) begin
+        int        byte_b = byte_addr + b;
+        int        word_b = byte_b >> 2;
+        bit [1:0]  lane_b = byte_b[1:0];
+        bit [31:0] word_prev = iss_mem.exists(word_b) ? iss_mem[word_b] : 0;
+
+        word_prev[8 * lane_b +: 8] = value[8 * b +: 8];
+        iss_mem[word_b] = word_prev;
+      end
+      word = iss_mem.exists(word_addr) ? iss_mem[word_addr] : 0;
       `uvm_info(get_full_name(),
-        $sformatf("ISS SW @0x%0h: x%0d (=0x%0h) -> mem_byte[%0d] / mem_word[%0d]",
-          pc, rs2, reg_file[rs2], byte_addr, word_addr),
+        $sformatf("ISS ST @0x%0h f3=%0b: mem_word[%0d] + lane %0d <- 0x%0h = 0x%0h",
+          pc, funct3, word_addr, lane, value, word),
         UVM_HIGH)
 
       // Publish the prediction the Scoreboard compares against the store the
-      // monitor observes on the data port.
+      // monitor observes on the data port. The prediction is the store
+      // CONTRACT the memory BFM already enforces -- byte address, byte strobes,
+      // lane-placed data word -- so a halfword at the wrong lane fails with the
+      // strobes it actually drove (T-51: 4'b0011 where 4'b0110 is required),
+      // not only through the read-back the program performs.
+      //
+      // SW is predicted as one beat at the byte address it names: an aligned
+      // store is one beat, and the second beat of a crossing store (FR-42) is
+      // T-52's, whose image runs with no model.
       begin
         riscv_small_transaction pred;
+        bit [31:0] lane_data;
+        bit [3:0]  lane_strb;
+
+        lane_data = '0;
+        lane_strb = '0;
+        for (int b = 0; b < nbytes; b++)
+          if ((lane + b) < 4) begin
+            lane_data[8 * (lane + b) +: 8] = value[8 * b +: 8];
+            lane_strb[lane + b] = 1'b1;
+          end
+        if (funct3 == 3'b010) begin
+          lane_data = value;
+          lane_strb = 4'b1111;
+        end
+
         pred = riscv_small_transaction::type_id::create("pred");
-        pred.op_is_data_write   = 1;
-        pred.op_is_data_read    = 0;
-        pred.captured_data_addr = byte_addr;
-        pred.captured_data_wr   = reg_file[rs2];
+        pred.op_is_data_write      = 1;
+        pred.op_is_data_read       = 0;
+        pred.captured_data_addr    = byte_addr;
+        pred.captured_data_wr      = lane_data;
+        pred.captured_data_wr_strb = lane_strb;
         pred_count++;
         rm2sb_port.write(pred);
       end

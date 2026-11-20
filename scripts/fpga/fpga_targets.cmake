@@ -61,12 +61,6 @@ message(STATUS "  - FPGA project   : ${FPGA_PROJECT_NAME} on ${FPGA_PART}")
 set(FPGA_PROJECT_FILE "${CMAKE_BINARY_DIR}/fpga/${FPGA_PROJECT_NAME}.xpr")
 set(FPGA_SRC_DIR "${CMAKE_SOURCE_DIR}/scripts/fpga")
 
-# Every target below builds the project first when it is missing, so a single
-# command works from a clean build/.
-set(FPGA_ENSURE_PROJECT
-    COMMAND ${CMAKE_COMMAND} -E echo "Vivado project: ${FPGA_PROJECT_FILE}"
-)
-
 add_custom_target(create_fpga
     COMMAND vivado -mode batch -notrace
             -source ${FPGA_SRC_DIR}/create_project.tcl

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Requirement | The core shall pass every applicable image of the bundled RISC-V test suite: `rv32ui-p-*`, `rv32um-p-*`, `rv32uc-p-*` and `rv32mi-p-*`, plus `rv32ua-p-*` where `ENABLE_A` = 1. |
-| Gap | `G-10`/`G-25`/`G-26`/`G-27`/`G-20`/`G-08`/`G-19`/`G-29`/`G-07`/`G-30`/`G-31` closed; the one remaining failure is `G-22` (`FR-42`), and `G-15` is no longer an `NFR-05` failure |
+| Gap | `G-10`/`G-25`/`G-26`/`G-27`/`G-20`/`G-08`/`G-19`/`G-29`/`G-07`/`G-30`/`G-31`/`G-22` closed, so no `rv32ui` image fails and `G-15` is not an `NFR-05` failure; what the row still owes is the `rv32um`, `rv32uc` and `rv32mi` legs its `shall` names (`G-06`, `G-13`) |
 | Owner | verification lead |
-| Status | **measured** - 41 pass / 1 fail of the **42 bundled images**; the harness runs 43 because WP-7 added one project-local image (`rv32ui-p-jalr_unaligned`), which passes. Not `verified` until 0 failures |
+| Status | **measured** - 43 pass / 0 fail: all **42 bundled images** and the one project-local image (`rv32ui-p-jalr_unaligned`) pass. The `rv32ui` leg of `A-09` is met; the row does not become `verified` here, because `NFR-05` also names the `rv32um`, `rv32uc` and `rv32mi` legs and only `rv32ui` is measured |
 
 ## Method
 
@@ -56,25 +56,27 @@ make compile_sanity_images                    # same build step, from CMake
 `make sanity` exits 0 when it produced a verdict and 1 when an image failed. The signoff gate runs the
 same measurement through `sanity-evidence` (`--allow-fail`).
 
-## Result - 2026-11-18 (WP-11, re-measured after the reset-vector harness change)
+## Result - 2026-11-19 (WP-13, re-measured after the word-crossing split)
 
 | Field | Value |
 |---|---|
-| RTL digest | `sha256:b914f2e10cf3b7ebffc992e38e15f3ef33fe881000011d58990c32e2ad54c774` |
-| TB digest | `sha256:066dce857e4371895b8aa9a7f111da06bf078e66f706ed752126a713bfc8a7af` |
+| RTL digest | `sha256:f84ea86b666a26d72f04647d8e771e9dc23da144b135cb1aa23544103a2d63ee` |
+| TB digest | `sha256:7860d1b04faa5e91a7d98937c26df709e381dffd2886fb9d0316c8dce63cdab5` |
 | Images | 43 = 42 bundled + 1 project-local (`rv32ui-p-jalr_unaligned`) |
-| Pass | 42 (41 bundled + the local image) |
-| Fail | 1 (`rv32ui-p-ma_data`) |
+| Pass | 43 (42 bundled + the local image) |
+| Fail | 0 |
 | Artefacts | `build/sanity/summary.json`, `build/sanity/<image>.log` |
 
-WP-9 measured the same 42 pass / 1 fail earlier the same day at RTL `sha256:120b211f…` and TB
-`sha256:c8ba82d7…` (History below); WP-11 re-ran it because every image is now linked at `0x80000000`
-instead of `0x0`, so the verdict was re-established rather than carried over. `T-50` is the new directed
-reset-vector test and not a sanity image, which is why the image count stays 43.
+This is the first measurement with **no failure at all**, and it supersedes the 42 pass / 1 fail verdict of
+2026-11-18 (WP-9 and WP-11, kept in History below). The image that failed was `rv32ui-p-ma_data`: it presents
+misaligned word and halfword loads and stores, and until WP-13 a crossing access left the core as one unaligned
+beat, so the image stopped at `testnum=1`. WP-13 made the crossing access two beats, each confined to one word
+(`FR-42`, `G-22`, observed by `T-52` as `sanity:rv32ui-p-ma_data` and the `no-misaligned-split` mutant), and the
+image now writes its pass epilogue to `tohost`. The image count stays 43 because the split added no image:
+`rv32ui-p-ma_data` moved from fail to pass, like every other image the earlier rows enumerate.
 
-The directed-driver fix landed afterwards and the run was repeated a second time the same day — TB
-`sha256:c4bad285…` → `sha256:066dce85…`, RTL unmoved — with the verdict unchanged, so the digest cells above
-name that later run.
+The per-image table below is the WP-13 run. Only `rv32ui-p-ma_data` changes status against the WP-11 row in
+History; every other row is the same verdict at a later digest.
 
 | Image | Status | Verdict | Triage group |
 |---|---|---|---|
@@ -99,7 +101,7 @@ name that later run.
 | `rv32ui-p-lhu` | pass | - | pass |
 | `rv32ui-p-lui` | pass | - | pass |
 | `rv32ui-p-lw` | pass | - | pass |
-| `rv32ui-p-ma_data` | fail | testnum=1 | FR-42 / G-22 |
+| `rv32ui-p-ma_data` | pass | - | pass (T-52) — the word-crossing split, `FR-42` |
 | `rv32ui-p-or` | pass | - | pass |
 | `rv32ui-p-ori` | pass | - | pass |
 | `rv32ui-p-sb` | pass | - | pass (T-13) |
@@ -134,11 +136,13 @@ name that later run.
 | `G-30` | A branch decided against an unresolved load flushes a valid fetch. | **closed 2026-11-05**: `ld_st` passes; mutant `branch-taken-stale` reproduces `testnum=2` | verification lead / WP-7 |
 | `G-31` | `JALR`'s `rs1` was never forwarded. | **closed 2026-11-05**: found by the `jalr` red; mutant `jalr-no-forward` | verification lead / WP-7 |
 | `G-15` | No I-cache / line fetch — a **target** gap, not a test failure. | **re-attributed 2026-11-05**: `fence_i` passes on a cacheless core, because `fence.i` is correctly a no-operation; its old timeout was the unforwarded `JALR` `rs1` (`G-31`) | designer / `F-10` |
-| `FR-42` / `G-22` | No misaligned split. | `rv32ui-p-ma_data` testnum=1 | designer / E8 |
+| `FR-42` / `G-22` | **closed 2026-11-19 by WP-13**: a crossing access left the core as one unaligned beat. It now leaves as two beats, each confined to one word — beat 1 at the access's byte address with its strobes inside that word, beat 2 at `(base & ~32'h3) + 4` with the remaining strobes (`rtl/misaligned_split.sv`). | `T-52` (`sanity:rv32ui-p-ma_data`) passes and fails on the `no-misaligned-split` mutant; the image writes its pass epilogue to `tohost` | closed |
 
-The one remaining failure is not a waiver: `NFR-05` stays red until `FR-42`/`G-22` implements the misaligned
-split. The `Q-11` release blockers are now `G-04` and `G-11`; the release is blocked by `A-09` and this
-measurement regardless.
+No failure is left and none of them is a waiver: the `rv32ui` leg of `NFR-05` is green at the digests above, and
+`rv32ui-p-ma_data` — the last image in the table to go green — passes since WP-13 (`FR-42`, `T-52`). The `Q-11`
+release blockers are now `G-04` and `G-11`; the release is still blocked by `A-09` and by the legs of `NFR-05`
+this measurement does not cover (`rv32um`, `rv32uc`, `rv32mi`, owned by `FR-43`, `FR-44` and
+`FR-24`/`FR-46`/`FR-47`).
 
 ## Debug
 
@@ -162,3 +166,4 @@ measurement regardless.
 | 2026-11-18 | `sha256:120b211f...` | 43 (42 + 1 local) | 42 | 1 | WP-9: same one failure `ma_data` (`FR-42`); the `spike:` rows `T-47`/`T-48`/`T-49` run their images through the commit-trace comparison instead of a plain sanity run, so the sanity count is unchanged (TB `c8ba82d7...`) |
 | 2026-11-18 | `sha256:b914f2e1...` | 43 (42 + 1 local) | 42 | 1 | WP-11: re-established after `scripts/verify/sanity/link.ld` moved every image to `0x80000000`; same one failure `ma_data` (`FR-42`), and `T-50` is a directed test, not an image (TB `c4bad285...`) |
 | 2026-11-18 | `sha256:b914f2e1...` | 43 (42 + 1 local) | 42 | 1 | Re-run after the driver fix in `tb/env/agents/riscv_small_agent/riscv_small_driver.sv` (an unmatched fetch is answered with `inst_ready` before the program is entered, and warns once instead of 196 times); verdict unchanged, same one failure `ma_data` (`FR-42`), and the RTL digest did not move — only the testbench's (TB `066dce85...`) |
+| 2026-11-19 | `sha256:f84ea86b...` | 43 (42 + 1 local) | 43 | 0 | WP-13: the word-crossing access is issued as two beats by `rtl/misaligned_split.sv` (`FR-42`/`G-22`) and a store is held in MA until its grant (`FR-38`/`G-18`); `rv32ui-p-ma_data` passes on its own `tohost` check and fails on the `no-misaligned-split` mutant, so no `rv32ui` image fails (TB `7860d1b0...`) |

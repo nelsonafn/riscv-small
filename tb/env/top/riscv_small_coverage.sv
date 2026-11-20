@@ -12,6 +12,8 @@
 //   cp_lane           FR-11/FR-12: the byte lane selected by addr[1:0]
 //   cp_dir            both directions on the data port
 //   cp_subword_lane   FR-12: a lane other than 0 is reached by a sub-word access
+//   cp_beat           FR-42/G-22: both beats of a crossing (split) access were
+//                     observed on the bus; a non-split access has no bin
 //   cp_inst           NFR-06/A-09: one bin per instruction of doc/spec.md §4.1
 //
 // Author: Nelson Alves nelsonafn@gmail.com
@@ -175,6 +177,30 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
     }
   endgroup: cg_mem
 
+  // What a cp_beat bin proves (FR-42/G-22, WP-13): the monitor published a beat
+  // that belongs to an access the core split into two word-aligned beats. What
+  // it does not prove: that the two beats were consistent with each other --
+  // that is riscv_small_strb_checker's claim -- so this coverpoint exists to
+  // make the coverage report able to say the split was MEASURED, not merely
+  // checked. `split_beat1` and `split_beat2` must both be hit for that claim:
+  // one bin alone says the core issued one half.
+  //
+  // `iff (beats == 2)` is what keeps the non-split case out. `captured_data_beat`
+  // is 1 for a non-split access too, so a bin on beat 1 without the guard would
+  // be hit by every ordinary access and would prove nothing about the split.
+  // There is deliberately no bin for `beats == 1` (see cp_subword_lane for the
+  // same guards-are-not-bins rule). The width is not a bin: a split SH and a
+  // split SW differ only in the spill arithmetic the strb checker already pins
+  // per width, and `cp_width` already proves both widths were measured.
+  covergroup cg_beat with function sample(int unsigned beat, int unsigned beats);
+    option.per_instance = 1;
+
+    cp_beat: coverpoint beat iff (beats == 2) {
+      bins split_beat1 = {1};
+      bins split_beat2 = {2};
+    }
+  endgroup: cg_beat
+
   // What a cp_inst bin proves: the instruction class reached IF/ID, i.e. the
   // core accepted a fetch of that encoding. What it does not prove:
   // retirement -- `if_id_flush` (rtl/control.sv:246-258) can discard a fetch
@@ -238,6 +264,7 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
   function new(string name, uvm_component parent);
     super.new(name, parent);
     cg_mem = new();
+    cg_beat = new();
     cg_inst = new();
   endfunction: new
 
@@ -258,6 +285,10 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
     cg_mem.sample(cov_trans.captured_data_wr_ctrl[1:0],
                   cov_trans.captured_data_addr[1:0],
                   cov_trans.op_is_data_write);
+    // The split-beat coverpoint samples the same published beat: beat 1/2 of a
+    // crossing access, and nothing when the access was not split.
+    cg_beat.sample(cov_trans.captured_data_beat,
+                   cov_trans.captured_data_beats);
   endfunction: write
 
 endclass: riscv_small_coverage

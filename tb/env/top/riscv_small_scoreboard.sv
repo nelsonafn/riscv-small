@@ -11,7 +11,8 @@
 //   mon_fifo  → STORE observation transactions (from Monitor/DUT)
 //
 // For each STORE observed by the Monitor, the Scoreboard retrieves the next 
-// prediction from the RM queue and compares the address + data.
+// prediction from the RM queue and compares the store contract: the byte
+// address, the byte strobes and the lane-placed data word.
 //
 // The FR-11 store strobe <-> width invariant is NOT here: it lives in
 // riscv_small_strb_checker, which is built with or without a reference model.
@@ -99,15 +100,24 @@ class riscv_small_scoreboard extends uvm_scoreboard;
       // 2. Obtain the next prediction from the Ref Model (blocks until arrival)
       rm_fifo.get(exp_trans);
 
-      // ---- Compare address and data ----------------------------------------
+      // ---- Compare the store contract: address, strobes, lane-placed data ---
+      // The model publishes exactly one prediction per retired store, so the
+      // pairing is 1:1 and positional. The strobes are part of the comparison
+      // because a store's byte lane lives there: a halfword at offset 1 must
+      // strobe 4'b0110, and a strobe of 4'b0011 writes bytes 0-1 instead
+      // (G-34, T-51). riscv_small_strb_checker only proves strobe <-> width
+      // coherence, and 4'b0011 IS a legal halfword pattern, so it cannot see
+      // this; the prediction can.
       if (mon_trans.captured_data_addr == exp_trans.captured_data_addr &&
+          (mon_trans.captured_data_wr_strb & 4'hF) == (exp_trans.captured_data_wr_strb & 4'hF) &&
           mon_trans.captured_data_wr   == exp_trans.captured_data_wr) begin
 
         pass_count++;
         `uvm_info(get_full_name(),
-          $sformatf("[PASS #%0d] SW %0d correct: addr=0x%0h data=0x%0h",
+          $sformatf("[PASS #%0d] STORE %0d correct: addr=0x%0h strb=4'b%04b data=0x%0h",
             pass_count, mon_count,
             mon_trans.captured_data_addr,
+            mon_trans.captured_data_wr_strb,
             mon_trans.captured_data_wr),
           UVM_LOW)
 
@@ -115,10 +125,12 @@ class riscv_small_scoreboard extends uvm_scoreboard;
 
         fail_count++;
         `uvm_error(get_full_name(),
-          $sformatf("[FAIL #%0d] SW %0d wrong:\n  DUT: addr=0x%0h data=0x%0h\n  EXP: addr=0x%0h data=0x%0h",
+          $sformatf("[FAIL #%0d] STORE %0d wrong:\n  DUT: addr=0x%0h strb=4'b%04b data=0x%0h\n  EXP: addr=0x%0h strb=4'b%04b data=0x%0h",
             fail_count, mon_count,
-            mon_trans.captured_data_addr, mon_trans.captured_data_wr,
-            exp_trans.captured_data_addr, exp_trans.captured_data_wr))
+            mon_trans.captured_data_addr, mon_trans.captured_data_wr_strb,
+            mon_trans.captured_data_wr,
+            exp_trans.captured_data_addr, exp_trans.captured_data_wr_strb,
+            exp_trans.captured_data_wr))
 
       end
     end

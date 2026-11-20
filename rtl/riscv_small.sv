@@ -130,8 +130,13 @@ import riscv_definitions_pkg::*;
 
     dataBus_u rd0_data_wb; //[out] Reg destination (rd) data from write back (wb)
 
+    dataBus_u rs2_raw_ma; // Store operand before the lane, source of the second beat (ma)
+    logic [3:0] data_wr_strb_ma; // Byte write strobe of the beat-1 lanes (ma)
+    logic split_stall; // A misaligned access holds MA for its second beat (FR-42)
+    logic ld_split_en; // This cycle completes a split load (FR-42)
+    dataBus_u ld_split_word; // Loaded word assembled from both beats, aligned (FR-42)
+
     assign data_rd_wr_ctrl = access_size(rd_wr_ctrl);
-    assign data_addr = alu_ma;
 
 
     
@@ -220,8 +225,9 @@ import riscv_definitions_pkg::*;
         .pc_ma            (pc_ma),//[out] PC value to memory access (ma)
         .inst_ma          (inst_ma),//[out] Instruction word to memory access (ma)
         .valid_ma         (valid_ma),//[out] Instruction valid in memory access (ma)
-        .rs2_ma           (data_wr), //[out] Reg source two (rs2) data to data memory
-        .data_wr_strb_ma  (data_wr_strb), //[out] Byte write strobe to data memory
+        .rs2_ma           (rs2_ma), //[out] Reg source two (rs2) data to data memory
+        .rs2_raw_ma       (rs2_raw_ma), //[out] Reg source two (rs2) data before the store lane (ma)
+        .data_wr_strb_ma  (data_wr_strb_ma), //[out] Byte write strobe to data memory
         .rd0_wr_en_ma     (rd0_wr_en_ma),//[out] Reg destination (rd) write enable to pipeline to memory access
         .data_rd_en_ma    (data_rd_en_ma),//[out] Data memory read enable (wb_mux_sel) to be used with funct3 
         .data_wr_en_ma    (data_wr_en_ma),//[out] Data memory write enable to be used together with funct3
@@ -238,6 +244,8 @@ import riscv_definitions_pkg::*;
         .inst             (inst_ma),//[in] Instruction word from (ex)
         .valid            (valid_ma),//[in] Instruction valid from (ex)
         .data             (data_rd),//[in] Data from data_memory
+        .split_word       (ld_split_word),//[in] Loaded word assembled from both beats, aligned
+        .split_ld_en      (ld_split_en),//[in] This cycle completes a split load
         .rd0_wr_en        (rd0_wr_en_ma),//[in] Reg destination (rd) write enable from (ex)
         .data_rd_en       (data_rd_en_ma),//[in] Data memory read enable (wb_mux_sel) to be used with funct3  
         .rd_wr_ctrl       (rd_wr_ctrl),//[in] funct3 LOAD from execution (ex)
@@ -255,6 +263,30 @@ import riscv_definitions_pkg::*;
     //Write Back mux
     assign rd0_data_wb = wb_mux_sel_wb? ld_data_wb : alu_wb;
 
+    /* FR-42/G-22: the data port is driven beat by beat. With no crossing access
+     * this is the EX/MA register unchanged (address, lane data and strobe), so
+     * every non-misaligned access behaves exactly as before. */
+    misaligned_split u_misaligned_split (
+        .clk             (clk),//[in] Clock
+        .clk_en          (clk_en),//[in] Clock Enable
+        .rst_n           (rst_n),//[in] Asynchronous reset active low
+        .addr_ma         (alu_ma),//[in] Effective address in memory access (ma)
+        .funct3_ma       (rd_wr_ctrl),//[in] Access width, load or store funct3 (ma)
+        .data_rd_en_ma   (data_rd_en_ma),//[in] Data memory read enable (ma)
+        .data_wr_en_ma   (data_wr_en_ma),//[in] Data memory write enable (ma)
+        .store_data_ma   (rs2_raw_ma),//[in] Store operand in memory access, before the lane (ma)
+        .store_lane_ma   (rs2_ma),//[in] Store operand placed in the beat-1 lanes (ma)
+        .store_strb_ma   (data_wr_strb_ma),//[in] Beat-1 byte write strobe (ma)
+        .data_rd         (data_rd),//[in] Data from data_memory
+        .data_ready      (data_ready),//[in] Indicates that data is ready
+        .data_addr       (data_addr),//[out] Address of the beat on the data port
+        .data_wr         (data_wr),//[out] Store data of the beat
+        .data_wr_strb    (data_wr_strb),//[out] Byte write strobe of the beat
+        .split_stall     (split_stall),//[out] Hold the pipeline while a split beat is outstanding
+        .ld_split_en     (ld_split_en),//[out] This cycle completes a split load
+        .ld_split_word   (ld_split_word)//[out] Loaded word assembled from both beats, aligned
+    );
+
     control u_control (
         .clk              (clk),//[in] Clock
         .clk_en           (clk_en),//[in] Clock Enable
@@ -271,7 +303,9 @@ import riscv_definitions_pkg::*;
         .rd0_wr_en_wb     (rd0_wr_en_wb),//[in] Reg destination (rd) write enable to pipeline
         .data_rd_en_ex    (data_rd_en_ex),//[in] Data memory read enable (wb_mux_sel) to be used with funct3
         .data_rd_en_ma    (data_rd_en_ma),//[in] Data memory read enable (wb_mux_sel) to be used with funct3
+        .data_wr_en_ma    (data_wr_en_ma),//[in] Data memory write enable to be used with funct3
         .data_wr_en_ex    (data_wr_en_ex),//[in] Data memory write enable to be used with funct3
+        .split_stall      (split_stall),//[in] A misaligned access holds MA for its second beat
         .mux_sel_rd_wb    (wb_mux_sel_wb),//[in] Data memory read enable (wb_mux_sel) 
         .cond_jump        (cond_jump),//Used to indicate a conditional branch have been decoded
         .jalr             (jalr),//Used to indicate a JALR have been decoded (rs1 is a source)

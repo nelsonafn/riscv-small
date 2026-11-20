@@ -91,6 +91,13 @@ if {[expr {$latches + $flops}] == 0} {
 set loops "not_measured"
 if {[catch {
     set drc [report_drc -quiet -checks LUTLP-1 -return_string]
+    # Print the block, so "Violations found: 0" is readable from the log the
+    # document cites instead of existing only in a variable.
+    foreach line [split $drc "\n"] {
+        if {[string match "*Violations found:*" $line] || [string match "*LUTLP-1*" $line]} {
+            puts "LINT_DRC: [string trim $line]"
+        }
+    }
     if {[regexp {Violations found:\s+(\d+)} $drc -> n]} {
         set loops $n
     } else {

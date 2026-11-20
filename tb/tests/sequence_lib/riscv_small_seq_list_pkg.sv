@@ -40,6 +40,8 @@ package riscv_small_seq_list_pkg;
   `include "riscv_small_basic_load_store_seq.sv"
   `include "riscv_small_corner_seq.sv"
   `include "riscv_small_subword_seq.sv"
+  `include "riscv_small_halfword_lane_seq.sv"
+  `include "riscv_small_store_grant_seq.sv"
   `include "riscv_small_branch_seq.sv"
   `include "riscv_small_skip3_seq.sv"
   `include "riscv_small_reset_seq.sv"

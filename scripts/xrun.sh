@@ -45,8 +45,8 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG_FILE="${ROOT_DIR}/configure"
 
 # Default Settings (Extracted directly from ./configure)
-TOP_NAME=$(grep -oP '^TOP_NAME="\K[^"]+' "$CONFIG_FILE" || echo "adder_tb_top")
-TEST_NAME=$(grep -oP '^TEST_NAME="\K[^"]+' "$CONFIG_FILE" || echo "adder_basic_test")
+TOP_NAME=$(grep -oP '^TOP_NAME="\K[^"]+' "$CONFIG_FILE" || echo "riscv_small_tb")
+TEST_NAME=$(grep -oP '^TEST_NAME="\K[^"]+' "$CONFIG_FILE" || echo "riscv_small_basic_load_store_test")
 SEED=$(grep -oP '^SEED="\K[^"]+' "$CONFIG_FILE" || echo "1")
 VIVADO_PARMS=$(grep -oP '^VIVADO_PARMS="\K[^"]+' "$CONFIG_FILE" || echo "--R")
 DO_CLEAN=0

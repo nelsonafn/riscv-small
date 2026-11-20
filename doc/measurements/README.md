@@ -9,8 +9,8 @@ that produced it, because a number without its method, date and part is not evid
 | `NFR-02` | [NFR-02-throughput.md](NFR-02-throughput.md) | not measurable |
 | `NFR-03` | [NFR-03-area.md](NFR-03-area.md) | not measurable |
 | `NFR-04` | [NFR-04-power.md](NFR-04-power.md) | not measurable |
-| `NFR-05` | [NFR-05-riscv-tests.md](NFR-05-riscv-tests.md) | measured, 41/42 bundled images (43 run: +1 project-local `jalr_unaligned`); the one failure is `FR-42` |
-| `NFR-06` | [NFR-06-coverage.md](NFR-06-coverage.md) | bins closed, 50/50 report and 40/40 `A-09` bar bins (100 %, `uncovered` empty); the requirement stays `partial` on the `FR` half |
+| `NFR-05` | [NFR-05-riscv-tests.md](NFR-05-riscv-tests.md) | measured, **43/43** (42 bundled + 1 project-local `jalr_unaligned`), 0 failures (2026-11-19, `rv32ui-p-ma_data` included); the requirement stays `partial` on its four suite legs |
+| `NFR-06` | [NFR-06-coverage.md](NFR-06-coverage.md) | bins closed, **52/52** report and 40/40 `A-09` bar bins (100 %, `uncovered` empty); the requirement stays `partial` on the `FR` half |
 | `NFR-07` | [NFR-07-lint.md](NFR-07-lint.md) | measured: 0 latches, 0 loops (2026-11-18) |
 
 ## Contract

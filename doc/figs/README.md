@@ -17,8 +17,8 @@ figure by ID, and this file records how each **non-Mermaid** figure is produced 
 | Source | Artefact | Tool | Status | Used by |
 |---|---|---|---|---|
 | `architecture-legacy.drawio` | `architecture-legacy.png` | drawio | frozen | none — historical reference |
-| `wave/t1-load-use-stall.json5` | `wave/t1-load-use-stall.svg` | wavedrom-cli 3, default skin, `hscale: 3` | as-built | `uarch.md` section 7.5 |
-| `wave/t2-branch-flush.json5` | `wave/t2-branch-flush.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.5 |
+| `wave/t1-load-use-stall.json5` | `wave/t1-load-use-stall.svg` | wavedrom-cli 3, default skin, `hscale: 3` | as-built | `uarch.md` section 7.6 |
+| `wave/t2-branch-flush.json5` | `wave/t2-branch-flush.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.6 |
 | `wave/t3-fetch-stall.json5` | `wave/t3-fetch-stall.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.1 |
 
 The three timing figures are **as-built**: each draws the behaviour of `rtl/`, and where the RTL

@@ -19,6 +19,12 @@
 // decides PASS/FAIL, never raises a report error and never feeds the reference
 // model. The verdict belongs to the checker (sanity) or the scoreboard
 // (directed).
+//
+// `data_ready_delay` (config_db, default 0) is how many clock edges the data
+// port withholds the grant after an access is first presented (WP-13 P3,
+// FR-38/G-18). At 0 the answer goes out on the first edge, byte-identically to
+// before the option existed; the delay is the TEST's stimulus, never the BFM's
+// opinion.
 // ============================================================================
 class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
 
@@ -58,6 +64,29 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
   bit warned_iaddr_oor;   // directed path: first fetch outside the program only
   bit program_entered;    // directed path: a program address has been answered
 
+  // ---- Data-port protocol (WP-13 P3, FR-38/G-18) ---------------------------
+  // How many clock edges the BFM withholds `data_ready` after an access is
+  // first presented. Configuration, default 0 = answer on the first edge, the
+  // behaviour the 47 tests before T-53 were written against.
+  int unsigned data_ready_delay;
+
+  int unsigned data_wait;       // edges the current access has been withheld
+  bit          data_inflight;   // an access is on the bus and not yet answered
+  bit          data_answered;   // the access on the bus already has its answer
+  bit          data_sig_read;   // what identifies the access on the bus
+  bit          data_sig_write;
+  logic [31:0] data_sig_addr;
+  logic [31:0] data_sig_wr;
+  logic [3:0]  data_sig_strb;
+
+  function bit data_same_access();
+    if (data_sig_read != vif.data_rd_en)   return 1'b0;
+    if (data_sig_write != vif.data_wr_en)  return 1'b0;
+    if (data_sig_addr != vif.data_addr.u_data) return 1'b0;
+    if (!data_sig_write) return 1'b1;
+    return (data_sig_strb == vif.data_wr_strb) && (data_sig_wr == vif.data_wr.u_data);
+  endfunction
+
   function new (string name, uvm_component parent);
     super.new(name, parent);
   endfunction
@@ -71,6 +100,10 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       mem_mode = 0;
     if (!uvm_config_db#(bit)::get(this, "", "trace", trace))
       trace = 0;
+    // WP-13 P3: the grant delay is the test's decision. Absent, it is 0 and the
+    // directed memory answers exactly as it did before this option existed.
+    if (!uvm_config_db#(int unsigned)::get(this, "", "data_ready_delay", data_ready_delay))
+      data_ready_delay = 0;
     // The image base is configuration, and it must exist: without it an
     // absolute address has no index, and guessing 0 is the defect this WP
     // removes. The top owns the single source (`duv.RESET_VECTOR`).
@@ -107,6 +140,47 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       if (strb[b]) word[8*b +: 8] = data[8*b +: 8];
     return word;
   endfunction
+
+  // One data access, one answer: read the word the item declared, or apply the
+  // DUT's byte strobes to the declared word, then raise the grant for exactly
+  // one cycle. `found` is about the program's declared addresses, not about the
+  // protocol: an address the item did not declare is answered with a warning and
+  // no grant, exactly as before WP-13.
+  task automatic answer_data_access();
+    bit found = 0;
+    foreach (req.data_addr[i]) begin
+      if (req.data_addr[i] == vif.data_addr.u_data) begin
+        if (vif.data_rd_en) begin
+          vif.data_rd.u_data <= #INPUT_DELAY req.data_list[i];
+          `uvm_info("DFETCH_DRV", $sformatf("ADDR='h%0h DATA='h%0h", vif.data_addr.u_data, req.data_list[i]), UVM_LOW);
+        end else begin
+          logic [31:0] stored;
+          stored = apply_strobes(req.data_list[i],
+                                 vif.data_wr.u_data,
+                                 vif.data_wr_strb,
+                                 vif.data_addr.u_data);
+          // Byte-addressed aliasing: the core presents a BYTE address, so
+          // a store at 0x411 and the read-back at 0x410 name the same
+          // memory word. The item declares one entry per byte address a
+          // program names, so the write is mirrored into every declared
+          // entry of that word -- otherwise a load after a store returns
+          // the pre-store value and no store/load pair could be checked.
+          // A real memory applies the strobes to the word; this is that
+          // word, seen through the addresses the item declared.
+          foreach (req.data_addr[j])
+            if ((req.data_addr[j] >> 2) == (vif.data_addr.u_data >> 2))
+              req.data_list[j] = stored;
+          `uvm_info("DSTORE_DRV", $sformatf("ADDR='h%0h DATA='h%0h STRB=0b%04b WORD='h%0h", vif.data_addr.u_data, vif.data_wr.u_data, vif.data_wr_strb, stored), UVM_LOW);
+        end
+        vif.data_ready <= #INPUT_DELAY 1;
+        found = 1;
+        break;
+      end
+    end
+    if (!found) begin
+      `uvm_warning("DATA_OOR_DRV", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h, DATA_ADDRs=%s, DATA_VECTOR=%s, R/W=%s", vif.data_addr.u_data, to_hex_list(req.data_addr), to_hex_list(req.data_list), vif.data_rd_en ? "READ" : "WRITE"));
+    end
+  endtask
 
   virtual task run_phase(uvm_phase phase);
     reset();
@@ -195,31 +269,72 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
         end
       end
       // Thread 2: Data
+      //
+      // WP-13 P3 (FR-38/G-18): the grant is a per-ACCESS decision, not a
+      // per-cycle echo. `data_ready_delay` is how many clock edges the BFM
+      // withholds the grant after an access is first presented; at 0 the answer
+      // goes out on that first edge, which is the behaviour every test written
+      // before T-53 relies on. The delay belongs to the test (config_db), never
+      // to the BFM: this driver only obeys it.
+      //
+      // An access is answered ONCE. A store the core holds until the grant
+      // stays on the bus for as many cycles as the wait takes, and answering it
+      // again would write the memory twice for one store. The signature of the
+      // access on the bus is what distinguishes "the same store, still waiting"
+      // from "the next store": the request fields the core drives, not the read
+      // data the memory answers with.
       forever begin : data_mem_thread
         @(posedge vif.clk);
         vif.data_ready <= #INPUT_DELAY 0; // Default
-        if (vif.data_rd_en || vif.data_wr_en) begin
-          bit found = 0;
-          foreach (req.data_addr[i]) begin
-            if (req.data_addr[i] == vif.data_addr.u_data) begin
-              if (vif.data_rd_en) begin
-                vif.data_rd.u_data <= #INPUT_DELAY req.data_list[i];
-                `uvm_info("DFETCH_DRV", $sformatf("ADDR='h%0h DATA='h%0h", vif.data_addr.u_data, req.data_list[i]), UVM_LOW);
-              end else begin
-                req.data_list[i] = apply_strobes(req.data_list[i],
-                                                  vif.data_wr.u_data,
-                                                  vif.data_wr_strb,
-                                                  vif.data_addr.u_data);
-                `uvm_info("DSTORE_DRV", $sformatf("ADDR='h%0h DATA='h%0h STRB=0b%04b", vif.data_addr.u_data, vif.data_wr.u_data, vif.data_wr_strb), UVM_LOW);
-              end
-              vif.data_ready <= #INPUT_DELAY 1;
-              found = 1;
-              break;
-            end
+
+        // No access on the bus: nothing is waiting, and the next presentation
+        // is a new access.
+        if (!(vif.data_rd_en || vif.data_wr_en)) begin
+          data_inflight = 0;
+          data_answered = 0;
+          data_wait     = 0;
+          continue;
+        end
+
+        // The access on the bus already carries its answer. This is the cycle
+        // after the grant went out; the core advances on the next edge, so
+        // answering it again is a second store for one.
+        if (data_answered && data_same_access()) continue;
+
+        // The same access, still withheld: answer when the delay has elapsed.
+        if (data_inflight && data_same_access()) begin
+          if (data_wait >= data_ready_delay) begin
+            answer_data_access();
+            data_inflight = 0;
+            data_answered = 1;
+          end else begin
+            data_wait++;
           end
-          if (!found) begin
-            `uvm_warning("DATA_OOR_DRV", $sformatf("ADDR_OUT_OF_RANGE: ADDR='h%0h, DATA_ADDRs=%s, DATA_VECTOR=%s, R/W=%s", vif.data_addr.u_data, to_hex_list(req.data_addr), to_hex_list(req.data_list), vif.data_rd_en ? "READ" : "WRITE"));
-          end
+          continue;
+        end
+
+        // A new access: remember what identifies it, then answer now when no
+        // delay applies to it.
+        data_inflight  = 1;
+        data_answered  = 0;
+        data_wait      = 0;
+        data_sig_read  = vif.data_rd_en;
+        data_sig_write = vif.data_wr_en;
+        data_sig_addr  = vif.data_addr.u_data;
+        data_sig_wr    = vif.data_wr.u_data;
+        data_sig_strb  = vif.data_wr_strb;
+        // The delay is the STORE contract (FR-38) and nothing else. A read
+        // keeps the historical answer on its first edge: the core evaluates
+        // its data_ready stall one cycle after the load left MA
+        // (rtl/control.sv:288 reads the WB slot's mux select), so a read grant
+        // this memory withholds is lost before the core can use it -- that is
+        // a separate defect (FR-21's wait state), reported and not claimed
+        // here, and withholding a read would turn T-53 into a timeout instead
+        // of an FR-38 verdict.
+        if (data_ready_delay == 0 || !vif.data_wr_en) begin
+          answer_data_access();
+          data_inflight = 0;
+          data_answered = 1;
         end
       end
 

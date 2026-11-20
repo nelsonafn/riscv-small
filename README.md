@@ -96,10 +96,10 @@ same command works from the project root or from inside `build/`.
 
 | Command | What it does |
 |---|---|
-| `make regress` | runs the manifest through CTest, writes `build/regress/<run>/results.json` (per-test log, `rtl_digest`, `tb_digest`) |
+| `make regress` | runs the **49-row** manifest (`scripts/verify/tests.tsv`) through CTest, writes `build/regress/<run>/results.json` (per-test log, `rtl_digest`, `tb_digest`) |
 | `make regress REGRESS_ARGS="--test T-06"` | one test |
 | `make coverage` | builds an instrumented snapshot, runs the manifest tests and merges the databases with `xcrg` into `build/cov_report/summary.json` |
-| `make sanity` | runs the bundled `rv32ui-p-*` images (plus the project-local `scripts/verify/sanity/local/*.S`) through the core and records `build/sanity/summary.json` (`NFR-05`); 41 of the 42 bundled pass today, the one failure is triaged in `doc/measurements/NFR-05-riscv-tests.md` |
+| `make sanity` | runs the bundled `rv32ui-p-*` images (plus the project-local `scripts/verify/sanity/local/*.S`) through the core and records `build/sanity/summary.json` (`NFR-05`); 42 of the 42 bundled pass (43 of 43 runs, the extra being the project-local image); triage in `doc/measurements/NFR-05-riscv-tests.md` |
 | `make negative-control` | rebuilds each covered defect and proves the test fails on it (`build/red/<T-id>/results.json`) |
 | `make signoff-check` | the release gate: all 11 checks, report in `build/signoff/report.md` |
 | `make signoff-check SIGNOFF_ARGS="--wp 0"` | the gate of one work package: checks 1-5, 7 and 11 (6 and 8-10 are release evidence, reported as `skipped`) |
@@ -117,7 +117,7 @@ The gate never pretends to pass. It answers with an exit code and a report:
 - exit `2` when the gate itself could not run.
 
 `not-measurable` is a blocker, never a pass. The release gate is expected to stay `blocked` until every requirement is
-`verified` (`A-09`) and `NFR-05`/`NFR-07` can be measured. `NFR-05` is now **measured** (41 of the 42 bundled images pass, over 43 runs
+`verified` (`A-09`) and `NFR-05`/`NFR-07` can be measured. `NFR-05` is now **measured** (42 of the 42 bundled images pass, over 43 runs
 including one project-local image); the one remaining failure is `FR-42` (`rv32ui-p-ma_data`).
 
 ### Why "red" evidence is reproducible
@@ -224,7 +224,8 @@ $ make compile_sanity_images           # every rv32ui-p-* image
 **3. Test Payload:**
 The ELF, hex, `tohost` address and disassembly are written to `build/sanity_tests/{isa,hex,tohost,dump}/<image>`.
 The test reads `+HEX`, the sequence builds the program item, the driver is the memory BFM and the
-`riscv_small_sanity_checker` decides from the monitor. `make sanity` runs the 42 bundled images plus the local ones; each run ends with
-`SANITY: PASS` or `SANITY: FAIL testnum=<n>` (a missing store is `SANITY: TIMEOUT`). The current baseline is 41/42 bundled; the
-triage is in `doc/measurements/NFR-05-riscv-tests.md`, and the release gate reports it as `blocked` until the images
-pass.
+`riscv_small_sanity_checker` decides from the monitor. `make sanity` runs the 43 images (the 42 bundled plus the project-local one); each run ends with
+`SANITY: PASS` or `SANITY: FAIL testnum=<n>` (a missing store is `SANITY: TIMEOUT`). The current baseline is **42/42 bundled (43/43 runs)** at RTL `sha256:f84ea86b...`. Nothing on the data path
+fails any more: the split (`FR-42`) and the store grant wait (`FR-38`) landed in WP-13. The remaining data-port
+defect is **`G-35`** — a read whose grant is withheld for two cycles or more is lost. The release gate reports
+`blocked` until the FR gaps close (`A-09`), not because of a sanity image.

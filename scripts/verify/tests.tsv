@@ -110,3 +110,35 @@ T-47	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:alu-ignore-rs2	spike:rv32u
 T-48	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:negative-branch	spike:rv32ui-p-beq
 T-49	riscv_small_sanity_test	9	G-04,NFR-05	300	mutant:store-lane-offset	spike:rv32ui-p-st_ld
 T-50	riscv_small_reset_vector_test	11	FR-41,G-33	300	mutant:reset-vector-zero
+
+# wp 13 P1 (FR-11/FR-12/G-34): the halfword lane ignores addr[0] in both directions, so a
+# LH/LHU at byte offset 1 takes bytes 0-1 and a SH at offset 1 strobes 0011 where 0110 is
+# required. Offset 1 ONLY: a halfword at offset 3 spans bytes 3-4 and crosses the word, which
+# is the split (FR-42/G-22, T-52) and belongs to P6. The mutant `halfword-lane-ignore-bit0`
+# is two rows in `mutants.tsv` (load lane + store strobe), the halves the P2 fix repairs.
+T-51	riscv_small_halfword_lane_test	13	FR-11,FR-12,G-34	300	mutant:halfword-lane-ignore-bit0
+
+# wp 13 P3 (FR-38/G-18): the store does not wait for the data grant. Pre-fix,
+# rtl/control.sv:288 gated the `data_ready` stall on the load destination, so a store drove
+# its strobe for one cycle whatever the grant did (the fix is rtl/control.sv:294).
+# T-53 configures the memory BFM to withhold the grant
+# for two cycles (config_db, default 0 = today's behaviour) and riscv_small_store_grant_checker
+# judges the monitor's per-access publication: a write that ended without a grant was
+# accepted before it. The scoreboard is green in both worlds (address, strobes and data are
+# right; the completion is not), which is why the claim has a protocol checker of its own.
+# red=mutant:store-grant-ignored (wp 13 P4b) reverts the fix: it ties the store term of
+# the stall condition to 1'b0, which is the pre-fix `!data_ready && mux_sel_rd_wb`. The
+# fix's line cannot be the `find` itself because a cell may not carry `||` (mutants.tsv).
+T-53	riscv_small_store_grant_test	13	FR-38,G-18	300	mutant:store-grant-ignored
+
+# wp 13 P5 (FR-42/G-22): the split. rv32ui-p-ma_data is the one image in the corpus
+# with odd offsets; since P2's halfword lane it gets past cases 1-2 (`lh`/`lhu` at
+# offset 1) and stops at MISALIGNED_LOAD_TEST(3, lw, s0, 1) -- the first WORD that
+# crosses the word boundary, emitted today as one beat at the unaligned address.
+# The verdict is the image's own tohost: no new TB class, the sanity checker judges.
+# red=mutant:no-misaligned-split (P6) reverts the crossing detection, so the image is
+# back to one beat at the unaligned address and reports testnum=3. The TB half of P6b
+# (monitor beat index + strb checker low-bytes/high-bytes rule) is what turns the run
+# green at the same RTL: before it, the image stored the pass value and the run still
+# failed on 99 STRB_WIDTH errors from the partial beats.
+T-52	riscv_small_sanity_test	13	FR-42,G-22	300	mutant:no-misaligned-split	sanity:rv32ui-p-ma_data

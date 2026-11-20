@@ -65,6 +65,7 @@ import riscv_definitions_pkg::*;
     output instruction_u inst_ma, //[out] Instruction word to memory access (ma)
     output logic valid_ma, //[out] Instruction valid to memory access (ma)
     output dataBus_u rs2_ma, //[out] Reg source two (rs2) data
+    output dataBus_u rs2_raw_ma, //[out] Reg source two (rs2) data before the store lane (ma)
     output logic [3:0] data_wr_strb_ma, //[out] Byte write strobe to memory access (ma)
 	output logic rd0_wr_en_ma,//[out] Reg destination (rd) write enable to pipeline to memory access
     output logic data_rd_en_ma, //[out] Data memory read enable (wb_mux_sel) to be used with funct3 
@@ -110,6 +111,7 @@ import riscv_definitions_pkg::*;
             funct3_ma <= LB;
             rd0_addr_ma <= '0;
             rs2_ma <= '0;
+            rs2_raw_ma <= '0;
             data_wr_strb_ma <= 4'b0000;
         end: proc_ex_ma_rst
         else if (clk_en) begin
@@ -123,6 +125,7 @@ import riscv_definitions_pkg::*;
             funct3_ma <= funct3;
             rd0_addr_ma <= rd0_addr;
             rs2_ma <= rs2_lane;
+            rs2_raw_ma <= rs2_pipeline;
             data_wr_strb_ma <= data_wr_strb_ex;
         end        
     end: proc_ex_ma
@@ -209,12 +212,27 @@ import riscv_definitions_pkg::*;
                     data_wr_strb_ex = 4'b0001 << alu_result.u_data[1:0];
                 end
                 ACCESS_HALF: begin
-                    rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1], 4'b0000};
-                    data_wr_strb_ex = 4'b0011 << {alu_result.u_data[1], 1'b0};
+                    /* A halfword is byte-granular: offset 1 occupies bytes 1-2
+                     * of the same word, so both the rotation and the strobe use
+                     * 8 * addr[1:0], not 16 * addr[1]. Offset 3 spans bytes 3-4
+                     * and crosses the word -- that is the misaligned split
+                     * (FR-42/G-22, WP-13 P6), not a lane. The shift and the
+                     * 4-bit strobe stay defined there: byte 3 is written
+                     * (4'b1000) with the low byte at lane 3, and the byte at
+                     * offset 4 is not written until P6 issues the second beat. */
+                    rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1:0], 3'b000};
+                    data_wr_strb_ex = 4'b0011 << alu_result.u_data[1:0];
                 end
                 ACCESS_WORD: begin
-                    rs2_lane = rs2_pipeline;
-                    data_wr_strb_ex = 4'b1111;
+                    /* A word is byte-granular as well: at offset 1 it occupies
+                     * bytes 1-3 of the addressed word and crosses it, so the
+                     * beat carries the operand rotated into those lanes and
+                     * the byte at offset 4 is left for the second beat
+                     * (FR-42/G-22, WP-13 P6). At offset 0 the rotation and the
+                     * strobe are the identity, which is the unaligned-in-word
+                     * word store every test before this WP performs. */
+                    rs2_lane.u_data = rs2_pipeline.u_data << {alu_result.u_data[1:0], 3'b000};
+                    data_wr_strb_ex = 4'b1111 << alu_result.u_data[1:0];
                 end
                 default: begin
                     rs2_lane = rs2_pipeline;

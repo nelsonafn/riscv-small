@@ -48,6 +48,8 @@ import riscv_definitions_pkg::*;
     input instruction_u inst, //[in] Instruction word from execution (ex)
     input logic valid, //[in] Instruction valid from execution (ex)
     input dataBus_u data, //[in] Data from data_memory
+    input dataBus_u split_word, //[in] Loaded word assembled from both beats, aligned (FR-42)
+    input logic split_ld_en, //[in] This cycle completes a split load (FR-42)
     input logic rd0_wr_en,//[in] Reg destination (rd) write enable from (ex)
     input logic data_rd_en, //[in] Data memory read enable (wb_mux_sel) to be used with funct3  
     input funct3ITypeLOAD_e rd_wr_ctrl, //[in] funct3 LOAD from execution (ex)
@@ -65,14 +67,43 @@ import riscv_definitions_pkg::*;
     //dataBus_u ld_data;
     funct3ITypeLOAD_e rd_wr_ctrl_wb;
 
+    /* Split load (FR-42/G-22): the MA/WB registers below mark the load whose
+     * beats were assembled by misaligned_split, and carry its aligned word. */
+    logic split_wb;
+    dataBus_u split_word_wb;
+
     /* Byte lane of the word the data memory returned for this load.
      * alu_wb is the effective address registered in the same cycle as
      * rd_wr_ctrl_wb, so it stays aligned with `data` while the load is in WB.
      * dataBus_u declares its byte array as [0:3] (index 0 = bits [31:24]), so
      * the lane is taken from an indexed part-select of u_data instead of a
-     * byte-array index: offset 0 is bits [7:0], offset 3 is bits [31:24]. */
+     * byte-array index: offset 0 is bits [7:0], offset 3 is bits [31:24].
+     * A split load presents an ALIGNED word in ld_word (the merge of both
+     * beats puts the accessed bytes at bit 0), so its lane is 0. */
     logic [1:0] ld_lane;
-    assign ld_lane = alu_wb.u_data[1:0];
+    assign ld_lane = split_wb ? 2'd0 : alu_wb.u_data[1:0];
+
+    /* Byte lane of a HALFWORD load. A halfword is byte-granular, so its lane is
+     * the address lane: offset 1 reads bytes 1-2 of the same word. Offset 3
+     * would span bytes 3-4, i.e. it crosses the word, and `8 * lane +: 16`
+     * would then select bits [39:24], of which [39:32] do not exist. That
+     * access is the misaligned split (FR-42/G-22, WP-13 P6), so until the split
+     * issues the second beat the lane is clamped to 2: offset 3 reads the upper
+     * halfword, which is defined (and is the value the pre-fix
+     * halfword-granular lane produced there) instead of an out-of-range
+     * part-select. */
+    logic [1:0] ld_lane_half;
+    assign ld_lane_half = (ld_lane == 2'd3) ? 2'd2 : ld_lane;
+
+    /* Word the load extension reads: the memory's answer, or the aligned word
+     * the two split beats assembled. It is registered through MA/WB in the same
+     * edge as rd_wr_ctrl_wb/alu_wb, so it stays aligned with them. */
+    dataBus_u ld_word;
+
+    always_comb begin: proc_ld_word
+        ld_word = data;
+        if (split_wb) ld_word.u_data = split_word_wb.u_data;
+    end: proc_ld_word
 
     always_ff @(posedge clk or negedge rst_n) begin: proc_ma_wb
         if (!rst_n) begin: proc_ma_wb_rst
@@ -84,6 +115,8 @@ import riscv_definitions_pkg::*;
             pc_wb <= '0;
             inst_wb <= '0;
             valid_wb <= '0;
+            split_wb <= '0;
+            split_word_wb <= '0;
         end: proc_ma_wb_rst
         else if (clk_en) begin
             //ld_data_wb <= ld_data;
@@ -95,28 +128,30 @@ import riscv_definitions_pkg::*;
             pc_wb <= pc;
             inst_wb <= inst;
             valid_wb <= valid;
+            split_wb <= split_ld_en;
+            split_word_wb <= split_word;
         end        
     end: proc_ma_wb
     
     always_comb begin: load_extension
         case (rd_wr_ctrl_wb)
             LB: begin
-                ld_data_wb.s_data = $signed(data.u_data[8 * ld_lane +: 8]);
+                ld_data_wb.s_data = $signed(ld_word.u_data[8 * ld_lane +: 8]);
             end
             LH: begin
-                ld_data_wb.s_data = $signed(data.u_data[16 * ld_lane[1] +: 16]);
+                ld_data_wb.s_data = $signed(ld_word.u_data[8 * ld_lane_half +: 16]);
             end
             LW: begin
-                ld_data_wb.s_data = data.s_data;
+                ld_data_wb.s_data = ld_word.s_data;
             end
             LBU: begin
-                ld_data_wb.u_data = data.u_data[8 * ld_lane +: 8];
+                ld_data_wb.u_data = ld_word.u_data[8 * ld_lane +: 8];
             end
             LHU: begin
-                ld_data_wb.u_data = data.u_data[16 * ld_lane[1] +: 16];
+                ld_data_wb.u_data = ld_word.u_data[8 * ld_lane_half +: 16];
             end
             default: begin
-                ld_data_wb.s_data = data.s_data;
+                ld_data_wb.s_data = ld_word.s_data;
             end
         endcase
         
