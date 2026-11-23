@@ -20,15 +20,20 @@ figure by ID, and this file records how each **non-Mermaid** figure is produced 
 | `wave/t1-load-use-stall.json5` | `wave/t1-load-use-stall.svg` | wavedrom-cli 3, default skin, `hscale: 3` | as-built | `uarch.md` section 7.6 |
 | `wave/t2-branch-flush.json5` | `wave/t2-branch-flush.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.6 |
 | `wave/t3-fetch-stall.json5` | `wave/t3-fetch-stall.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.1 |
+| `wave/t4-trap-entry.json5` | `wave/t4-trap-entry.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.6 |
+| `wave/t5-zicsr-timing.json5` | `wave/t5-zicsr-timing.svg` | wavedrom-cli 3, default skin, `hscale: 2` | as-built | `uarch.md` section 7.11 |
 
-The three timing figures are **as-built**: each draws the behaviour of `rtl/`, and where the RTL
+The five timing figures are **as-built**: each draws the behaviour of `rtl/`, and where the RTL
 diverges from `spec.md` the caption names the gap. T3 names the open `G-09`, the fetch stall that
 does not exist; T1 names `G-19` only as history, because WP-6 closed it on 2026-11-05, and then
 states the as-built behaviour that closed it: the register file is clocked by `clk_en_wb`, so the
 write in WB commits through a load-use insertion. They are hand-derived from the enable and flush
 expressions in `rtl/control.sv`, not captured from a simulation trace. The `wavedrom-timing` skill
 fixes no colour configuration, so they use the documented WaveDrom default skin and differ only in
-`hscale`.
+`hscale`. T4 draws the WP-14 trap entry and the echo flush that discards the fetch in flight — the
+second flush is the whole claim, and the caption records that the first version observed 4 of 6
+traps without it. T5 draws the same-edge CSR read/write, which is why a `CSR*` pair needs no bubble
+and why a consumer of the read value is served by the ordinary EX/MA forward.
 
 ## Frozen figures
 
@@ -41,7 +46,7 @@ A PNG is used instead of an SVG because the vector export is ~843 kB for a file 
 | Figure | Why it is not Mermaid |
 |---|---|
 | `architecture-legacy` | pre-existing drawio file kept for history; not a live document figure |
-| `wave/t1-load-use-stall`, `wave/t2-branch-flush`, `wave/t3-fetch-stall` | cycle-level timing: the figure contract reserves WaveDrom for time and Mermaid for structure, so these are not an exception to the rule |
+| `wave/t1-load-use-stall`, `wave/t2-branch-flush`, `wave/t3-fetch-stall`, `wave/t4-trap-entry`, `wave/t5-zicsr-timing` | cycle-level timing: the figure contract reserves WaveDrom for time and Mermaid for structure, so these are not an exception to the rule |
 
 ## Checks
 

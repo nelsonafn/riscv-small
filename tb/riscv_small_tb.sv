@@ -27,7 +27,23 @@ module riscv_small_tb;
   
   // Add clock enables manually required by DUT
   logic clk_en = 1;
-  logic exception = 0;
+
+  // WP-14 §2.5 / WP-14b (audit blocker 3, FR-22): the external trap cause is a
+  // 4-bit DUT input, and it is NOT a local constant of this top. `exception`
+  // lives on riscv_small_interface: the DRIVER asserts it for the cycle the
+  // sequence scheduled, and the MONITOR observes the same wire and publishes it
+  // with the trap event, so the reference model predicts the external cause from
+  // the observation (D13) and a test can reach the pin without editing this
+  // file. Before WP-14b this port was tied to a local `'0`: the external arm of
+  // proc_trap_priority had no observation at all, and no test could give it one
+  // (G-37).
+  //
+  // WP-14 §2.5: the CSR file's time base and this hart's id are DUT inputs too.
+  // They are carried by riscv_small_interface (see the comment there): the
+  // DRIVER drives them from the test's configuration and the MONITOR observes
+  // the same wire, which is what D13 requires -- the model predicts `time` and
+  // `mhartid` from what the monitor saw, never from configuration. A passive
+  // agent has no driver, so the interface's initialiser holds both at zero.
 
   // The monitor reads clk_en to gate both sides of the instruction handshake
   // (wp-8 §3.1.3 R10). The interface signal was never driven, so it stayed x
@@ -49,11 +65,27 @@ module riscv_small_tb;
     .ma_wb_clk_en (ma_wb_clk_en)
   );
 
+  // Trap observation (WP-14 §4.2, E6): the trapping instruction is flushed
+  // before write-back and never retires, so the retire probe above cannot see
+  // it and a model fed only by retire would miss the trap entirely. The entry
+  // is probed here instead, beside the commit probe and for the same reason:
+  // no new port on the synthesizable top. The probe derives nothing -- the
+  // event is trap_valid itself.
+  bind riscv_small riscv_small_trap_if u_trap (
+    .clk        (clk),
+    .trap_valid (trap_valid),
+    .trap_pc    (trap_pc),
+    .trap_inst  (trap_inst),
+    .trap_cause (trap_cause)
+  );
+
   riscv_small duv(
     .clk(clk),
     .clk_en(clk_en),
     .rst_n(rst_n),
-    .exception(exception),
+    .exception(intf.exception),
+    .mtime(intf.mtime),
+    .hart_id(intf.hart_id),
 
     // Instruction Memory controls
     .inst_ready(intf.inst_ready),
@@ -80,6 +112,9 @@ module riscv_small_tb;
     uvm_config_db#(virtual riscv_small_interface)::set(uvm_root::get(), "*", "intf", intf);
     // The bound probe is read through a virtual interface, exactly like intf.
     uvm_config_db#(virtual riscv_small_retire_if)::set(uvm_root::get(), "*", "retire_vif", duv.u_retire);
+    // WP-14 §4.2: the trap probe, read the same way. The monitor publishes the
+    // event it carries; nothing else in the environment touches it.
+    uvm_config_db#(virtual riscv_small_trap_if)::set(uvm_root::get(), "*", "trap_vif", duv.u_trap);
     // FR-41 / G-33: publish the value the DUT actually elaborated with. This is
     // the ONE source of the expected reset vector in the testbench -- T-50
     // compares against it and no test or checker repeats the spec default. A

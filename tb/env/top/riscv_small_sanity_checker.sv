@@ -98,6 +98,9 @@ class riscv_small_sanity_checker extends uvm_component;
       if (h.op_is_inst)
         $display("SANITY: HISTORY IFETCH pc=0x%08h inst=0x%08h",
                  h.captured_inst_addr, h.captured_inst_data);
+      else if (h.op_is_trap)
+        $display("SANITY: HISTORY TRAP   pc=0x%08h inst=0x%08h cause=%0d",
+                 h.trap_pc, h.trap_inst, h.trap_cause);
       else if (h.op_is_data_write)
         $display("SANITY: HISTORY DWRITE addr=0x%08h data=0x%08h",
                  h.captured_data_addr, h.captured_data_wr);

@@ -5,9 +5,11 @@
 //
 // ONLY THE MONITOR FEEDS THE REFERENCE MODEL (C-16, AGENTS.md responsibility 9).
 // The model subscribes to `mon2sb_port` and executes the retire events it finds
-// there; there is no path from the sequence or from the driver into it. The
-// program image the test/sequence fills is configuration, not a stream, and is
-// read by the model for its initial data memory only.
+// there, and since WP-14 also the trap events; there is no path from the
+// sequence or from the driver into it. The program image the test/sequence
+// fills is configuration, not a stream, and is read by the model for its
+// initial data memory only. The platform straps `mtime`/`hart_id` reach the
+// model the same way -- on the events the monitor publishes (D13).
 //
 // There is no program path from the environment into the model: the sequences
 // only fill the `program_image` configuration object, which the checkers and

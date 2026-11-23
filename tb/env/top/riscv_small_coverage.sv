@@ -15,6 +15,15 @@
 //   cp_beat           FR-42/G-22: both beats of a crossing (split) access were
 //                     observed on the bus; a non-split access has no bin
 //   cp_inst           NFR-06/A-09: one bin per instruction of doc/spec.md §4.1
+//   cp_csr_op         FR-47: the six Zicsr instructions were EXECUTED (sampled on
+//                     the retire and trap streams, never on a fetch)
+//   cp_csr_group      FR-50: each of the five address groups was accessed
+//   cp_trap_cause     FR-24/FR-25: cause 2 illegal, 3 breakpoint, 11 ECALL
+//
+// The CSR coverpoints sample the RETIRE and TRAP streams, not the fetch stream:
+// a fetched `CSRRW` proves the decoder saw the encoding, an executed one proves
+// the instruction reached write-back (or trapped). The fetch stream cannot tell
+// the two, and `cg_inst` already covers it.
 //
 // Author: Nelson Alves nelsonafn@gmail.com
 // ============================================================================
@@ -261,14 +270,124 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
     }
   endgroup: cg_inst
 
+  // ---------------------------------------------------------------------------
+  // WP-14: CSR and trap coverage (FR-47, FR-50, FR-24, FR-25)
+  // ---------------------------------------------------------------------------
+  // What a cp_csr_op bin proves: the core EXECUTED that Zicsr instruction --
+  // the retire stream carried it, or the trap stream did. What it does not
+  // prove: that the read-modify-write semantics were right (the scoreboard's
+  // claim). `csrr*` is decoded from the instruction word the monitor published,
+  // so a fetch of the encoding cannot hit a bin: `cg_inst` already covers the
+  // decoder seeing it.
+  //
+  // What a cp_csr_group bin proves: the machine-mode address map of FR-50 was
+  // actually reached, group by group, including an address the configuration
+  // does not implement. The classification is by ADDRESS, never by outcome, so
+  // an implemented trap/status address and the unimplemented `medeleg` (0x302)
+  // that lives in the same 0x300 window land in different bins.
+  localparam bit [2:0] CSR_OP_NONE   = 3'd6;
+  localparam bit [2:0] CSR_GRP_TSTATUS = 3'd0; // trap and status   0x300..0x344
+  localparam bit [2:0] CSR_GRP_COUNTER = 3'd1; // counters          0xB00/0xC00
+  localparam bit [2:0] CSR_GRP_ID      = 3'd2; // identification    0xF11..0xF15
+  localparam bit [2:0] CSR_GRP_PERF    = 3'd3; // performance       0xB03../0x323..
+  localparam bit [2:0] CSR_GRP_ILLEGAL = 3'd4; // anything else: not implemented
+
+  function bit is_csr_access(int word);
+    return (word[6:0] == 7'b1110011) && (word[14:12] != 3'b000);
+  endfunction
+
+  // CSRRW=0 CSRRS=1 CSRRC=2 CSRRWI=3 CSRRSI=4 CSRRCI=5, CSR_OP_NONE otherwise.
+  function bit [2:0] csr_op_code(int word);
+    if (!is_csr_access(word)) return CSR_OP_NONE;
+    case (word[14:12])
+      3'b001: return 3'd0; // CSRRW
+      3'b010: return 3'd1; // CSRRS
+      3'b011: return 3'd2; // CSRRC
+      3'b101: return 3'd3; // CSRRWI
+      3'b110: return 3'd4; // CSRRSI
+      3'b111: return 3'd5; // CSRRCI
+      default: return CSR_OP_NONE;
+    endcase
+  endfunction
+
+  function bit [2:0] csr_group_code(int addr);
+    case (addr)
+      12'h300, 12'h301, 12'h304, 12'h305, 12'h310,
+      12'h340, 12'h341, 12'h342, 12'h343, 12'h344: return CSR_GRP_TSTATUS;
+      12'hB00, 12'hB02, 12'hB80, 12'hB82,
+      12'hC00, 12'hC01, 12'hC02, 12'hC80, 12'hC81, 12'hC82: return CSR_GRP_COUNTER;
+      12'hF11, 12'hF12, 12'hF13, 12'hF14, 12'hF15: return CSR_GRP_ID;
+      default: begin
+        if (addr >= 12'hB03 && addr <= 12'hB1F) return CSR_GRP_PERF;
+        if (addr >= 12'h323 && addr <= 12'h33F) return CSR_GRP_PERF;
+        return CSR_GRP_ILLEGAL;
+      end
+    endcase
+  endfunction
+
+  // The guards are not bins: `has_csr` keeps an ECALL/EBREAK (a SYSTEM encoding
+  // with funct3 = 000) out of cp_csr_op/cp_csr_group, and `has_cause` keeps a
+  // retire out of cp_trap_cause. A guard that silently folded the two would
+  // make an ECALL look like a CSR access to address 0x000.
+  covergroup cg_csr with function sample(bit [2:0] csr_op, bit [2:0] csr_grp,
+                                         bit has_csr, int cause, bit has_cause);
+    option.per_instance = 1;
+
+    cp_csr_op: coverpoint csr_op iff (has_csr) {
+      bins csrrw  = {3'd0};
+      bins csrrs  = {3'd1};
+      bins csrrc  = {3'd2};
+      bins csrrwi = {3'd3};
+      bins csrrsi = {3'd4};
+      bins csrrci = {3'd5};
+    }
+
+    cp_csr_group: coverpoint csr_grp iff (has_csr) {
+      bins trap_status  = {CSR_GRP_TSTATUS};
+      bins counters     = {CSR_GRP_COUNTER};
+      bins identification = {CSR_GRP_ID};
+      bins performance  = {CSR_GRP_PERF};
+      bins illegal      = {CSR_GRP_ILLEGAL};
+    }
+
+    cp_trap_cause: coverpoint cause iff (has_cause) {
+      bins illegal_instruction = {2};
+      bins breakpoint          = {3};
+      bins ecall_m             = {11};
+    }
+  endgroup: cg_csr
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
     cg_mem = new();
     cg_beat = new();
     cg_inst = new();
+    cg_csr = new();
   endfunction: new
 
   function void write(riscv_small_transaction t);
+    // Trap events (WP-14): the cause and, when the trapping instruction is a
+    // CSR access, its opcode and address group. A trapped instruction never
+    // reaches the retire stream, so this is the only place those bins can be
+    // sampled for it.
+    if (t.op_is_trap) begin
+      cg_csr.sample(csr_op_code(t.trap_inst),
+                    csr_group_code(t.trap_inst[31:20]),
+                    is_csr_access(t.trap_inst),
+                    int'(t.trap_cause),
+                    1'b1);
+      return;
+    end
+    // Retire (commit) events: a CSR instruction the core EXECUTED. Retire
+    // events carry no data-port fields, so they never feed cg_mem.
+    if (t.op_is_retire) begin
+      cg_csr.sample(csr_op_code(t.retire_inst),
+                    csr_group_code(t.retire_inst[31:20]),
+                    is_csr_access(t.retire_inst),
+                    0,
+                    1'b0);
+      return;
+    end
     // Fetch transactions share the analysis port but not the memory covergroup:
     // sampling them would leave lane/direction bins that no data access made.
     // They feed cg_inst instead, through the local decoder. An orphan response
@@ -278,9 +397,6 @@ class riscv_small_coverage extends uvm_subscriber #(riscv_small_transaction);
       cg_inst.sample(decode_inst(t.captured_inst_data));
       return;
     end
-    // Retire (commit) events share the port too and carry no data-port fields:
-    // sampling them would hit the lane/direction bins with all-zero values.
-    if (t.op_is_retire) return;
     $cast(cov_trans, t);
     cg_mem.sample(cov_trans.captured_data_wr_ctrl[1:0],
                   cov_trans.captured_data_addr[1:0],

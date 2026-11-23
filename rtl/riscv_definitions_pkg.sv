@@ -117,7 +117,11 @@ package riscv_definitions_pkg;
         ALU_SUB  = 4'b1000, // funct7 0100000, funct3 SUB  = 3'b000
         ALU_SRA  = 4'b1101, // funct7 0100000, funct3 SRA  = 3'b101
         ALU_ADD4 = 4'b1001, // Source one plus 4
-        ALU_BPS2 = 4'b1010 // By pass source 2
+        ALU_BPS2 = 4'b1010, // By pass source 2
+        /* Zicsr (FR-47): pass the CSR read value to write-back untouched. The
+         * CSR is read in EX, so it reuses the ALU's write-back mux instead of
+         * adding a fourth select (wp-14 D3). */
+        CSR_PASS = 4'b1110
     } aluOpType_e;
 
 
@@ -267,6 +271,32 @@ package riscv_definitions_pkg;
         ACCESS_WORD = 2'b10
     } accessSize_e;
 
+    /*
+     * Zicsr operation, encoded exactly as the instruction's funct3 (FR-47).
+     * funct3 000 (ECALL/EBREAK/...) and 100 are not CSR operations and are
+     * decoded outside this enum.
+     */
+    typedef enum logic [2:0] {
+        CSRRW  = 3'b001,
+        CSRRS  = 3'b010,
+        CSRRC  = 3'b011,
+        CSRRWI = 3'b101,
+        CSRRSI = 3'b110,
+        CSRRCI = 3'b111
+    } csrOpType_e;
+
+    /*
+     * Trap causes this build raises (FR-22..FR-25). TRAP_NONE is the "this
+     * instruction is legal" value the decode carries in ID; the external
+     * exception bus carries its own 4-bit cause beside it.
+     */
+    typedef enum logic [3:0] {
+        TRAP_NONE                = 4'd0,
+        TRAP_ILLEGAL_INSTRUCTION = 4'd2,
+        TRAP_BREAKPOINT          = 4'd3,
+        TRAP_ECALL_M             = 4'd11
+    } trapCause_e;
+
     /* 
      * Decode the access size from a LOAD or STORE funct3.
      * The low two bits select the width: 00 byte, 01 halfword, 10 word.
@@ -294,6 +324,100 @@ package riscv_definitions_pkg;
             ACCESS_WORD: access_bytes = 3'd4;
             default:     access_bytes = 3'd4;
         endcase
+    endfunction
+
+    /*
+     * Machine-mode CSR address map (FR-50). This is the ONE truth table:
+     * instruction_decode asks csr_implemented()/csr_read_only(), and
+     * csr_file uses the same functions, so the legality decided in ID cannot
+     * drift from the register the file actually implements.
+     */
+    localparam logic [11:0] CSR_MSTATUS    = 12'h300;
+    localparam logic [11:0] CSR_MISA       = 12'h301;
+    localparam logic [11:0] CSR_MIE        = 12'h304;
+    localparam logic [11:0] CSR_MTVEC      = 12'h305;
+    localparam logic [11:0] CSR_MSTATUSH   = 12'h310;
+    localparam logic [11:0] CSR_MSCRATCH   = 12'h340;
+    localparam logic [11:0] CSR_MEPC       = 12'h341;
+    localparam logic [11:0] CSR_MCAUSE     = 12'h342;
+    localparam logic [11:0] CSR_MTVAL      = 12'h343;
+    localparam logic [11:0] CSR_MIP        = 12'h344;
+    localparam logic [11:0] CSR_MCYCLE     = 12'hB00;
+    localparam logic [11:0] CSR_MINSTRET   = 12'hB02;
+    localparam logic [11:0] CSR_MCYCLEH    = 12'hB80;
+    localparam logic [11:0] CSR_MINSTRETH  = 12'hB82;
+    localparam logic [11:0] CSR_CYCLE      = 12'hC00;
+    localparam logic [11:0] CSR_TIME       = 12'hC01;
+    localparam logic [11:0] CSR_INSTRET    = 12'hC02;
+    localparam logic [11:0] CSR_CYCLEH     = 12'hC80;
+    localparam logic [11:0] CSR_TIMEH      = 12'hC81;
+    localparam logic [11:0] CSR_INSTRETH   = 12'hC82;
+    localparam logic [11:0] CSR_MVENDORID  = 12'hF11;
+    localparam logic [11:0] CSR_MARCHID    = 12'hF12;
+    localparam logic [11:0] CSR_MIMPID     = 12'hF13;
+    localparam logic [11:0] CSR_MHARTID    = 12'hF14;
+    localparam logic [11:0] CSR_MCONFIGPTR = 12'hF15;
+
+    /*
+     * FR-50: is the address implemented at all? The five groups of the
+     * requirement, plus the two performance-counter windows the standard makes
+     * legally read-only zero. The trigger and debug windows are absent
+     * (NUM_TRIGGERS = 0, FR-57), so they take the illegal-instruction trap.
+     */
+    function automatic logic csr_implemented(logic [11:0] addr);
+        case (addr)
+            CSR_MSTATUS, CSR_MISA, CSR_MIE, CSR_MTVEC, CSR_MSTATUSH,
+            CSR_MSCRATCH, CSR_MEPC, CSR_MCAUSE, CSR_MTVAL, CSR_MIP,
+            CSR_MCYCLE, CSR_MINSTRET, CSR_MCYCLEH, CSR_MINSTRETH,
+            CSR_CYCLE, CSR_TIME, CSR_INSTRET, CSR_CYCLEH, CSR_TIMEH, CSR_INSTRETH,
+            CSR_MVENDORID, CSR_MARCHID, CSR_MIMPID, CSR_MHARTID, CSR_MCONFIGPTR:
+                csr_implemented = 1'b1;
+            default:
+                csr_implemented = ((addr >= 12'hB03) && (addr <= 12'hB1F)) ||
+                                  ((addr >= 12'h323) && (addr <= 12'h33F));
+        endcase
+    endfunction
+
+    /*
+     * FR-50 write rule, read from the ADDRESS: csr[11:10] = 2'b11 is a
+     * read-only address, so a write there raises illegal-instruction. A write
+     * to a read/write address whose bits are read-only is accepted and
+     * ignored (see csr_write_mask).
+     */
+    function automatic logic csr_read_only(logic [11:0] addr);
+        csr_read_only = (addr[11:10] == 2'b11);
+    endfunction
+
+    /*
+     * Which bits a write to a R/W address can change (FR-37, FR-50, FR-52).
+     * Zero means "accepted, ignored, no trap".
+     */
+    function automatic logic [31:0] csr_write_mask(logic [11:0] addr);
+        case (addr)
+            CSR_MISA, CSR_MSTATUSH, CSR_MTVAL, CSR_MIP:
+                csr_write_mask = 32'h0000_0000;
+            default:
+                csr_write_mask = (((addr >= 12'hB03) && (addr <= 12'hB1F)) ||
+                                  ((addr >= 12'h323) && (addr <= 12'h33F)))
+                                 ? 32'h0000_0000 : 32'hFFFF_FFFF;
+        endcase
+    endfunction
+
+    /*
+     * FR-37: misa reports the CONFIGURED extension set, never a literal.
+     * MXL = 01 (RV32) and I are always present; A, M and C come from the build
+     * configuration, so a build that does not execute an extension reads its
+     * bit as zero (D11).
+     */
+    function automatic logic [31:0] misa_value(bit enable_a, bit enable_m, bit enable_c);
+        logic [31:0] v;
+        v = 32'h0000_0000;
+        v[31:30] = 2'b01; // MXL = 1: RV32
+        v[8]     = 1'b1;  // I
+        if (enable_m) v[12] = 1'b1;
+        if (enable_c) v[2]  = 1'b1;
+        if (enable_a) v[0]  = 1'b1;
+        misa_value = v;
     endfunction
 
 
@@ -389,6 +513,18 @@ package riscv_definitions_pkg;
         regAddr_t rd;
         opcodeType_e opcode; // logic [6:0]
     } instJType_s;
+
+    /* 
+     * CSR-type instruction definition (Zicsr, FR-47). The rs1 field carries
+     * either a register address or the 5-bit zimm of the immediate forms.
+     */
+    typedef struct packed {
+        logic [11:0] csr;
+        regAddr_t rs1;
+        logic [2:0] funct3;
+        regAddr_t rd;
+        opcodeType_e opcode; // logic [6:0]
+    } instCSRType_s;
             
     /* 
      * Instruction definition.
@@ -402,6 +538,7 @@ package riscv_definitions_pkg;
         instBType_s b_type;
         instUType_s u_type;
         instJType_s j_type;
+        instCSRType_s csr_type;
         logic [0:3] [7:0] memory_b; 
         logic [31:0] memory_w;
     } instruction_u;

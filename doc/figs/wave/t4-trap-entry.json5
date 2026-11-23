@@ -1,0 +1,53 @@
+// T4 - trap entry: one trap costs TWO IF/ID flushes, as built.
+//
+// Scenario: ECALL at 0x80 sits in ID in cycle 3, and mtvec.BASE holds 0x200, the
+// address the program wrote before the trap. inst_ready and data_ready are high and
+// clk_en is high throughout, so nothing below is a stall: every stage enable stays 1.
+//
+// Fetch latency: inst_addr is the registered pc and the instruction memory answers one
+// cycle later, so ID in cycle N decodes the word addressed in cycle N-2
+// (rtl/instruction_fetch.sv:76, :83-101: pc_fetch keeps pc_id aligned with inst_data).
+//
+// Cycle 3 - the ECALL is in ID (pc_id = 0x80). instruction_decode raises trap_cause_id =
+// ECALL_M in ID (rtl/instruction_decode.sv:331-356), control qualifies the event with
+// valid_id and the two register enables (rtl/control.sv:353-354), so trap_valid is high
+// for this one cycle and pc_sel = TRAP with if_id_flush and id_ex_flush both set
+// (rtl/control.sv:355-359). The edge ending cycle 3 loads mtvec.BASE into the PC
+// (rtl/instruction_fetch.sv:112-125) and writes mepc/mcause in the CSR file
+// (rtl/csr_file.sv:232-235).
+//
+// Cycle 4 - trap_taken_q, registered from trap_valid on the edge ending cycle 3
+// (rtl/control.sv:94-98, :116-125), repeats if_id_flush (rtl/control.sv:293-296). This
+// is the same echo branch_taken_q gives a jump, and it is what discards the fetch that
+// was already in flight when the trap resolved (0x88). Without it the fetch enters ID
+// behind the handler: WP-14's directed program observed 4 of 6 traps before the echo
+// existed, EBREAK and a mhartid write being the two that were lost
+// (.opencode/plan/wp-14-csr-trap.md:282-291).
+//
+// Cycle 5 - no flush: IF/ID takes the word answered this cycle (pc_fetch = 0x200), so
+// ID decodes the handler's first instruction in cycle 6. Cost: two fetch slots, not
+// one, and the trap does not cancel what is already in MA or WB.
+//
+// pc_id is drawn as 0, not x, while flushed: the RTL clears it to 'b0
+// (rtl/instruction_fetch.sv:90-94).
+{
+  signal: [
+    { name: 'clk',            wave: 'p.......' },
+    { name: 'pc',             wave: '========', data: ['0x78', '0x80', '0x84', '0x88', '0x200', '0x204', '0x208', '0x20C'] },
+    { name: 'pc_id',          wave: '========', data: ['0x74', '0x78', '0x7C', '0x80', '0', '0', '0x200', '0x204'] },
+    { name: 'valid_id',       wave: '11110011' },
+    { name: 'trap_cause_id',  wave: '========', data: ['0', '0', '0', '11', '0', '0', '0', '0'] },
+    { name: 'trap_valid',     wave: '00010000' },
+    { name: 'trap_taken_q',   wave: '00001000' },
+    { name: 'if_id_flush',    wave: '00011000' },
+    { name: 'id_ex_flush',    wave: '00010000' },
+    { name: 'pc_sel',         wave: '========', data: ['PC_PLUS4', 'PC_PLUS4', 'PC_PLUS4', 'TRAP', 'PC_PLUS4', 'PC_PLUS4', 'PC_PLUS4', 'PC_PLUS4'] },
+  ],
+  head: {
+    text: 'T4 trap entry: the trap flushes IF/ID and ID/EX, and a one-cycle echo flushes IF/ID again',
+    tick: 1,
+    every: 1,
+  },
+  foot: { text: 'doc/figs/wave/t4-trap-entry.json5' },
+  config: { hscale: 2 },
+}

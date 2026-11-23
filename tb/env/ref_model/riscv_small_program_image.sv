@@ -49,6 +49,15 @@ class riscv_small_program_image extends uvm_object;
   // does yet.
   bit [31:0] skip_pc [$];
 
+  // A placed instruction the TRAP path removes from the commit stream
+  // (WP-14b, FR-22): the instruction that traps is flushed before write-back
+  // and never retires, so "every placed word retires" is false for exactly
+  // these addresses. The sequence declares them, and the retire checker then
+  // asserts BOTH halves: none of them ever retires, and every OTHER placed word
+  // does -- which is what turns "no instruction was lost" into a claim instead
+  // of a count that silently tolerates the difference.
+  bit [31:0] no_retire_pc [$];
+
   function new(string name = "riscv_small_program_image");
     super.new(name);
   endfunction
@@ -76,6 +85,18 @@ class riscv_small_program_image extends uvm_object;
     return 1'b0;
   endfunction
 
+  // The instruction that occupies this address TRAPS: it must not retire.
+  // Declared by the sequence that placed the trap site (WP-14b, FR-22/D12).
+  function void add_no_retire(bit [31:0] byte_addr);
+    if (!is_no_retire(byte_addr)) no_retire_pc.push_back(byte_addr);
+  endfunction
+
+  function bit is_no_retire(bit [31:0] byte_addr);
+    foreach (no_retire_pc[i])
+      if (no_retire_pc[i] == byte_addr) return 1'b1;
+    return 1'b0;
+  endfunction
+
   // ---- Read side: checkers and the reference model --------------------------
 
   // One accessor per question, so a caller never has to know that a missing
@@ -97,9 +118,10 @@ class riscv_small_program_image extends uvm_object;
   endfunction
 
   // How many instructions the program executes: everything it placed, minus the
-  // addresses its control flow skips.
+  // addresses its control flow skips and minus the instructions its traps
+  // remove from the commit stream.
   function int unsigned commit_target();
-    return inst.num() - skip_pc.size();
+    return inst.num() - skip_pc.size() - no_retire_pc.size();
   endfunction
 
   function int unsigned data_size();

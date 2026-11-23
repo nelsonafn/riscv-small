@@ -1,3 +1,4 @@
 rtl/riscv_definitions_pkg.sv
 rtl/execution.sv
 rtl/alu.sv
+rtl/csr_file.sv

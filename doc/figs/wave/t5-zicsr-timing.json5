@@ -1,0 +1,49 @@
+// T5 - Zicsr: the CSR is read in EX and written on the same edge, so the next CSR
+// instruction reads what the previous one wrote with no bubble, as built.
+//
+// Scenario:
+//   0x00: csrrw x5, mscratch, x7    # mscratch <- 0xA5, x5 <- the old value
+//   0x04: csrrs x6, mscratch, x0    # x6 <- 0xA5 (rs1 = x0, so nothing is written)
+//   0x08: add  x8, x6, x9           # consumer of x6
+//
+// CSRRW sits in EX in cycle 3, CSRRS in EX in cycle 4 and add in EX in cycle 5.
+//
+// Cycle 3 - EX presents csr_addr = 0x340 and csr_we = 1 (rtl/riscv_small.sv:175-176: the
+// address is inst_ex.csr_type.csr and the write enable is csr_valid_ex && csr_write_ex).
+// The read is combinational, so csr_rdata is the OLD value, 0 (rtl/csr_file.sv:134-159);
+// csr_new is the read-modify-write result (rtl/csr_file.sv:166-178) and the single
+// always_ff stores it on the edge ending this cycle (rtl/csr_file.sv:205-237). The value
+// read is what the instruction returns: the ALU's CSR_PASS arm forwards csr_rdata to
+// alu_result (rtl/alu.sv:90-92), so x5 commits the old value in cycle 5.
+//
+// Cycle 4 - CSRRS is in EX and reads the register the previous instruction wrote in
+// cycle 3: csr_rdata is 0xA5, no hazard, no stall. csr_we is 0 because the write
+// suppression is the REGISTER SPECIFIER rs1 = x0, not the value
+// (rtl/instruction_decode.sv:348-350: only CSRRW/CSRRWI always write).
+//
+// Cycle 5 - add is in EX and reads x6, whose producer is in MA, so control selects the
+// EX/MA forward (rtl/control.sv:238-249) and the consumer sees 0xA5 without a bubble.
+// if_id_clk_en never drops: the whole sequence is hazard-free.
+//
+// "--" is don't-care (no CSR access in EX that cycle), not an unknown value.
+{
+  signal: [
+    { name: 'clk',          wave: 'p.......' },
+    { name: 'inst_ex',      wave: '========', data: ['..', '..', '..', 'csrrw', 'csrrs', 'add', '..', '..'] },
+    { name: 'csr_addr',     wave: '========', data: ['--', '--', '--', '0x340', '0x340', '--', '--', '--'] },
+    { name: 'csr_rdata',    wave: '========', data: ['--', '--', '--', '0x0', '0xA5', '--', '--', '--'] },
+    { name: 'csr_we',       wave: '00010000' },
+    { name: 'mscratch_q',   wave: '========', data: ['0x0', '0x0', '0x0', '0x0', '0xA5', '0xA5', '0xA5', '0xA5'] },
+    { name: 'alu_result',   wave: '========', data: ['--', '--', '--', '0x0', '0xA5', 'sum', '--', '--'] },
+    { name: 'rd0_wr_en_ma', wave: '00011110' },
+    { name: 'alu_src1',     wave: '========', data: ['RS1_S1', 'RS1_S1', 'RS1_S1', 'RS1_S1', 'RS1_S1', 'RD_MA_S1', 'RS1_S1', 'RS1_S1'] },
+    { name: 'if_id_clk_en', wave: '1.......' },
+  ],
+  head: {
+    text: 'T5 Zicsr: read in EX, written on the same edge, read back by the next CSR instruction with no stall',
+    tick: 1,
+    every: 1,
+  },
+  foot: { text: 'doc/figs/wave/t5-zicsr-timing.json5' },
+  config: { hscale: 2 },
+}

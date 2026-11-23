@@ -19,7 +19,7 @@
 #   7  coverage merge + bins, at the current digest   both modes
 #   8  doc/measurements/NFR-01..04 present and dated  release only
 #   9  NFR-07 lint evidence                           release only
-#  10  A-09: every FR `verified`                      release only
+#  10  A-09: the phase-1 `FR` set `verified`           release only
 #  11  every work-package test has a red run at an older digest
 #
 # Never edits anything. Writes build/signoff/report.md.
@@ -619,7 +619,32 @@ else()
         endif()
     endif()
 
-    # 10. A-09
+    # 10. A-09 -- the phase bar.
+    #
+    # The bar is A-09's phase-1 FR set, not "every FR": 28 of the 34 deferred
+    # rows are blocked by a feature that does not exist, so the original bar was
+    # the whole product roadmap and stopped distinguishing a broken release from
+    # an incomplete one. The designer re-scoped it on 2026-11-19.
+    #
+    # The set is read from the spec and never duplicated here: A-09 carries a
+    # gate-input line naming the rows OUTSIDE the bar. A missing line is a
+    # blocker, not a silent fall back to "every FR" -- a gate that quietly
+    # widens its own bar is worse than one that fails.
+    # riscv_read_lines, never file(STRINGS): file(STRINGS) splits a line at
+    # every non-ASCII byte, and the marker line carries an em dash. Measured on
+    # this line: file(STRINGS) returns "- Gate input " and the rest is lost.
+    set(A09_LINE "")
+    foreach(L IN LISTS SPEC_LINES)
+        if(L MATCHES "Gate input" AND L MATCHES "outside the bar")
+            set(A09_LINE "${L}")
+        endif()
+    endforeach()
+    set(OUTSIDE "")
+    if(A09_LINE)
+        string(REGEX REPLACE "^.*outside the bar[^A-Za-z]*" "" A09_TAIL "${A09_LINE}")
+        string(REPLACE "`" "" A09_TAIL "${A09_TAIL}")
+        string(REGEX MATCHALL "FR-[0-9]+" OUTSIDE "${A09_TAIL}")
+    endif()
     set(DONE_VERIFIED 0)
     set(BY_STATUS "")
     set(PENDING "")
@@ -664,13 +689,34 @@ else()
         endif()
     endforeach()
 
-    if(DONE_VERIFIED LESS N_SPEC)
-        list(JOIN BY_STATUS " " BTEXT)
-        list(JOIN RELEASE_GAPS " " GTEXT)
-        list(JOIN PENDING " " PTEXT)
-        add_row("10::A-09: every FR verified::blocked::${DONE_VERIFIED}/${N_SPEC} verified, ${BTEXT}, release-blocker gaps: ${GTEXT}, pending (first 8 per category): ${PTEXT}")
+    if(NOT A09_LINE)
+        add_row("10::A-09: the phase-1 FR set verified::blocked::A-09 carries no 'Gate input ... outside the bar' line, so the gate cannot tell which rows the bar covers")
     else()
-        add_row("10::A-09: every FR verified::ok::${N_SPEC}/${N_SPEC} verified")
+        set(N_BAR 0)
+        set(DONE_BAR 0)
+        set(BAR_PENDING "")
+        foreach(ID IN LISTS SPEC_IDS)
+            list(FIND OUTSIDE "${ID}" OIDX)
+            if(OIDX LESS 0)
+                math(EXPR N_BAR "${N_BAR} + 1")
+                list(FIND SPEC_IDS "${ID}" IDX)
+                list(GET SPEC_STATUS ${IDX} S)
+                if(S STREQUAL "verified")
+                    math(EXPR DONE_BAR "${DONE_BAR} + 1")
+                else()
+                    list(APPEND BAR_PENDING "${ID}")
+                endif()
+            endif()
+        endforeach()
+        list(LENGTH OUTSIDE N_OUTSIDE)
+        if(DONE_BAR LESS N_BAR)
+            list(JOIN BY_STATUS " " BTEXT)
+            list(JOIN RELEASE_GAPS " " GTEXT)
+            list(JOIN BAR_PENDING " " PTEXT)
+            add_row("10::A-09: the phase-1 FR set verified::blocked::${DONE_BAR}/${N_BAR} phase-1 rows verified, ${N_OUTSIDE} outside the bar by phase, ${BTEXT}, release-blocker gaps: ${GTEXT}, phase-1 rows still open: ${PTEXT}")
+        else()
+            add_row("10::A-09: the phase-1 FR set verified::ok::${N_BAR}/${N_BAR} phase-1 rows verified, ${N_OUTSIDE} outside the bar by phase")
+        endif()
     endif()
 endif()
 

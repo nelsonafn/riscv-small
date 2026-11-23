@@ -79,6 +79,21 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
   logic [31:0] data_sig_wr;
   logic [3:0]  data_sig_strb;
 
+  // ---- Platform straps (WP-14, D13) ----------------------------------------
+  // `mtime` and `hart_id` are DUT inputs the CSR file reads as `time`/`timeh`
+  // (FR-49) and `mhartid` (FR-32). The VALUE is born in the test (config_db,
+  // default 0 = the platform's silent timer and hart 0); this BFM only drives
+  // it, exactly as it drives `data_ready_delay`. The monitor observes the same
+  // interface wire, so the reference model learns the value from the
+  // observation and never from here (C-16, wp-14 D13).
+  //
+  // `exception[3:0]` is the same kind of input and travels the same way
+  // (WP-14b, FR-22/Q-35): the sequence schedules a request against a program
+  // address (the item's exception_addr/exception_cause, see raise_exception),
+  // this BFM asserts it for one core cycle, and the monitor observes it.
+  bit [63:0] mtime_stim;
+  bit [3:0]  hart_id_stim;
+
   function bit data_same_access();
     if (data_sig_read != vif.data_rd_en)   return 1'b0;
     if (data_sig_write != vif.data_wr_en)  return 1'b0;
@@ -100,6 +115,12 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
       mem_mode = 0;
     if (!uvm_config_db#(bit)::get(this, "", "trace", trace))
       trace = 0;
+    // WP-14 D13: the platform straps. Absent, they are 0 -- the value the
+    // interface already holds, so a run that never sets them is unchanged.
+    if (!uvm_config_db#(bit [63:0])::get(this, "", "mtime", mtime_stim))
+      mtime_stim = '0;
+    if (!uvm_config_db#(bit [3:0])::get(this, "", "hart_id", hart_id_stim))
+      hart_id_stim = '0;
     // WP-13 P3: the grant delay is the test's decision. Absent, it is 0 and the
     // directed memory answers exactly as it did before this option existed.
     if (!uvm_config_db#(int unsigned)::get(this, "", "data_ready_delay", data_ready_delay))
@@ -184,6 +205,8 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
 
   virtual task run_phase(uvm_phase phase);
     reset();
+    // WP-14 D13: the platform straps, on the first clock edge (see drive_straps).
+    drive_straps();
 
     // The image path receives the pre-built program from the sequence and then
     // runs the memory responder; the directed path below is only reached when
@@ -237,6 +260,12 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
               vif.inst_ready <= #OUTPUT_DELAY 1;
               program_entered = 1;
               `uvm_info("IFETCH_DRV", $sformatf("READ_INST: PC='h%0h INST='h%0h", vif.inst_addr, req.instruction_list[i]), UVM_LOW);
+              // FR-22/Q-35: the platform's synchronous trap request, if the
+              // sequence scheduled one against this address. The BFM obeys the
+              // schedule; it does not decide when a trap is meaningful.
+              foreach (req.exception_addr[k])
+                if (req.exception_addr[k] == vif.inst_addr)
+                  raise_exception(req.exception_cause[k]);
               found = 1;
               break;
             end
@@ -380,6 +409,60 @@ class riscv_small_driver extends uvm_driver #(riscv_small_transaction);
     vif.inst_data.memory_w <= #OUTPUT_DELAY 'bx;
     vif.data_ready <= #INPUT_DELAY 0;
     vif.data_rd.u_data <= #INPUT_DELAY 'bx;
+  endtask
+
+  // WP-14 D13: the straps are level inputs, not part of a handshake. They are
+  // driven on the first clock edge and never change during the run, so the
+  // value the test configured is the value the whole run sees.
+  //
+  // Why the first edge and not time 0: the interface initialises both to zero
+  // (the value a PASSIVE agent -- no driver -- must present), and a write at
+  // time 0 would race that initialisation. One edge settles it, and the core is
+  // still in reset then, so nothing can read the value early.
+  task drive_straps();
+    @(posedge vif.clk);
+    vif.mtime   = mtime_stim;
+    vif.hart_id = hart_id_stim;
+    // FR-22/Q-35: no external trap request is standing at reset. The interface
+    // initialises the same value (a passive agent has no driver to do it), so a
+    // run without a schedule sees a defined zero on the pin -- never an X.
+    vif.exception = 4'b0000;
+  endtask
+
+  // ---------------------------------------------------------------------------
+  // FR-22/Q-35 (WP-14b): the external trap request
+  //
+  // `exception[3:0]` is a level input: the code present in a cycle is the reason
+  // the platform is asking for. The sequence schedules it against an
+  // INSTRUCTION ADDRESS (the item's exception_addr/exception_cause), so the
+  // program's shape decides where the trap lands and this BFM only times it.
+  //
+  // The timing is the pipeline's, not a guess: the instruction memory answers a
+  // request one edge after the address is presented, and IF/ID registers that
+  // word (with `pc_id` = that address) on the following edge. So the cycle
+  // after this BFM answers the fetch of the named address is the cycle in which
+  // that instruction occupies ID -- the cycle a request must stand in to trap
+  // it. Exactly ONE cycle, because a request left high would trap again on the
+  // first instruction the handler runs.
+  //
+  // A mis-timed request is not silent: an early trap reports the wrong PC in
+  // `mepc` and a late one lets the instruction execute, and both are values the
+  // program reads back and the scoreboard compares.
+  //
+  // The drive is NON-BLOCKING on purpose: the monitor samples `trap_valid` and
+  // `exception` in the same posedge that ends the request's cycle, and a
+  // blocking de-assert there would race the observation -- measured on T-61,
+  // where the trap was taken with cause 5 and published with exception = 0.
+  // ---------------------------------------------------------------------------
+  task automatic raise_exception(int unsigned cause);
+    fork
+      begin
+        @(posedge vif.clk);       // the named instruction is now in ID
+        vif.exception <= cause[3:0];
+        @(posedge vif.clk);       // one core cycle later
+        vif.exception <= 4'b0000;
+      end
+    join_none
   endtask
 
   // ---------------------------------------------------------------------------

@@ -194,21 +194,27 @@ foreach(ROW IN LISTS ROWS)
     if(NOT RED MATCHES "^mutant:(.+)$")
         continue()
     endif()
-    set(NAME "${CMAKE_MATCH_1}")
-    if(NOT NAME IN_LIST CATALOGUE)
-        message(FATAL_ERROR "${TID} names mutant '${NAME}', but ${MUTANT_TABLE} has no such row")
-    endif()
-    list(APPEND REFERENCED "${NAME}")
-    if(REQUESTED AND NOT TID IN_LIST REQUESTED)
-        continue()
-    endif()
-    if(NOT WP STREQUAL "")
-        list(FIND WP_TESTS "${TID}" WP_INDEX)
-        if(WP_INDEX EQUAL -1)
+    # A row may name SEVERAL mutants, '+'-separated: one test can carry the teeth
+    # for more than one clause, and the catalogue is keyed by name, so nothing is
+    # gained by forcing six extra manifest rows that would each re-run the same
+    # simulation. Each name is selected as its own (T-id, mutant) pair.
+    string(REPLACE "+" ";" MUTANT_LIST "${CMAKE_MATCH_1}")
+    foreach(NAME IN LISTS MUTANT_LIST)
+        if(NOT NAME IN_LIST CATALOGUE)
+            message(FATAL_ERROR "${TID} names mutant '${NAME}', but ${MUTANT_TABLE} has no such row")
+        endif()
+        list(APPEND REFERENCED "${NAME}")
+        if(REQUESTED AND NOT TID IN_LIST REQUESTED)
             continue()
         endif()
-    endif()
-    list(APPEND SELECTED "${TID}|${NAME}")
+        if(NOT WP STREQUAL "")
+            list(FIND WP_TESTS "${TID}" WP_INDEX)
+            if(WP_INDEX EQUAL -1)
+                continue()
+            endif()
+        endif()
+        list(APPEND SELECTED "${TID}|${NAME}")
+    endforeach()
 endforeach()
 
 # The serial selection, kept for the partition report and the shard split.
@@ -582,14 +588,32 @@ foreach(ENTRY IN LISTS SELECTED)
         message(FATAL_ERROR "${PROBLEM}; see build/mutants/${TID}/negative.log")
     endif()
 
+    # results.json keeps the FIRST mutant's record, which is what check 11 reads;
+    # a second mutant for the same test is published beside it as <name>.json so
+    # the durable evidence covers every clause, not just the first.
     set(RESULT "${SCRATCH}/build/red/results.json")
     file(MAKE_DIRECTORY "${OUT}/${TID}")
-    file(COPY "${RESULT}" DESTINATION "${OUT}/${TID}")
+    if(EXISTS "${OUT}/${TID}/results.json")
+        # A second mutant for the same test: publish beside the first under its
+        # own name. configure_file(COPYONLY) writes the destination directly, so
+        # the first mutant's results.json is untouched (file(COPY) would
+        # overwrite it before any rename could preserve it).
+        configure_file("${RESULT}" "${OUT}/${TID}/${NAME}.json" COPYONLY)
+    else()
+        file(COPY "${RESULT}" DESTINATION "${OUT}/${TID}")
+    endif()
     if(EXISTS "${SCRATCH}/build/regress/${TID}.log")
-        file(COPY "${SCRATCH}/build/regress/${TID}.log" DESTINATION "${OUT}/${TID}")
+        if(EXISTS "${OUT}/${TID}/${TID}.log")
+            configure_file("${SCRATCH}/build/regress/${TID}.log" "${OUT}/${TID}/${NAME}.log" COPYONLY)
+        else()
+            file(COPY "${SCRATCH}/build/regress/${TID}.log" DESTINATION "${OUT}/${TID}")
+        endif()
         # results.json's `log` field is relative to the scratch's build/red;
         # keep a copy at that path too, or the published evidence points nowhere.
-        file(COPY "${SCRATCH}/build/regress/${TID}.log" DESTINATION "${OUT}")
+        # The first mutant's copy is the one that path resolves to.
+        if(NOT EXISTS "${OUT}/${TID}.log")
+            file(COPY "${SCRATCH}/build/regress/${TID}.log" DESTINATION "${OUT}")
+        endif()
     endif()
 
     math(EXPR N_DETECTED "${N_DETECTED} + 1")

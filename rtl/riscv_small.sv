@@ -40,12 +40,20 @@ import riscv_definitions_pkg::*;
 #(
     /* Reset vector: the address the first fetch after reset presents on
      * inst_addr (FR-41, Q-33). A build-time input, not a CSR. */
-    parameter dataBus_t RESET_VECTOR = 32'h8000_0000
+    parameter dataBus_t RESET_VECTOR = 32'h8000_0000,
+    /* FR-37: the extension set misa advertises is the CONFIGURATION's, never a
+     * literal (D11). This build executes I only, so A, M and C default to 0;
+     * a build that implements FR-35/FR-43/FR-44 passes them as 1. */
+    parameter bit ENABLE_A = 1'b0,
+    parameter bit ENABLE_M = 1'b0,
+    parameter bit ENABLE_C = 1'b0
 )(
     input clk,    //[in] Clock
     input clk_en, //[in] Clock Enable
     input rst_n,  //[in] Asynchronous reset active low
-    input logic exception, //[in] exception
+    input logic [3:0] exception, //[in] exception
+    input logic [63:0] mtime, //[in] Machine timer, view of time/timeh (FR-49)
+    input logic [3:0] hart_id, //[in] Hart identifier, read as mhartid (FR-32)
     // Instruction Memory controls
     input logic inst_ready, //[in] Indicates that data instruction ready
     input instruction_u inst_data, //[in] Data from instruction memory
@@ -71,7 +79,6 @@ import riscv_definitions_pkg::*;
     logic valid_id; //[out] Instruction valid from IF
     // Next PC control
     dataBus_t jump_addr;// Jump address
-    dataBus_t trap_addr;// Exception/interruption address
     nextPCType_e pc_sel; // PC source selector
 
     logic cond_jump; // Used to indicate a conditional branch have been decode
@@ -136,7 +143,42 @@ import riscv_definitions_pkg::*;
     logic ld_split_en; // This cycle completes a split load (FR-42)
     dataBus_u ld_split_word; // Loaded word assembled from both beats, aligned (FR-42)
 
+    /* WP-14 (FR-22..FR-25, FR-29, FR-32, FR-37, FR-47, FR-49..FR-52): the trap
+     * observation probe binds to these four signals (wp-14 §4.2). They are
+     * driven by the trap entry in ID: one cycle per trap, with the PC and the
+     * instruction word of the instruction that trapped. */
+    logic     trap_valid; // A trap was taken this cycle
+    dataBus_t trap_pc;    // PC of the instruction that trapped
+    dataBus_t trap_inst;  // Instruction word that trapped
+    logic [3:0] trap_cause; // Trap cause number
+
+    /* Zicsr interface between ID, EX and the CSR file (FR-47, FR-50). */
+    csrOpType_e csr_op_ex;   // Operation of the instruction in EX
+    logic       csr_valid_ex; // A legal Zicsr instruction is in EX
+    logic       csr_write_ex; // That instruction writes the CSR
+    logic       csr_we;       // The file must write this cycle
+    logic [11:0] csr_addr;    // Address of the instruction in EX
+    dataBus_t   csr_rdata;    // Value read from that address
+    dataBus_u   csr_rdata_u;  // Same value on the dataBus_u the ALU consumes
+    dataBus_u   csr_wdata;    // Source operand of the write, forwarded in EX
+    dataBus_t   mtvec_base;   // Trap vector, mtvec.BASE (FR-29)
+    trapCause_e trap_cause_id; // Synchronous cause decided in ID
+    logic       ctrl_trap_valid; // Trap event from control
+    trapCause_e ctrl_trap_cause; // Cause selected by control's priority
+
+    /* FR-37: the extension set of this build, composed from the parameters
+     * above by the same function the testbench's model uses (D11). */
+    localparam dataBus_t MISA_VALUE = misa_value(ENABLE_A, ENABLE_M, ENABLE_C);
+
     assign data_rd_wr_ctrl = access_size(rd_wr_ctrl);
+
+    assign csr_addr     = inst_ex.csr_type.csr;
+    assign csr_we       = csr_valid_ex && csr_write_ex;
+    assign csr_rdata_u.u_data = csr_rdata;
+    assign trap_pc      = pc_id;
+    assign trap_inst    = inst_id.memory_w;
+    assign trap_cause   = ctrl_trap_cause;
+    assign trap_valid   = ctrl_trap_valid;
 
 
     
@@ -156,7 +198,7 @@ import riscv_definitions_pkg::*;
         .valid_id     (valid_id),//[out] Instruction valid from IF
         // Next PC control
         .jump_addr    (jump_addr),// Jump address
-        .trap_addr    (trap_addr),// Exception/interruption address
+        .trap_addr    (mtvec_base),// Exception/interruption address, mtvec.BASE (FR-29)
         .pc_sel       (pc_sel)// PC source selector
     );
 
@@ -196,7 +238,11 @@ import riscv_definitions_pkg::*;
 	    .funct3_ex        (funct3_ex),//[out] funct3 LOAD
 	    .rd0_addr_ex      (rd0_addr_ex),//[out] Reg destination (rd) addr
 	    .rs1_addr_ex      (rs1_addr_ex),//[out] Reg source one (rs1) addr
-        .rs2_addr_ex      (rs2_addr_ex)//[out] Reg source two (rs2) addr
+        .rs2_addr_ex      (rs2_addr_ex),//[out] Reg source two (rs2) addr
+        .csr_op_ex        (csr_op_ex),//[out] Zicsr operation of the instruction in EX
+        .csr_valid_ex     (csr_valid_ex),//[out] A legal Zicsr instruction is in EX
+        .csr_write_ex     (csr_write_ex),//[out] That instruction writes the CSR
+        .trap_cause_id    (trap_cause_id)//[out] Synchronous trap cause decided in ID
     );
 
     execution u_exection (
@@ -214,6 +260,7 @@ import riscv_definitions_pkg::*;
         .rs2              (rs2_ex),//[in] Reg source two (rs2) data
         .imm              (imm_ex),//[in] Immediate value
         .rd0_data         (rd0_data_wb),//[in] Reg destination (rd) data from write back (wb) forward
+        .csr_rdata        (csr_rdata_u),//[in] Value read from the CSR addressed in EX (FR-47)
         .rd0_wr_en        (rd0_wr_en_ex),//[out] Reg destination (rd) write enable to pipeline from (id)
         .data_rd_en       (data_rd_en_ex),//[out] Data memory read enable (wb_mux_sel) to be used with funct3 
         .data_wr_en       (data_wr_en_ex),//[out] Data memory write enable to be used together with funct3
@@ -222,6 +269,7 @@ import riscv_definitions_pkg::*;
         .flush            (ex_ma_flush),// Insert NOP
         .alu_ex           (alu_ex), //[out] ALU result from execution not registered to jump forward (ex)
         .alu_ma           (alu_ma),//[out] ALU result to memory access (ma)
+        .csr_wdata        (csr_wdata),//[out] Zicsr source operand, forwarded (FR-47)
         .pc_ma            (pc_ma),//[out] PC value to memory access (ma)
         .inst_ma          (inst_ma),//[out] Instruction word to memory access (ma)
         .valid_ma         (valid_ma),//[out] Instruction valid in memory access (ma)
@@ -287,6 +335,30 @@ import riscv_definitions_pkg::*;
         .ld_split_word   (ld_split_word)//[out] Loaded word assembled from both beats, aligned
     );
 
+    /* FR-50: the machine-mode CSR file. It is read in EX (the address comes
+     * from the instruction EX holds) and written on the same edge, so an
+     * instruction that traps in ID never reaches it (wp-14 D1/D2). */
+    csr_file u_csr_file (
+        .clk          (clk),//[in] Clock
+        .clk_en       (clk_en),//[in] Clock Enable
+        .rst_n        (rst_n),//[in] Asynchronous reset active low
+        .csr_addr     (csr_addr),//[in] CSR address of the instruction in EX
+        .csr_rdata    (csr_rdata),//[out] Value read from that address
+        .csr_we       (csr_we),//[in] Write the addressed CSR this cycle
+        .csr_wdata    (csr_wdata.u_data),//[in] Source operand of the write
+        .csr_op       (csr_op_ex),//[in] Zicsr operation (funct3)
+        .trap_we      (ctrl_trap_valid),//[in] A trap is taken this cycle
+        .trap_pc      (trap_pc),//[in] PC of the trapping instruction
+        .trap_cause   (ctrl_trap_cause),//[in] Cause the trap carries
+        .mtime        (mtime),//[in] Machine timer (FR-49)
+        .hart_id      (hart_id),//[in] Hart identifier, read as mhartid (FR-32)
+        .misa_val     (MISA_VALUE),//[in] Configuration-derived misa (FR-37)
+        .retire_valid (valid_wb && ma_wb_clk_en),//[in] An instruction retires this cycle
+        .valid_ma     (valid_ma),//[in] A valid instruction in MA (older than EX)
+        .valid_wb     (valid_wb),//[in] A valid instruction in WB (older than EX)
+        .mtvec_base   (mtvec_base)//[out] Trap vector, mtvec.BASE (FR-29)
+    );
+
     control u_control (
         .clk              (clk),//[in] Clock
         .clk_en           (clk_en),//[in] Clock Enable
@@ -310,8 +382,9 @@ import riscv_definitions_pkg::*;
         .cond_jump        (cond_jump),//Used to indicate a conditional branch have been decoded
         .jalr             (jalr),//Used to indicate a JALR have been decoded (rs1 is a source)
         .branch_taken     (branch_taken),//[in] Indicates that a branch should be taken to the control  
-        .exception        (exception),//[in] Exception trigger
-        .pc_ex            (pc_ex),//[in] PC value to EX
+        .exception        (exception),//[in] External trap cause (FR-22)
+        .trap_cause_id    (trap_cause_id),//[in] Internal synchronous cause decided in ID
+        .valid_id         (valid_id),//[in] The ID slot holds a real instruction
         .inst_ready       (inst_ready),//[in] Indicates that instruction from memory is available
         .data_ready       (data_ready),//[in] Indicates that data from memory is available
         .alu_src1_ex      (alu_src1_ex),//[in] ALU source one mux selection (possible values PC/RS1) (id)
@@ -322,7 +395,8 @@ import riscv_definitions_pkg::*;
         .jmp_src1         (jmp_src1),//[out] JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
         .jmp_src2         (jmp_src2),//[out] JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
         .pc_sel           (pc_sel),//[out] PC source selector
-        .trap_addr        (trap_addr),//[out] Trap Addr
+        .trap_valid       (ctrl_trap_valid),//[out] A trap is taken this cycle
+        .trap_cause       (ctrl_trap_cause),//[out] Cause of the trap being taken
         .inst_rd_en       (inst_rd_en),//[out] Instruction memory read enable
         .if_id_clk_en     (if_id_clk_en),// Run/Pause IF_ID
         .id_ex_clk_en     (id_ex_clk_en),// Run/Pause ID_EX

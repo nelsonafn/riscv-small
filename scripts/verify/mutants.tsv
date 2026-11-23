@@ -194,3 +194,75 @@ store-grant-ignored	rtl/control.sv	data_wr_en_ma)) begin	1'b0)) begin // negativ
 # `find` is line 108 verbatim; it contains no `|`, so the row parses to five
 # cells (the `store-grant-ignored` limitation above does not apply here).
 no-misaligned-split	rtl/misaligned_split.sv	assign split_needed = access_ma && (({1'b0, lane_ma} + bytes_ma) > 3'd4);	assign split_needed = 1'b0; // negative control: the split is disabled	a crossing access is presented as one beat at the unaligned address (FR-42/G-22)
+#
+# T-03 (FR-50 / FR-24, WP-14): `csr-illegal-noop` removes the illegal-CSR
+# trap. It has two arms in rtl/instruction_decode.sv -- an address the
+# configuration does not implement (the `legal = 1'b0; // FR-50: absent
+# address` arm) and a write to a read-only address (the
+# `if (csr_write && csr_read_only(...)) legal = 1'b0;` arm). Each row flips
+# one arm from illegal to legal; riscv_mutant_apply() applies EVERY row of a
+# given name, so the tree the test runs on has neither and an illegal CSR
+# access retires as a no-operation that writes nothing -- the defect FR-50
+# names. One arm alone already costs T-03 a trap, but the mutant of a named
+# defect is the whole defect.
+csr-illegal-noop	rtl/instruction_decode.sv	legal = 1'b0; // FR-50: absent address	legal = 1'b1; // negative control: an absent CSR address decodes as legal	an absent CSR address retires as a no-operation instead of raising cause 2 (FR-50)
+csr-illegal-noop	rtl/instruction_decode.sv	if (csr_write && csr_read_only(inst.csr_type.csr)) legal = 1'b0;	if (csr_write && csr_read_only(inst.csr_type.csr)) legal = 1'b1; // negative control: a write to a read-only CSR decodes as legal	a write to a read-only CSR address retires as a no-operation instead of raising cause 2 (FR-50)
+#
+# T-03 (FR-50 / FR-24 / FR-37 / FR-32 / FR-49, WP-14b batch 2a): the six
+# independent clauses T-03's program measures besides the illegal-CSR trap, plus
+# the D12b pulse contract. Each names a different defect, so each is its own
+# (T-03, mutant) pair in the red cell.
+#
+# D5: the Zicsr write rule is the REGISTER SPECIFIER. `csrrs x15, mhartid, x0`
+# must not write, so it must NOT trap; a core that always writes turns that read
+# of a read-only CSR into cause 2 and T-03 loses a retire.
+csr-write-always	rtl/instruction_decode.sv	            ? 1'b1 : (inst.csr_type.rs1 != '0);	            ? 1'b1 : 1'b1; // negative control: every CSRRS/CSRRC writes	CSRRS/CSRRC with rs1=x0 writes instead of suppressing, so a read of a read-only CSR traps (D5, FR-50)
+#
+# FR-29: the program computes mtvec with AUIPC+ADDI and places the handler at
+# +0x200. A fixed vector sends the trap to 1000, where the program has nothing.
+trap-vector-fixed	rtl/csr_file.sv	    assign mtvec_base = {mtvec_q[31:2], 2'b00};	    assign mtvec_base = 32'd1000; // negative control: the trap vector is fixed	trap entry redirects to 1000 instead of the mtvec.BASE the program wrote (FR-29)
+#
+# FR-23: mepc is the PC of the instruction that trapped. Capturing pc+4 makes
+# the handler return one instruction past the trap site, and the co-cycle CSR
+# read (and the handler's own read) then disagrees by value.
+mepc-off-by-one	rtl/csr_file.sv	                mepc_q   <= trap_pc;	                mepc_q   <= trap_pc + 32'd4; // negative control: mepc captures pc+4	mepc captures pc+4 instead of the trapping instruction's PC (FR-23)
+#
+# FR-37: misa is the CONFIGURED extension set. A literal that advertises A
+# (bit 0) on an RV32I-only build contradicts `misa_value(ENABLE_A/M/C)`.
+misa-literal	rtl/csr_file.sv	            CSR_MISA:      csr_rdata = misa_val;	            CSR_MISA:      csr_rdata = 32'h4000_0101; // negative control: misa is a literal	misa reads a literal that advertises A instead of misa_value(ENABLE_A/M/C) (FR-37)
+#
+# FR-32 / D13: T-03 drives hart_id = 5. A hardwired zero passes only if the
+# test also drove zero, which it does not.
+mhartid-zero	rtl/csr_file.sv	            CSR_MHARTID:   csr_rdata = {28'b0, hart_id};         // FR-32	            CSR_MHARTID:   csr_rdata = 32'h0000_0000;             // negative control: mhartid reads zero	mhartid reads 0 instead of hart_id, which the test drives as 5 (FR-32)
+#
+# FR-49 / D13: time and timeh are views of the observed mtime. T-03 drives
+# 0x0000_0001_2345_6789, so a hardwired zero is a value mismatch, not a guess.
+# The two halves are separate rows (as halfword-lane-ignore-bit0 is): the same
+# defect on the read path, one per line with a unique find.
+time-not-a-view	rtl/csr_file.sv	            CSR_TIME:      csr_rdata = mtime[31:0];              // FR-49	            CSR_TIME:      csr_rdata = 32'h0000_0000;            // negative control: time is not a view	time does not follow mtime, so the observed 64-bit timer is not what time reads (FR-49)
+time-not-a-view	rtl/csr_file.sv	            CSR_TIMEH:     csr_rdata = mtime[63:32];	            CSR_TIMEH:     csr_rdata = 32'h0000_0000;            // negative control: timeh is not a view	timeh does not follow mtime, so the observed 64-bit timer is not what timeh reads (FR-49)
+#
+# D12b: trap_valid is the edge the pipeline advances, not a level. Replacing the
+# IF/ID and ID/EX enable terms with the global enable leaves it high while a
+# split beat or a data grant holds those registers (T-03 has neither, but the
+# defect is the signal's contract, not a stimulus path -- see the report).
+trap-held-while-stalled	rtl/control.sv	                     if_id_clk_en && id_ex_clk_en;	                     clk_en; // negative control: the stage enables do not gate trap_valid	trap_valid ignores the pipeline enables, so it stays high while a split beat or a data grant holds the pipeline (D12b)
+#
+# T-62's defect (FR-22/D12): the IF/ID and ID/EX enables are exactly what
+# split_stall and the data wait take away, so tying them to 1 makes the trap a
+# level across the held crossing store and the monitor publishes it once per
+# cycle -- `expected_traps_exact` names the count.
+trap-valid-while-held	rtl/control.sv	                     if_id_clk_en && id_ex_clk_en;	                     1'b1; // negative control: trap_valid ignores the IF/ID and ID/EX enables	trap_valid ignores the IF/ID and ID/EX enables, so it stays high across a held beat (T-62's defect)
+#
+# T-60's defect (WP-14b audit blocker 1, FR-22/FR-23/FR-25): the retire in WB is
+# OLDER than the trap in ID, so the commit must be published first. Publishing
+# the sampled trap before the retire block (and clearing it so the final
+# publication is a no-op) makes the model apply the trap first; its prediction
+# for the co-cycle CSR read is then the POST-trap mepc/mcause.
+trap-published-first	tb/env/agents/riscv_small_agent/riscv_small_monitor.sv	      if (retire_vif.retire_valid) begin	      publish_trap(trp); trp = null; if (retire_vif.retire_valid) begin	the monitor publishes the trap before the commit of the same cycle, so the model applies the trap first (T-60's defect)
+#
+# T-61's defect (FR-22/G-37): `exception` is a DUT input carried by the
+# interface. Tying the DUT port to zero leaves the driver's request and the
+# monitor's observation on a wire the core never sees, so the external arm of
+# proc_trap_priority is unreachable again.
+exception-unrouted	tb/riscv_small_tb.sv	    .exception(intf.exception),	    .exception(4'b0000), // negative control: the external cause is not routed	the DUT's exception input is tied to zero, so the platform's request never reaches the trap path (T-61's defect)

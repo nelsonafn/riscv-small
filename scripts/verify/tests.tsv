@@ -31,6 +31,27 @@
 # wp 0 - baseline: the tests that existed before the work-package flow
 T-01	riscv_small_basic_load_store_test	0	FR-09,FR-10	300	no
 T-02	riscv_small_corner_test	0	-	300	no
+#
+# wp 14 F2 (E6): CSR file, Zicsr and trap entry. T-03 is the directed program:
+# the six CSR* on mscratch, the rd=x0 / rs1=x0 clauses, one read per implemented
+# address group plus one absent address, a write to mtval that must NOT trap
+# (FR-52), and six traps back to back (ECALL 11, EBREAK 3, unallocated encoding
+# 2, absent CSR 2, two writes to read-only addresses 2) honoured at the mtvec the
+# program wrote. The oracle is the reference model (which derives the cause from
+# the trapping instruction) plus the scoreboard, fed ONLY by the monitor's retire
+# and trap streams. mtime and hart_id are driven non-zero (D13), so a DUT that
+# reads zero for time/timeh/mhartid fails rather than passes.
+#
+# red=mutant:csr-illegal-noop is the planned row (wp-14 §5): a CSR access the
+# configuration does not implement, and a write to a read-only address, must
+# raise illegal-instruction instead of executing as a no-operation (FR-24,
+# FR-47, FR-50). The catalogue row landed with the RTL text it mutates, as
+# `store-grant-ignored` did for T-53. WP-14b batch 2a adds the six independent
+# clauses of the same program plus the D12b pulse contract, each its own
+# (T-03, mutant) pair: csr-write-always (D5), trap-vector-fixed (FR-29),
+# mepc-off-by-one (FR-23), misa-literal (FR-37), mhartid-zero (FR-32),
+# time-not-a-view (FR-49) and trap-held-while-stalled (D12b).
+T-03	riscv_small_csr_test	14	FR-22,FR-23,FR-24,FR-25,FR-29,FR-32,FR-37,FR-47,FR-49,FR-50,FR-51,FR-52	300	mutant:csr-illegal-noop+csr-write-always+trap-vector-fixed+mepc-off-by-one+misa-literal+mhartid-zero+time-not-a-view+trap-held-while-stalled
 T-06	riscv_small_subword_access_test	0	FR-12	300	mutant:T-06
 T-08	riscv_small_sanity_test	4	NFR-05,FR-18	300	mutant:sanity-addi	sanity:rv32ui-p-simple
 T-09	riscv_small_passive_test	4b	-	300	mutant:passive-agent-always-active
@@ -142,3 +163,25 @@ T-53	riscv_small_store_grant_test	13	FR-38,G-18	300	mutant:store-grant-ignored
 # green at the same RTL: before it, the image stored the pass value and the run still
 # failed on 99 STRB_WIDTH errors from the partial beats.
 T-52	riscv_small_sanity_test	13	FR-42,G-22	300	mutant:no-misaligned-split	sanity:rv32ui-p-ma_data
+
+# wp 14b (audit blockers 1/3/4 of wp-14 §16): the three arms WP-14 left unobserved
+# or wrongly ordered, one test each. WP-14b batch 2a lands the catalogue row each
+# red cell names; the recorded red log (build/regress/<run>/T-6x.log) at the
+# RTL/TB digest that existed before the fix is the historical evidence, and the
+# mutant below is the reproducible one (check 11).
+#
+# T-60: the model must execute the RETIRE of a cycle before the TRAP of the same
+# cycle -- the retiring instruction is older (it is in WB, the trap in ID). The
+# program reads `mepc`/`mcause` in the write-back slot of the trap's own cycle,
+# so the pre-trap values must come back. Names FR-22/FR-23/FR-25.
+T-60	riscv_small_trap_order_test	14	FR-22,FR-23,FR-25	300	mutant:trap-published-first
+# T-61: `exception[3:0]` reaches the DUT through the interface and the driver
+# asserts it for one cycle on a scheduled instruction; the cause in `mcause` is
+# the presented code (5, which no internal path produces), `mepc` is the aimed
+# instruction, and its CSR write is discarded. Names FR-22 (`G-37`).
+T-61	riscv_small_external_trap_test	14	FR-22,FR-23,G-37	300	mutant:exception-unrouted
+# T-62: D12 -- a trap raised while a crossing store holds MA (T-53's withholding
+# memory): exactly one trap, taken on the release edge, and no instruction lost
+# (image: the trap site must not retire, every other placed word must). Names
+# FR-22/FR-42.
+T-62	riscv_small_trap_split_test	14	FR-22,FR-42,G-37	300	mutant:trap-valid-while-held

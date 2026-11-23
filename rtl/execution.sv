@@ -52,6 +52,7 @@ import riscv_definitions_pkg::*;
 	input dataBus_u rs2, //[in] Reg source two (rs2) data
 	input dataBus_u imm, //[in] Immediate value
     input dataBus_u rd0_data, //[in] Reg destination (rd) data from write back (wb) forward
+    input dataBus_u csr_rdata, //[in] Value read from the CSR addressed in EX (FR-47)
     input logic rd0_wr_en,//[out] Reg destination (rd) write enable to pipeline from (id)
     input logic data_rd_en, //[out] Data memory read enable (wb_mux_sel) to be used with funct3 
 	input logic data_wr_en, //[out] Data memory write enable to be used together with funct3
@@ -61,6 +62,7 @@ import riscv_definitions_pkg::*;
     //TODO: Check critical path of forward from not registered ALU (alu_ex)
     output dataBus_u alu_ex, //[out] ALU result from execution not registered to jump forward (ex)
     output dataBus_u alu_ma, //[out] ALU result to memory access (ma)
+    output dataBus_u csr_wdata, //[out] Zicsr source operand, forwarded (FR-47)
     output dataBus_u pc_ma, //[out] PC value to memory access (ma)
     output instruction_u inst_ma, //[out] Instruction word to memory access (ma)
     output logic valid_ma, //[out] Instruction valid to memory access (ma)
@@ -242,6 +244,20 @@ import riscv_definitions_pkg::*;
         end
     end: proc_store_lane
 
+    /*
+     * Zicsr source operand (FR-47). The register forms take the forwarded rs1
+     * that the ALU source mux already produced (control forwards MA/WB), and
+     * the immediate forms zero-extend their 5-bit zimm. The CSR file applies
+     * the read-modify-write operation, so this is the raw source.
+     */
+    always_comb begin: proc_csr_wdata
+        if (inst.csr_type.funct3[2]) begin
+            csr_wdata.u_data = {27'b0, inst.csr_type.rs1};
+        end else begin
+            csr_wdata = alu_data1;
+        end
+    end: proc_csr_wdata
+
     /* 
      * ALU calculation
      */
@@ -249,6 +265,7 @@ import riscv_definitions_pkg::*;
         .alu_op        (alu_op), //[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
         .alu_data1     (alu_data1), //[in] Reg destination (rd) data
         .alu_data2     (alu_data2), //[in] Registered alu result to memory access (ma) 
+        .csr_data      (csr_rdata), //[in] CSR read value, the Zicsr result
         .alu_result    (alu_result)  //[out] ALU result to pipeline 
     );
 

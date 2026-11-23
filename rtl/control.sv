@@ -60,8 +60,9 @@ import riscv_definitions_pkg::*; // import package into $unit space
     input logic cond_jump, // Used to indicate a conditional branch have been decoded
     input logic jalr, //[in] Indicates a JALR, whose target reads rs1
     input logic branch_taken,  //[in] Indicates that a branch should be taken to the control  
-    input exception, //[in] Exception trigger
-    input dataBus_u pc_ex, //[in] PC value to EX
+    input logic [3:0] exception, //[in] External trap cause (FR-22)
+    input trapCause_e trap_cause_id, //[in] Internal synchronous cause decided in ID
+    input logic valid_id, //[in] The ID slot holds a real instruction
     input logic inst_ready, //[in] Indicates that instruction from memory is available
     input logic data_ready, //[in] Indicates that data from memory is available
     input aluSrc1_e alu_src1_ex, //[in] ALU source one mux selection (possible values PC/RS1) (id)
@@ -72,7 +73,8 @@ import riscv_definitions_pkg::*; // import package into $unit space
     output ctrlCJmpSrc_e jmp_src1,//[out] JUMP mux1 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
     output ctrlCJmpSrc_e jmp_src2,//[out] JUMP mux2 sel (from RD_: EX alu_ex, MA alu_ma, WB rd0_data)
 	output nextPCType_e pc_sel, //[out] PC source selector
-    output dataBus_u trap_addr,  //[out] Trap Addr
+    output logic trap_valid, //[out] A trap is taken this cycle (one pulse, FR-22)
+    output trapCause_e trap_cause, //[out] Cause of the trap being taken
     output logic inst_rd_en,    //[out] Instruction memory read enable
     output logic if_id_clk_en, // Run/Pause IF_ID
     output logic id_ex_clk_en, // Run/Pause ID_EX
@@ -84,13 +86,24 @@ import riscv_definitions_pkg::*; // import package into $unit space
 ); 
 
 
-    dataBus_u sepc;
-    dataBus_u scause;
-
     /* Branch resolved in the previous cycle. The instruction memory answers one
      * cycle after the address is presented, so the fetch already in flight when
      * the branch resolved must be discarded too. */
     logic branch_taken_q;
+
+    /* Trap taken in the previous cycle: the same one-cycle echo, for the same
+     * reason. The trap's own flush kills the IF/ID slot at its edge; the fetch
+     * already in flight (accepted before the redirect) must be discarded on the
+     * next edge, or it enters ID behind the handler (FR-22). */
+    logic trap_taken_q;
+
+    /* Trap request and the cause it carries. The priority between the internal
+     * synchronous cause and the external bus is defined once, in
+     * proc_trap_priority: the internal cause belongs to the instruction in ID
+     * and must report that instruction's PC, so it wins; the external bus is
+     * level-sensitive and asynchronous and is taken on the next cycle the
+     * pipeline can advance. */
+    logic trap_request;
 
     /* G-30: the branch operand is not resolved while a load feeding it is
      * still in MA/EX. The decision comes from the stale register-file value,
@@ -103,9 +116,11 @@ import riscv_definitions_pkg::*; // import package into $unit space
     always_ff @(posedge clk or negedge rst_n) begin: proc_branch_flush
         if (!rst_n) begin: proc_branch_flush_rst
             branch_taken_q <= 1'b0;
+            trap_taken_q   <= 1'b0;
         end: proc_branch_flush_rst
         else if (clk_en) begin
             branch_taken_q <= branch_taken & ~branch_op_stall;
+            trap_taken_q   <= trap_valid;
         end
     end: proc_branch_flush
 
@@ -275,10 +290,9 @@ import riscv_definitions_pkg::*; // import package into $unit space
             if_id_flush =  '1;
         end
 
-        if (exception) begin
-            if_id_flush = '1;
-            id_ex_flush = '1;
-            pc_sel = TRAP;
+        // Discard the fetch that was already in flight when the trap resolved
+        if (trap_taken_q) begin
+            if_id_flush =  '1;
         end
 
         //Insert NOP if there is no instruction available
@@ -320,28 +334,46 @@ import riscv_definitions_pkg::*; // import package into $unit space
          * rv32ui-p-ma_data, where the read-back load behind a store waiting for
          * the grant was cleared out of EX and the branch then compared against
          * the stale register. Hold both registers and let the flush fire on the
-         * edge that releases the hold; an exception keeps its flush, because it
-         * aborts the access. */
-        if (((!data_ready && (mux_sel_rd_wb || data_wr_en_ma)) || split_stall) && !exception) begin
+         * edge that releases the hold. A trap is held the same way (D12): it
+         * fires on the edge the beat completes, and never while the pipeline is
+         * frozen. */
+        if ((!data_ready && (mux_sel_rd_wb || data_wr_en_ma)) || split_stall) begin
             id_ex_flush = '0;
             ex_ma_flush = '0;
         end
 
+        /* Trap entry (FR-22, D12/D12b). The event is the edge the pipeline
+         * actually advances: both the IF/ID and the ID/EX register must clock,
+         * which is exactly what split_stall, the data wait and the load-use
+         * freeze take away. trap_valid is therefore high for ONE cycle per trap
+         * and never while the pipeline is retained; the monitor samples it on
+         * every posedge without masking with clk_en (D12b). The flush and the
+         * vector load happen on that same edge, so the failing instruction is
+         * discarded before it can write anything. */
+        trap_valid = trap_request && valid_id && clk_en &&
+                     if_id_clk_en && id_ex_clk_en;
+        if (trap_valid) begin
+            if_id_flush = '1;
+            id_ex_flush = '1;
+            pc_sel = TRAP;
+        end
+
     end: proc_forward_ctrl
 
-    assign trap_addr = 1000; //TODO:TBD
+    /* Trap priority, defined once (wp-14 §3). The internal cause belongs to the
+     * instruction in ID and must report that instruction's PC, so it wins over
+     * the level-sensitive external bus; the external cause is captured on the
+     * next cycle the pipeline advances, with the same PC. */
+    always_comb begin: proc_trap_priority
+        trap_request = 1'b0;
+        trap_cause   = TRAP_NONE;
+        if (trap_cause_id != TRAP_NONE) begin
+            trap_request = 1'b1;
+            trap_cause   = trap_cause_id;
+        end else if (exception != 4'b0000) begin
+            trap_request = 1'b1;
+            trap_cause   = trapCause_e'(exception);
+        end
+    end: proc_trap_priority
 
-    always_ff @(posedge clk or negedge rst_n) begin: proc_exception
-        if (!rst_n) begin: proc_exception_rst
-            sepc <= '0;
-            scause <= '0;
-        end: proc_exception_rst
-        else if (clk_en) begin
-            if (exception) begin
-                sepc <= pc_ex;
-                scause <= '0; //TODO: TBD
-            end 
-        end        
-    end: proc_exception
-    
 endmodule: control

@@ -5,15 +5,50 @@
 // riscv_small_monitor
 //
 // Observes the DUT ports and publishes what it saw -- fetch AND data AND
-// retire -- on the analysis port. It never drives, never judges, never decodes
-// and never holds the verdict.
+// retire AND trap -- on the analysis port. It never drives, never judges, never
+// decodes and never holds the verdict.
+//
+// The trap stream (WP-14 §4.2, E6) is the fourth, read through
+// riscv_small_trap_if, the probe bound inside the DUT. It exists because the
+// instruction that traps is flushed before write-back and NEVER retires: a
+// model fed only by the retire stream is blind to exactly the event the trap
+// path implements, and a pc discontinuity cannot stand in for it because a jump
+// produces the same one. The event carries (pc, instruction word, cause), so
+// the reference model can DERIVE the cause from the word and compare it with
+// the cause the core took -- publishing only the cause would leave the model
+// repeating the DUT's value.
+//
+// The trap event is sampled on EVERY posedge and is NOT masked with `clk_en`
+// (wp-14 D12b): `clk_en` gates the advance of the pipeline, not a trap, and a
+// trap_valid held high for the two or three cycles of a retention would publish
+// N events for one trap and make the model apply N traps. The RTL contract is
+// therefore one cycle per trap, driven from the same signal the probe samples.
+//
+// THE PUBLICATION ORDER IS THE ARCHITECTURAL ORDER (WP-14b, audit blocker 1).
+// Four streams share one analysis port, so the position of an event in the
+// stream is a claim about time: the instruction retiring in WB and the beat in
+// MA are OLDER than the instruction trapping in ID in the same cycle. The trap
+// is therefore sampled first (unmasked) and published LAST, after the commit and
+// the data beat of that cycle. Publishing it first made a consumer of the two
+// observations apply the trap before the commit, so a CSR read of `mepc`/
+// `mcause` retiring in the trap's own cycle was predicted from the POST-trap
+// state -- latent until T-60 placed such a read three instructions before the
+// trap site.
+//
+// D13: `mtime` and `hart_id` are read from the pin interface and published with
+// every retire and trap event. They are the DUT's stimulus, observed, so the
+// model predicts `time`/`timeh` and `mhartid` from what the monitor saw and a
+// second source of truth is never created (C-16).
 //
 // The retire event (G-28) is read through riscv_small_retire_if, the probe bound
 // inside the DUT; the interface derives the commit rule, so the monitor only
 // reports it. The event carries (pc, instruction word, rd, wdata), which makes
 // it self-contained: a consumer never has to look the instruction up in a
 // fetched-word table, and a fetch the core flushed is never executed (the probe
-// only reports what reached write-back).
+// only reports what reached write-back). Since WP-14 it also carries whether
+// the instruction writes its destination register (the probe's rd0_wr_en_wb):
+// "CSRRW with rd = x0 wrote nothing" and "CSRRW failed to write rd" are the
+// same observation without it.
 //
 // The fetch pair is formed by the outstanding-request rule of wp-8 §3.1.3
 // (R1/R4/R10) and §3.1.7, not by sampling two pins in the same cycle:
@@ -72,6 +107,7 @@
 class riscv_small_monitor extends uvm_monitor;
   virtual riscv_small_interface.mon_mp vif;
   virtual riscv_small_retire_if     retire_vif;
+  virtual riscv_small_trap_if       trap_vif;
   uvm_analysis_port#(riscv_small_transaction) mon2sb_port;
   `uvm_component_utils(riscv_small_monitor)
 
@@ -84,6 +120,7 @@ class riscv_small_monitor extends uvm_monitor;
   int unsigned fetch_count  = 0; // published (address, word) pairs
   int unsigned orphan_count = 0; // responses with nothing outstanding (published with captured_inst_orphan)
   int unsigned retire_count = 0; // published retire (commit) events
+  int unsigned trap_count   = 0; // published trap events (wp-14 §4.2)
 
   // ---- Data-access assembly (WP-13 P3, FR-38/G-18) -------------------------
   // Core clock cycles, 1-based: incremented on every edge the core actually
@@ -138,6 +175,8 @@ class riscv_small_monitor extends uvm_monitor;
       `uvm_fatal("NO_VIF",{"virtual interface must be set for: ",get_full_name(),".vif"});
     if(!uvm_config_db#(virtual riscv_small_retire_if)::get(this, "", "retire_vif", retire_vif))
       `uvm_fatal("NO_RETIRE_VIF",{"virtual interface must be set for: ",get_full_name(),".retire_vif"});
+    if(!uvm_config_db#(virtual riscv_small_trap_if)::get(this, "", "trap_vif", trap_vif))
+      `uvm_fatal("NO_TRAP_VIF",{"virtual interface must be set for: ",get_full_name(),".trap_vif"});
     if (!uvm_config_db#(bit)::get(this, "", "trace", trace))
       trace = 0;
 
@@ -242,12 +281,46 @@ class riscv_small_monitor extends uvm_monitor;
 
   virtual task run_phase(uvm_phase phase);
     forever begin
+      // The trap of THIS edge, if any. It is sampled first (unmasked by clk_en,
+      // D12b) but PUBLISHED LAST, because of the order of the two observations
+      // (WP-14b, audit blocker 1): the instruction retiring in WB is OLDER than
+      // the one trapping in ID, so a consumer fed by this port must receive the
+      // commit before the trap of the same cycle. The publication order of the
+      // analysis port IS the architectural order; see the file header.
+      riscv_small_transaction trp;
       @(posedge vif.clk);
+
+      trp = null;
+      if (trap_vif.trap_valid) begin
+        trap_count++;
+        trp = riscv_small_transaction::type_id::create("trap_trans");
+        trp.op_is_trap   = 1;
+        trp.trap_pc      = trap_vif.trap_pc;
+        trp.trap_inst    = trap_vif.trap_inst;
+        trp.trap_cause   = trap_vif.trap_cause;
+        trp.trap_seq     = trap_count;
+        // D13: the straps as they stand next to the event.
+        trp.obs_mtime    = vif.mtime;
+        trp.obs_hart_id  = vif.hart_id;
+        // FR-22/Q-35 (WP-14b): the external request as the MONITOR read it, not
+        // as the test configured it. The model predicts an external trap's
+        // cause from this (D13's rule), so a DUT that ignores the pin while the
+        // monitor sees it cannot pass.
+        trp.obs_exception = vif.exception;
+        // The event belongs to the cycle being sampled. The counter below only
+        // advances after the `clk_en` gate, so at this point the cycle in
+        // progress is `cycle + 1` -- the same stamp the retire event published
+        // later in this iteration carries.
+        trp.obs_cycle    = cycle + 1;
+      end
 
       // R10: clk_en is a clock enable, not a protocol signal. When the core
       // does not clock, it latches neither the request nor the response, so
       // neither handshake happened.
-      if (!vif.clk_en) continue;
+      if (!vif.clk_en) begin
+        publish_trap(trp);
+        continue;
+      end
 
       if (!vif.rst_n) begin
         // Reset discards the pipeline, and the memory must not present a
@@ -264,6 +337,7 @@ class riscv_small_monitor extends uvm_monitor;
         da_beat      = 0;
         da_beats     = 1;
         da_beat_done = 0;
+        publish_trap(trp);
         continue;
       end
 
@@ -414,7 +488,15 @@ class riscv_small_monitor extends uvm_monitor;
         ret.retire_inst   = retire_vif.retire_inst;
         ret.retire_rd     = retire_vif.retire_rd;
         ret.retire_wdata  = retire_vif.retire_wdata;
+        ret.retire_wr_en  = retire_vif.rd0_wr_en_wb;
         ret.retire_seq    = retire_count;
+        // D13: the straps as they stand next to the event. The model predicts
+        // `time`/`timeh` and `mhartid` from THESE, never from configuration.
+        ret.obs_mtime     = vif.mtime;
+        ret.obs_hart_id   = vif.hart_id;
+        // FR-22/Q-35, and the cycle stamp a checker relates to a data beat (D12).
+        ret.obs_exception = vif.exception;
+        ret.obs_cycle     = cycle;
         if (retire_log_fd != 0) begin
           // One line per commit, in retire order, from the observation above:
           // no comparison, no verdict. `x0` is suppressed on this side exactly
@@ -427,12 +509,30 @@ class riscv_small_monitor extends uvm_monitor;
               ret.retire_pc, ret.retire_inst);
         end
         if (trace)
-          `uvm_info("RETIRE_MONITOR", $sformatf("RETIRE #%0d pc=0x%08h inst=0x%08h rd=x%0d wdata=0x%08h",
-            retire_count, ret.retire_pc, ret.retire_inst, ret.retire_rd, ret.retire_wdata), UVM_LOW);
+          `uvm_info("RETIRE_MONITOR", $sformatf("RETIRE #%0d pc=0x%08h inst=0x%08h rd=x%0d wr=%0d wdata=0x%08h (mtime=0x%016h hart_id=%0d)",
+            retire_count, ret.retire_pc, ret.retire_inst, ret.retire_rd, ret.retire_wr_en, ret.retire_wdata,
+            ret.obs_mtime, ret.obs_hart_id), UVM_LOW);
         mon2sb_port.write(ret);
       end
+
+      // The trap of this edge goes LAST: it is the YOUNGEST event of the cycle
+      // (decided in ID, while the commit came from WB and the data beat from
+      // MA). One publication per event, verbatim -- only the position in the
+      // stream is architectural.
+      publish_trap(trp);
     end
   endtask
+
+  // One publication for the trap sampled at the top of the iteration, if there
+  // was one. Nothing is derived and nothing is filtered here.
+  function void publish_trap(riscv_small_transaction trp);
+    if (trp == null) return;
+    if (trace)
+      `uvm_info("TRAP_MONITOR", $sformatf("TRAP #%0d pc=0x%08h inst=0x%08h cause=%0d (mtime=0x%016h hart_id=%0d exception=%0d cycle=%0d)",
+        trp.trap_seq, trp.trap_pc, trp.trap_inst, trp.trap_cause, trp.obs_mtime, trp.obs_hart_id,
+        trp.obs_exception, trp.obs_cycle), UVM_LOW);
+    mon2sb_port.write(trp);
+  endfunction
 
   function void report_phase(uvm_phase phase);
     // The run is over, so the dump is complete: close it once. The counter and
@@ -445,8 +545,8 @@ class riscv_small_monitor extends uvm_monitor;
         $sformatf("%0d commit line(s) written to %s", retire_count, retire_log_path), UVM_MEDIUM)
     end
     `uvm_info(get_full_name(),
-      $sformatf("fetch pair: %0d published, %0d request(s) still outstanding at the end of the run, %0d orphan response(s); %0d retire event(s)",
-        fetch_count, fetch_pending.size(), orphan_count, retire_count),
+      $sformatf("fetch pair: %0d published, %0d request(s) still outstanding at the end of the run, %0d orphan response(s); %0d retire event(s); %0d trap event(s)",
+        fetch_count, fetch_pending.size(), orphan_count, retire_count, trap_count),
       UVM_MEDIUM)
     `uvm_info(get_full_name(),
       $sformatf("data port: %0d beat(s) published (%0d of a split access, %0d split access(es)), %0d waited more than one cycle, %0d with a grant cycle, %0d without one, %0d left pending at the end of the run",

@@ -42,6 +42,7 @@ import riscv_definitions_pkg::*;
     input aluOpType_e alu_op, //[in] Opcode for alu operation ( composed by funct3ITypeALU_e)
     input dataBus_u alu_data1, //[in] Reg destination (rd) data
     input dataBus_u alu_data2, //[in] Registered alu result to memory access (ma) 
+    input dataBus_u csr_data, //[in] CSR read value, the result of a Zicsr read (FR-47)
     output dataBus_u alu_result //[out] ALU result to pipeline 
 );
 
@@ -85,6 +86,9 @@ import riscv_definitions_pkg::*;
             end
             ALU_BPS2 : begin
                 alu_result = alu_data2;
+            end
+            CSR_PASS : begin // Zicsr: write back the CSR value read in EX (FR-47)
+                alu_result = csr_data;
             end
             default: begin
                 alu_result = alu_data2;

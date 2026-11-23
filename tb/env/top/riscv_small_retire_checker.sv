@@ -85,6 +85,8 @@ class riscv_small_retire_checker extends uvm_subscriber #(riscv_small_transactio
   int unsigned multfetch_pc_count   = 0; // pcs fetched more than once (loop / re-fetched target)
   int unsigned lost_fetch_count     = 0; // fetched, placed, not skipped, never retired
   int unsigned skipped_fetch_count  = 0; // fetch events at pcs the control flow skips
+  int unsigned trap_site_fetch_count = 0; // fetch events at the declared trap site(s)
+  int unsigned trapped_retired_count = 0; // trap site(s) that retired anyway
   bit          count_form_asserted  = 0; // claim 7 was checked, not skipped
 
   function new(string name, uvm_component parent);
@@ -147,6 +149,16 @@ class riscv_small_retire_checker extends uvm_subscriber #(riscv_small_transactio
       `uvm_error("RETIRE_SKIPPED",
         $sformatf("[RETIRE_SKIPPED #%0d] commit #%0d (seq=%0d) retired at pc=0x%08h, which the program's branch skips",
           skipped_count, checked_count, t.retire_seq, t.retire_pc))
+    end
+
+    // Claim 3b (WP-14b, FR-22): the instruction the program DECLARED as its
+    // trap site must never retire -- the trap path flushes it before write-back.
+    // A commit there is the trap being lost, not an extra instruction.
+    if (image.is_no_retire(t.retire_pc)) begin
+      trapped_retired_count++;
+      `uvm_error("RETIRE_TRAPPED",
+        $sformatf("[RETIRE_TRAPPED #%0d] commit #%0d (seq=%0d) retired at pc=0x%08h, the program's declared trap site: the instruction that traps must be discarded before write-back (FR-22)",
+          trapped_retired_count, checked_count, t.retire_seq, t.retire_pc))
     end
 
     checked_count++;
@@ -212,6 +224,13 @@ class riscv_small_retire_checker extends uvm_subscriber #(riscv_small_transactio
         skipped_fetch_count += fetched_hits(pc);
         continue;
       end
+      // Claim 6b (WP-14b): a declared trap site is fetched and never retires by
+      // definition -- the trap removes it from the commit stream. Counted and
+      // reported, not an error; `RETIRE_TRAPPED` owns the other direction.
+      if (image.is_no_retire(pc)) begin
+        trap_site_fetch_count += fetched_hits(pc);
+        continue;
+      end
       if (retired_hits(pc) == 0) begin
         lost_fetch_count++;
         // Judged only when the program reached its end: otherwise RETIRE_COUNT
@@ -236,11 +255,12 @@ class riscv_small_retire_checker extends uvm_subscriber #(riscv_small_transactio
       bit [31:0] offender;
 
       count_form_asserted = 1;
-      if (fetch_count != retire_count + skipped_fetch_count) begin
+      if (fetch_count != retire_count + skipped_fetch_count + trap_site_fetch_count) begin
         offender = count_offender();
         `uvm_error("RETIRE_FETCH_COUNT",
-          $sformatf("%0d fetch(es) and %0d commit(s): the difference is %0d, expected %0d = the skipped address(es) actually fetched; first unaccounted pc=0x%08h (fetched %0d time(s), retired %0d time(s)); %0d word(s) placed, %0d executed",
-            fetch_count, retire_count, fetch_count - retire_count, skipped_fetch_count,
+          $sformatf("%0d fetch(es) and %0d commit(s): the difference is %0d, expected %0d = the skipped address(es) actually fetched plus the declared trap site(s) fetched; first unaccounted pc=0x%08h (fetched %0d time(s), retired %0d time(s)); %0d word(s) placed, %0d executed",
+            fetch_count, retire_count, fetch_count - retire_count,
+            skipped_fetch_count + trap_site_fetch_count,
             offender, fetched_hits(offender), retired_hits(offender),
             image.inst_size(), image.commit_target()))
       end
@@ -263,10 +283,10 @@ class riscv_small_retire_checker extends uvm_subscriber #(riscv_small_transactio
       skips = {skips, $sformatf(" 0x%08h", image.skip_pc[i])};
 
     `uvm_info(get_full_name(),
-      $sformatf("G-28 retire: %0d commit(s) of %0d executed, %0d fetch(es), difference %0d (expected %0d), %0d mismatch(es), %0d skipped address(es) retired, %0d after the program, done=%0d",
+      $sformatf("G-28 retire: %0d commit(s) of %0d executed, %0d fetch(es), difference %0d (expected %0d), %0d mismatch(es), %0d skipped address(es) retired, %0d trap site(s) retired, %0d after the program, done=%0d",
         retire_count, image.commit_target(), fetch_count,
-        fetch_count - retire_count, skipped_fetch_count,
-        mismatch_count, skipped_count, extra_count, done),
+        fetch_count - retire_count, skipped_fetch_count + trap_site_fetch_count,
+        mismatch_count, skipped_count, trapped_retired_count, extra_count, done),
       UVM_LOW)
     `uvm_info(get_full_name(),
       $sformatf("G-28 skip: pc(s) the control flow never executes:%s -- %0d retire event(s) at them",

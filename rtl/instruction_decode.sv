@@ -74,7 +74,11 @@ import riscv_definitions_pkg::*;
 	output funct3ITypeLOAD_e funct3_ex, //[out] funct3 LOAD
 	output regAddr_t rd0_addr_ex,  //[out] Reg destination (rd) addr
 	output regAddr_t rs1_addr_ex, //[out] Reg source one (rs1) addr
-	output regAddr_t rs2_addr_ex  //[out] Reg source two (rs2) addr
+	output regAddr_t rs2_addr_ex,  //[out] Reg source two (rs2) addr
+	output csrOpType_e csr_op_ex, //[out] Zicsr operation of the instruction in EX (FR-47)
+	output logic csr_valid_ex, //[out] A legal Zicsr instruction is in EX
+	output logic csr_write_ex, //[out] The Zicsr instruction writes the CSR
+	output trapCause_e trap_cause_id //[out] Synchronous trap cause decided in ID
 );
 	
 	/*
@@ -94,6 +98,16 @@ import riscv_definitions_pkg::*;
 	aluOpType_e alu_op;  // Opcode for alu operation (always be composed by funct3ITypeALU_e)
 	dataBus_t rs1, rs2, rs1_jump, rs2_jump;
     logic rd0_wr_en_2pipe; //
+
+	/*
+	 * Zicsr decode (FR-47, FR-50). The legality is decided HERE, in ID, from
+	 * the address and the encoding alone: the instruction that writes a CSR is
+	 * either flushed before it reaches EX or it writes, never both (wp-14 D1).
+	 */
+	csrOpType_e csr_op;  // operation of the instruction in ID
+	logic csr_valid;     // a legal Zicsr access
+	logic csr_write;     // that access writes the CSR
+	logic legal;         // the encoding is in the implemented subset (FR-24)
 
 	/*
 	 * Register signals to be used in execute stage. 
@@ -116,6 +130,9 @@ import riscv_definitions_pkg::*;
 			rs2_addr_ex <= '0;
 			rd0_wr_en_ex <= '0;
 			funct3_ex <= LB;
+			csr_op_ex <= CSRRW;
+			csr_valid_ex <= '0;
+			csr_write_ex <= '0;
 		end: proc_id_ex_rst
 		else if (clk_en) begin
 			data_rd_en_ex <= data_rd_en;
@@ -134,6 +151,9 @@ import riscv_definitions_pkg::*;
 			funct3_ex <= inst.i_type_load.funct3;
 			rs1_ex <= rs1;
 			rs2_ex <= rs2;
+			csr_op_ex <= csr_op;
+			csr_valid_ex <= csr_valid;
+			csr_write_ex <= csr_write;
 		end        
 	end: proc_id_ex
 
@@ -248,6 +268,103 @@ import riscv_definitions_pkg::*;
 	end: proc_imm_gen
 
 	/*
+	 * Instruction legality and the synchronous trap cause (FR-24, FR-25,
+	 * FR-47, FR-50). One truth table, read from the encoding:
+	 *   - an opcode outside the implemented subset of doc/spec.md §4.1 traps;
+	 *   - a reserved funct3/funct7 of an implemented instruction traps;
+	 *   - ECALL/EBREAK carry their causes; MRET/WFI stay legal no-operations
+	 *     (FR-45/FR-46) so they retire like every other machine-mode no-op;
+	 *   - an absent CSR address, a write to a read-only address (csr[11:10] =
+	 *     2'b11) and the reserved SYSTEM encodings trap with cause 2.
+	 * The write test is on the ENCODING -- CSRRW/CSRRWI always write, the
+	 * set/clear forms write when their source field is not x0/0 -- which is
+	 * what FR-50 states and what keeps the decision in ID, before any effect.
+	 */
+	always_comb begin: proc_legality
+		legal = 1'b1;
+		csr_op = CSRRW;
+		csr_valid = 1'b0;
+		csr_write = 1'b0;
+		trap_cause_id = TRAP_NONE;
+
+		case (inst.r_type.opcode)
+		LUI, AUIPC, JAL, FENCE: begin
+			// Always legal in this build.
+		end
+		JALR: begin
+			if (inst.i_type.funct3 != 3'b000) legal = 1'b0;
+		end
+		BRCH_C: begin
+			case (inst.b_type.funct3)
+				3'b000, 3'b001, 3'b100, 3'b101, 3'b110, 3'b111: ;
+				default: legal = 1'b0;
+			endcase
+		end
+		LOAD_C: begin
+			case (inst.i_type_load.funct3)
+				3'b000, 3'b001, 3'b010, 3'b100, 3'b101: ;
+				default: legal = 1'b0;
+			endcase
+		end
+		STORE_C: begin
+			case (inst.s_type.funct3)
+				3'b000, 3'b001, 3'b010: ;
+				default: legal = 1'b0;
+			endcase
+		end
+		ALUI_C: begin
+			// The shifts are the arm with a funct7 field in RV32.
+			case (inst.i_type_alu.funct3)
+				3'b001: if (inst.r_type.funct7 != 7'b0000000) legal = 1'b0;
+				3'b101: if ((inst.r_type.funct7 != 7'b0000000) &&
+				            (inst.r_type.funct7 != 7'b0100000)) legal = 1'b0;
+				default: ;
+			endcase
+		end
+		ALU_C: begin
+			case (inst.r_type.funct3)
+				3'b000, 3'b101: if ((inst.r_type.funct7 != 7'b0000000) &&
+				                   (inst.r_type.funct7 != 7'b0100000)) legal = 1'b0;
+				default: if (inst.r_type.funct7 != 7'b0000000) legal = 1'b0;
+			endcase
+		end
+		ECBK_C: begin
+			case (inst.csr_type.funct3)
+				3'b000: begin
+					case (inst.csr_type.csr)
+						12'h000: trap_cause_id = TRAP_ECALL_M;      // ECALL, FR-25
+						12'h001: trap_cause_id = TRAP_BREAKPOINT;   // EBREAK FR-25
+						12'h302, 12'h105: ; // MRET/WFI: legal no-operation
+						default: legal = 1'b0;
+					endcase
+				end
+				3'b100: legal = 1'b0; // no Zicsr operation uses funct3 100
+				default: begin
+					csr_op = csrOpType_e'(inst.csr_type.funct3);
+					if (!csr_implemented(inst.csr_type.csr)) begin
+						legal = 1'b0; // FR-50: absent address
+					end else begin
+						csr_valid = 1'b1;
+						csr_write = ((inst.csr_type.funct3 == 3'b001) ||
+						             (inst.csr_type.funct3 == 3'b101))
+						            ? 1'b1 : (inst.csr_type.rs1 != '0);
+						// FR-50: a write to a read-only address traps.
+						if (csr_write && csr_read_only(inst.csr_type.csr)) legal = 1'b0;
+					end
+				end
+			endcase
+		end
+		default: legal = 1'b0;
+		endcase
+
+		if (!legal) begin
+			trap_cause_id = TRAP_ILLEGAL_INSTRUCTION;
+			csr_valid = 1'b0;
+			csr_write = 1'b0;
+		end
+	end: proc_legality
+
+	/*
 	 * Instruction decoder
 	 */
 	always_comb begin: proc_decode
@@ -349,7 +466,17 @@ import riscv_definitions_pkg::*;
 			//TODO:
 		end
         ECBK_C: begin
-			//TODO:
+			/* Zicsr (FR-47): the CSR is read and written in EX, so the
+			 * destination write enable is the architectural one -- an
+			 * instruction with rd = x0 writes nothing (D4). ECALL, EBREAK,
+			 * MRET, WFI and the illegal encodings are decided in proc_legality
+			 * and never reach this arm with csr_valid set. */
+			if (csr_valid) begin
+				alu_op = CSR_PASS;
+				alu_src1 = RS1;
+				alu_src2 = IMM;
+				rd0_wr_en_2pipe = (inst.csr_type.rd != '0);
+			end
 		end
 		endcase
 	end: proc_decode
