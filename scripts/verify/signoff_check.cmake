@@ -314,7 +314,12 @@ foreach(ID IN LISTS SPEC_IDS)
     if(IDX LESS 0)
         list(APPEND MISMATCH "${ID}(missing)")
     else()
-        list(GET SPEC_STATUS ${IDX} S1)
+        # IDX indexes VERIF_IDS, so it must read VERIF_STATUS. Reading SPEC_STATUS here
+        # compared the spec with itself whenever the two lists were in the same order --
+        # which is always -- so a status disagreement could never be reported. Measured
+        # 2026-11-23: FR-01 flipped to `implemented` in verification.md against `verified`
+        # in spec.md still reported `ok`.
+        list(GET VERIF_STATUS ${IDX} S1)
         list(FIND SPEC_IDS "${ID}" SIDX)
         list(GET SPEC_STATUS ${SIDX} S0)
         if(NOT S0 STREQUAL S1)
@@ -840,6 +845,7 @@ else()
         endif()
     endif()
     set(NC_WP_TESTS 0)
+    set(NC_UNPROVEN "")
     riscv_manifest_rows(MANIFEST_ROWS "${MANIFEST}")
     foreach(MROW IN LISTS MANIFEST_ROWS)
         string(REPLACE "|" ";" MF "${MROW}")
@@ -857,6 +863,11 @@ else()
         # be a vacuous truth, so the row is `skipped` instead (see below).
         math(EXPR NC_WP_TESTS "${NC_WP_TESTS} + 1")
         if(NOT RED_SPEC MATCHES "^mutant:")
+            # A row with `red=no` carries no mutant, so nothing here can prove
+            # it. That is legitimate for rows that predate the flow and a named
+            # debt for a new one, but either way the report must not say "every
+            # WP test fails on its mutant" while quietly skipping it.
+            list(APPEND NC_UNPROVEN "${TID}")
             continue()
         endif()
 
@@ -866,7 +877,15 @@ else()
         endif()
     endforeach()
 
-    if(NC_PROBLEMS)
+    if(NOT NC_UNPROVEN STREQUAL "")
+        list(JOIN NC_UNPROVEN " " UTEXT)
+        if(NC_PROBLEMS)
+            list(JOIN NC_PROBLEMS " " NTEXT)
+            add_row("11::work-package negative control (test-first)::blocked::${NTEXT}; also carriers of no mutant: ${UTEXT}")
+        else()
+            add_row("11::work-package negative control (test-first)::ok::every WP test that carries a mutant fails on it; carriers of none: ${UTEXT}")
+        endif()
+    elseif(NC_PROBLEMS)
         list(JOIN NC_PROBLEMS " " NTEXT)
         add_row("11::work-package negative control (test-first)::blocked::${NTEXT}")
     elseif(NC_WP_TESTS EQUAL 0 AND NOT WP STREQUAL "0")

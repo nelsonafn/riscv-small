@@ -220,7 +220,6 @@ csr-write-always	rtl/instruction_decode.sv	            ? 1'b1 : (inst.csr_type.r
 #
 # FR-29: the program computes mtvec with AUIPC+ADDI and places the handler at
 # +0x200. A fixed vector sends the trap to 1000, where the program has nothing.
-trap-vector-fixed	rtl/csr_file.sv	    assign mtvec_base = {mtvec_q[31:2], 2'b00};	    assign mtvec_base = 32'd1000; // negative control: the trap vector is fixed	trap entry redirects to 1000 instead of the mtvec.BASE the program wrote (FR-29)
 #
 # FR-23: mepc is the PC of the instruction that trapped. Capturing pc+4 makes
 # the handler return one instruction past the trap site, and the co-cycle CSR
@@ -242,17 +241,20 @@ mhartid-zero	rtl/csr_file.sv	            CSR_MHARTID:   csr_rdata = {28'b0, hart
 time-not-a-view	rtl/csr_file.sv	            CSR_TIME:      csr_rdata = mtime[31:0];              // FR-49	            CSR_TIME:      csr_rdata = 32'h0000_0000;            // negative control: time is not a view	time does not follow mtime, so the observed 64-bit timer is not what time reads (FR-49)
 time-not-a-view	rtl/csr_file.sv	            CSR_TIMEH:     csr_rdata = mtime[63:32];	            CSR_TIMEH:     csr_rdata = 32'h0000_0000;            // negative control: timeh is not a view	timeh does not follow mtime, so the observed 64-bit timer is not what timeh reads (FR-49)
 #
-# D12b: trap_valid is the edge the pipeline advances, not a level. Replacing the
-# IF/ID and ID/EX enable terms with the global enable leaves it high while a
-# split beat or a data grant holds those registers (T-03 has neither, but the
-# defect is the signal's contract, not a stimulus path -- see the report).
-trap-held-while-stalled	rtl/control.sv	                     if_id_clk_en && id_ex_clk_en;	                     clk_en; // negative control: the stage enables do not gate trap_valid	trap_valid ignores the pipeline enables, so it stays high while a split beat or a data grant holds the pipeline (D12b)
+# T-58 (FR-51, WP-14b audit follow-up): the CLEAR spelling of Zicsr. `csrrc` and
+# `csrrci` must clear the bits rs1/uimm names; ANDing the source value in leaves
+# a different register, and `rv32mi-p-csr` reads the result back after
+# TEST_CASE(3)'s `csrrci a1, mscratch, 1` at TEST_CASE(4)'s `csrrsi a2, ...`.
+# `csr-write-always` cannot be this row's mutant: every mscratch write it adds
+# is legal, so the image passes on it.
+csrrc-and-instead-of-clear	rtl/csr_file.sv	            CSRRC, CSRRCI: csr_new = csr_rdata & ~csr_wdata;	            CSRRC, CSRRCI: csr_new = csr_rdata & csr_wdata; // negative control: CSRRC ANDs instead of clearing	CSRRC/CSRRCI ANDs the source value in instead of clearing the named bits, so rv32mi-p-csr reads back a different mscratch value (FR-51)
 #
-# T-62's defect (FR-22/D12): the IF/ID and ID/EX enables are exactly what
-# split_stall and the data wait take away, so tying them to 1 makes the trap a
-# level across the held crossing store and the monitor publishes it once per
-# cycle -- `expected_traps_exact` names the count.
-trap-valid-while-held	rtl/control.sv	                     if_id_clk_en && id_ex_clk_en;	                     1'b1; // negative control: trap_valid ignores the IF/ID and ID/EX enables	trap_valid ignores the IF/ID and ID/EX enables, so it stays high across a held beat (T-62's defect)
+# T-62's defect (FR-22/D12): trap_valid is the edge the pipeline advances, not a
+# level. The IF/ID and ID/EX enables are exactly what a split beat or the data
+# grant holds down (the same pair `trap-valid-while-held` ties to 1), so tying
+# them to 1 makes the trap a level across the held crossing store and the
+# monitor publishes it once per cycle -- `expected_traps_exact` names the count.
+trap-valid-while-held	rtl/control.sv	                     if_id_clk_en && id_ex_clk_en;	                     1'b1; // negative control: trap_valid ignores the IF/ID and ID/EX enables	trap_valid ignores the IF/ID and ID/EX enables, so it stays high across a held beat instead of being the edge the pipeline advances (T-62's defect)
 #
 # T-60's defect (WP-14b audit blocker 1, FR-22/FR-23/FR-25): the retire in WB is
 # OLDER than the trap in ID, so the commit must be published first. Publishing

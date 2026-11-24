@@ -5,7 +5,7 @@
 | Requirement | The core shall pass every applicable image of the bundled RISC-V test suite: `rv32ui-p-*`, `rv32um-p-*`, `rv32uc-p-*` and `rv32mi-p-*`, plus `rv32ua-p-*` where `ENABLE_A` = 1. |
 | Gap | `G-10`/`G-25`/`G-26`/`G-27`/`G-20`/`G-08`/`G-19`/`G-29`/`G-07`/`G-30`/`G-31`/`G-22` closed, so no `rv32ui` image fails and `G-15` is not an `NFR-05` failure; what the row still owes is the `rv32um`, `rv32uc` and `rv32mi` legs its `shall` names (`G-06`, `G-13`) |
 | Owner | verification lead |
-| Status | **measured** - 43 pass / 0 fail: all **42 bundled images** and the one project-local image (`rv32ui-p-jalr_unaligned`) pass. The `rv32ui` leg of `A-09` is met; the row does not become `verified` here, because `NFR-05` also names the `rv32um`, `rv32uc` and `rv32mi` legs and only `rv32ui` is measured |
+| Status | **measured** - **46 pass / 0 fail** on 2026-11-23 at RTL `sha256:2e91301d…` / TB `sha256:fdd8a2fd…`: all **45 bundled images** (42 `rv32ui` + 3 `rv32mi`) and the one project-local image (`rv32ui-p-jalr_unaligned`) pass. The `rv32ui` leg of `A-09` is met and the `rv32mi` leg is **3 of its 16 images**; the row does not become `verified` here, because `NFR-05` also names the `rv32um` and `rv32uc` legs, which no environment measures yet |
 
 ## Method
 
@@ -46,7 +46,7 @@ literal.
 ## Command
 
 ```bash
-make sanity                                   # every image (43 today: 42 bundled + 1 local)
+make sanity                                   # every image (46 today: 45 bundled + 1 local)
 make sanity SANITY_ARGS="rv32ui-p-addi"
 make sanity SANITY_ARGS="rv32ui-p-addi --trace"
 make sanity SANITY_ARGS="--compile-only"      # build the images only
@@ -55,6 +55,35 @@ make compile_sanity_images                    # same build step, from CMake
 
 `make sanity` exits 0 when it produced a verdict and 1 when an image failed. The signoff gate runs the
 same measurement through `sanity-evidence` (`--allow-fail`).
+
+## Result - 2026-11-23 (WP-14b, the `rv32mi` leg added)
+
+| Field | Value |
+|---|---|
+| RTL digest | `sha256:2e91301d3496c0753af3678dc82181230f0a3433d52a123007c9f47875cec056` |
+| TB digest | `sha256:fdd8a2fdfba11466bb6a79cdd86918825e0a2b8a4bce91b9ff5a143355a6aaad` |
+| Images | **46** = 45 bundled (42 `rv32ui` + 3 `rv32mi`) + 1 project-local (`rv32ui-p-jalr_unaligned`) |
+| Pass | **46** (45 bundled + the local image) |
+| Fail | 0 |
+| Artefacts | `build/sanity/summary.json` (`SANITY measured pass=46 fail=0`), `build/sanity/<image>.log` |
+
+The three new images are the `rv32mi` ones WP-14b added, and each runs through the core's **own** trap path —
+`mtvec` programmed, the handler dispatching on `mcause` — using the faithful `env/p` ceremony in
+`scripts/verify/sanity/mi/riscv_test.h` rather than the `tohost`-only one the `rv32ui` images use:
+
+| Image | Test | What it exercises |
+|---|---|---|
+| `rv32mi-p-mcsr` | `T-54` | the machine CSR map of `FR-50`, `misa` and `mhartid` (`FR-37`, `FR-32`) and the address rules of `FR-47` |
+| `rv32mi-p-zicntr` | `T-55` | the counter CSRs: writes to the read-only views trap, the machine counters are read/write (`FR-49`) |
+| `rv32mi-p-csr` | `T-58` | the CSR access rules across the map, `misa` among them (`FR-47`, `FR-51`) |
+
+Two of the sixteen `rv32mi` images are **withheld, not skipped**: `rv32mi-p-illegal` hangs because it writes
+`mepc` and executes `mret` while `MRET` is a legal no-operation (`FR-45`, deferred), and `rv32mi-p-breakpoint`
+fails because no trigger CSR exists (`FR-57`). Both are an RTL boundary, not an environment fault, so the
+`rv32mi` leg reads **3 of its 16 images** and stays open.
+
+The per-image table below is the 2026-11-19 WP-13 run and is kept as history; the `rv32ui` verdicts are byte-for-byte
+the same at this digest, and the three `rv32mi` rows above are the only additions.
 
 ## Result - 2026-11-19 (WP-13, re-measured after the word-crossing split)
 
@@ -141,8 +170,9 @@ History; every other row is the same verdict at a later digest.
 No failure is left and none of them is a waiver: the `rv32ui` leg of `NFR-05` is green at the digests above, and
 `rv32ui-p-ma_data` — the last image in the table to go green — passes since WP-13 (`FR-42`, `T-52`). The `Q-11`
 release blockers are now `G-04` and `G-11`; the release is still blocked by `A-09` and by the legs of `NFR-05`
-this measurement does not cover (`rv32um`, `rv32uc`, `rv32mi`, owned by `FR-43`, `FR-44` and
-`FR-24`/`FR-46`/`FR-47`).
+this measurement does not cover — `rv32um` and `rv32uc`, owned by `FR-43` and `FR-44`, and the thirteen `rv32mi`
+images held out by `FR-45` (`MRET`) and `FR-57` (trigger CSRs) — since 2026-11-23 the `rv32mi` leg is measured
+for the three images `T-54`/`T-55`/`T-58` run.
 
 ## Debug
 
@@ -167,3 +197,4 @@ this measurement does not cover (`rv32um`, `rv32uc`, `rv32mi`, owned by `FR-43`,
 | 2026-11-18 | `sha256:b914f2e1...` | 43 (42 + 1 local) | 42 | 1 | WP-11: re-established after `scripts/verify/sanity/link.ld` moved every image to `0x80000000`; same one failure `ma_data` (`FR-42`), and `T-50` is a directed test, not an image (TB `c4bad285...`) |
 | 2026-11-18 | `sha256:b914f2e1...` | 43 (42 + 1 local) | 42 | 1 | Re-run after the driver fix in `tb/env/agents/riscv_small_agent/riscv_small_driver.sv` (an unmatched fetch is answered with `inst_ready` before the program is entered, and warns once instead of 196 times); verdict unchanged, same one failure `ma_data` (`FR-42`), and the RTL digest did not move — only the testbench's (TB `066dce85...`) |
 | 2026-11-19 | `sha256:f84ea86b...` | 43 (42 + 1 local) | 43 | 0 | WP-13: the word-crossing access is issued as two beats by `rtl/misaligned_split.sv` (`FR-42`/`G-22`) and a store is held in MA until its grant (`FR-38`/`G-18`); `rv32ui-p-ma_data` passes on its own `tohost` check and fails on the `no-misaligned-split` mutant, so no `rv32ui` image fails (TB `7860d1b0...`) |
+| 2026-11-23 | `sha256:2e91301d...` | **46** (45 bundled + 1 local) | **46** | 0 | WP-14b: the `rv32mi` environment (`scripts/verify/sanity/mi/riscv_test.h`) and its three images — `mcsr` (`T-54`), `zicntr` (`T-55`), `csr` (`T-58`) — all pass; `illegal` and `breakpoint` withheld for `FR-45`/`FR-57`; the 43 `rv32ui` verdicts unchanged (TB `fdd8a2fd...`) |

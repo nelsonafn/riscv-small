@@ -67,8 +67,52 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     if(RISCV_VERIFY_CORES GREATER 12)
         set(RISCV_VERIFY_CORES 12)
     endif()
-    set(VERIFY_JOBS "${RISCV_VERIFY_CORES}" CACHE STRING
-        "Parallel ctest jobs for the verification targets (make-time override: VERIFY_JOBS=N make regress)")
+
+    # --- the memory bound ---------------------------------------------------
+    # Cores are not the only limit: `xelab` and `xsim` are the consumers, and
+    # the box dies when they pass ~90% of MemAvailable (measured 2026-11-23:
+    # 12 concurrent shards took `xsimk` past 60 GB and the OOM killer ended the
+    # run three times, which looked like a crashing server). So the job count is
+    # also bounded by memory: a per-simulation reserve, a budget of
+    # RISCV_MEM_BUDGET_PCT of MemAvailable, and the smaller of the two.
+    #
+    # This CLAMPS a larger value rather than only setting the default, because
+    # the guarantee is the point: a make-time `VERIFY_JOBS=12` that OOMs the
+    # machine is not an override worth honouring. Lowering it always works.
+    set(RISCV_XSIM_RESERVE_MB "6144" CACHE STRING
+        "Memory reserved per concurrent xelab/xsim run, in MB (the parallelism bound)")
+    set(RISCV_MEM_BUDGET_PCT "90" CACHE STRING
+        "Percentage of MemAvailable the verification jobs may plan to use")
+    set(RISCV_MEM_JOBS 0)
+    if(EXISTS "/proc/meminfo")
+        file(STRINGS "/proc/meminfo" RISCV_MEMINFO REGEX "^MemAvailable:")
+        if(RISCV_MEMINFO MATCHES "MemAvailable:[ \t]+([0-9]+)")
+            math(EXPR RISCV_AVAIL_MB "${CMAKE_MATCH_1} / 1024")
+            math(EXPR RISCV_BUDGET_MB "${RISCV_AVAIL_MB} * ${RISCV_MEM_BUDGET_PCT} / 100")
+            if(RISCV_XSIM_RESERVE_MB GREATER 0)
+                math(EXPR RISCV_MEM_JOBS "${RISCV_BUDGET_MB} / ${RISCV_XSIM_RESERVE_MB}")
+            endif()
+            if(RISCV_MEM_JOBS GREATER 0 AND RISCV_MEM_JOBS LESS RISCV_VERIFY_CORES)
+                message(STATUS
+                    "verification jobs bounded by memory: ${RISCV_MEM_JOBS} "
+                    "(${RISCV_BUDGET_MB} of ${RISCV_AVAIL_MB} MB / ${RISCV_XSIM_RESERVE_MB} MB per run)")
+                set(RISCV_VERIFY_CORES "${RISCV_MEM_JOBS}")
+            endif()
+        endif()
+    endif()
+
+    set(RISCV_VERIFY_JOBS_DEFAULT "${RISCV_VERIFY_CORES}")
+    if(DEFINED VERIFY_JOBS AND VERIFY_JOBS GREATER RISCV_VERIFY_JOBS_DEFAULT
+       AND RISCV_MEM_JOBS GREATER 0)
+        message(WARNING
+            "VERIFY_JOBS=${VERIFY_JOBS} exceeds the memory bound of ${RISCV_VERIFY_JOBS_DEFAULT}; "
+            "clamping. Concurrent xelab/xsim runs are what exhausted the machine on 2026-11-23.")
+        set(VERIFY_JOBS "${RISCV_VERIFY_JOBS_DEFAULT}" CACHE STRING
+            "Parallel ctest jobs for the verification targets" FORCE)
+    else()
+        set(VERIFY_JOBS "${RISCV_VERIFY_CORES}" CACHE STRING
+            "Parallel ctest jobs for the verification targets (make-time override: VERIFY_JOBS=N make regress)")
+    endif()
 endif()
 
 # --- safe line reader --------------------------------------------------------

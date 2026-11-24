@@ -46,12 +46,24 @@ T-02	riscv_small_corner_test	0	-	300	no
 # configuration does not implement, and a write to a read-only address, must
 # raise illegal-instruction instead of executing as a no-operation (FR-24,
 # FR-47, FR-50). The catalogue row landed with the RTL text it mutates, as
-# `store-grant-ignored` did for T-53. WP-14b batch 2a adds the six independent
-# clauses of the same program plus the D12b pulse contract, each its own
-# (T-03, mutant) pair: csr-write-always (D5), trap-vector-fixed (FR-29),
-# mepc-off-by-one (FR-23), misa-literal (FR-37), mhartid-zero (FR-32),
-# time-not-a-view (FR-49) and trap-held-while-stalled (D12b).
-T-03	riscv_small_csr_test	14	FR-22,FR-23,FR-24,FR-25,FR-29,FR-32,FR-37,FR-47,FR-49,FR-50,FR-51,FR-52	300	mutant:csr-illegal-noop+csr-write-always+trap-vector-fixed+mepc-off-by-one+misa-literal+mhartid-zero+time-not-a-view+trap-held-while-stalled
+# `store-grant-ignored` did for T-53. WP-14b batch 2a added five of the
+# program's clauses as their own (T-03, mutant) pair: csr-write-always (D5),
+# mepc-off-by-one (FR-23), misa-literal (FR-37), mhartid-zero (FR-32) and
+# time-not-a-view (FR-49). The red cell therefore carries SIX names --
+# csr-illegal-noop plus those five -- and not the seven this comment used to
+# claim. Two further candidates were tried and removed in WP-14b:
+#   trap-vector-fixed (FR-29) makes the program unrunnable: a wrong vector sends
+#     the trap away from the program's handler, so the tohost store is never
+#     reached, seq.start() never returns, and the only outcome is a CTest
+#     wall-clock timeout with no UVM error -- the engine scores fail|timeout
+#     only with a uvm_error, the rule that stops an OOM kill reading as a
+#     defect. FR-29 is still observed by T-03's own pass (all six traps are
+#     taken at the mtvec the program wrote), just not by a mutant.
+#   trap-held-while-stalled (D12b) duplicated trap-valid-while-held on the same
+#     rtl/control.sv line and was weaker (clk_en vs 1'b1); attached to T-03,
+#     whose clk_en is always 1, it mutated nothing and passed. The arm belongs
+#     to trap-valid-while-held, whose teeth are in T-62 (D12).
+T-03	riscv_small_csr_test	14	FR-22,FR-23,FR-24,FR-25,FR-29,FR-32,FR-37,FR-47,FR-49,FR-50,FR-51,FR-52	300	mutant:csr-illegal-noop+csr-write-always+mepc-off-by-one+misa-literal+mhartid-zero+time-not-a-view
 T-06	riscv_small_subword_access_test	0	FR-12	300	mutant:T-06
 T-08	riscv_small_sanity_test	4	NFR-05,FR-18	300	mutant:sanity-addi	sanity:rv32ui-p-simple
 T-09	riscv_small_passive_test	4b	-	300	mutant:passive-agent-always-active
@@ -185,3 +197,53 @@ T-61	riscv_small_external_trap_test	14	FR-22,FR-23,G-37	300	mutant:exception-unr
 # (image: the trap site must not retire, every other placed word must). Names
 # FR-22/FR-42.
 T-62	riscv_small_trap_split_test	14	FR-22,FR-42,G-37	300	mutant:trap-valid-while-held
+
+# wp 14b batch 2b (wp-14 §4.3, §18): the rv32mi images, built against the
+# faithful env/p ceremony in scripts/verify/sanity/mi/riscv_test.h. The other
+# sanity rows run an image whose verdict is a plain store; these run one whose
+# verdict travels THROUGH the core's trap path: `_start` programs `mtvec` with
+# `trap_vector`, the handler dispatches on `mcause`, and the `ECALL` inside
+# RVTEST_PASS/RVTEST_FAIL reaches `write_tohost`, so `SANITY: PASS` is the
+# image's own TESTNUM arriving via a trap. The environment is per-suite
+# (`SANITY_SUITES`, `SANITY_IMAGES_rv32mi`); the three images below are the ones
+# this WP claims and they pass. T-56 (rv32mi-p-illegal) and T-57
+# (rv32mi-p-breakpoint) are deliberately NOT registered: they fail against the
+# CORE, not the environment -- `illegal` needs MRET to return to `mepc` (FR-45,
+# outside WP-14; the image hangs at pc=0x800003e4) and `breakpoint` needs the
+# trigger CSRs (NUM_TRIGGERS = 0, FR-57 deferred; it stops at testnum=2). Their
+# logs are build/sanity/rv32mi-p-illegal.log and -breakpoint.log.
+#
+# T-54: mcsr reads `misa` (XLEN), `mhartid` (== 0), `mimpid`/`marchid`/
+# `mvendorid` and writes `mtvec`/`mepc`, all without trapping. red=csr-write-always
+# is the D5 defect (a CSRRS with rs1=x0 that writes instead of suppressing):
+# the read of a read-only identification register then traps.
+T-54	riscv_small_sanity_test	14	FR-32,FR-37,FR-47,FR-50	300	mutant:csr-write-always	sanity:rv32mi-p-mcsr
+# T-55: Zicntr through the four read-modify-write spellings on `cycle`/`instret`
+# and their high halves, with rd=x0 and rs1/uimm=0 -- the reads must not trap.
+# red is the same D5 defect, but through a different path than T-54's: it turns
+# the first `csrr a0, mhartid` in reset_vector into a write, which traps BEFORE
+# the program installs its handler (RISCV_MULTICORE_DISABLE precedes
+# `csrw mtvec`, as in env/p). `mtvec` still holds its reset value 0, outside the
+# image (linked at 0x8000_0000), and the memory BFM answers an out-of-program
+# fetch with a NOP (riscv_small_driver.sv:274, NOP = 32'h33), so the PC walks up
+# from 0 and the image's body never runs: the verdict is SANITY: TIMEOUT at the
+# checker's cycle budget (measured pc=0x000c344c). That watchdog is independent
+# of the sequence and raises a uvm_error, so check 11 scores it -- unlike the
+# removed trap-vector-fixed, whose hang was inside seq.start(). It is NOT the
+# image's own mtvec_handler, which is `j fail`. Installing the vector before the
+# multicore block was rejected because it would not buy a FAIL either: the
+# handler's RVTEST_FAIL spins while TESTNUM == 0, and the trap precedes
+# `li TESTNUM, 0`, so the reorder would move the derailment without changing the
+# verdict, and it would break the "env/p as published" contract this header
+# exists for. The env/p order stays, and the narrative now says what the run
+# actually does.
+T-55	riscv_small_sanity_test	14	FR-47,FR-49	300	mutant:csr-write-always	sanity:rv32mi-p-zicntr
+# T-58: the six Zicsr forms on `mscratch` (read-modify-write values, rd=x0 and
+# rs1=x0 clauses) and the `misa` extension checks that decide the body's path.
+# red=mutant:csrrc-and-instead-of-clear: `csrrc`/`csrrci` must CLEAR the bits
+# rs1/uimm names; the mutant ANDs the source in instead, so the value the next
+# `csrrsi a2, mscratch, 4` reads back disagrees at TESTNUM 4. `csr-write-always`
+# is NOT this row's mutant -- every mscratch write it adds is legal, so the
+# image passes on it -- which is why T-58 needed a catalogue row of its own
+# rather than a borrowed one.
+T-58	riscv_small_sanity_test	14	FR-47,FR-51	300	mutant:csrrc-and-instead-of-clear	sanity:rv32mi-p-csr

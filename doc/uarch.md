@@ -3,14 +3,14 @@
 | Field | Value |
 |---|---|
 | Status | draft |
-| Implements | [spec.md](spec.md) v0.8.8 |
-| Baseline | the WP-14 tree the citations were read from: `rtl_digest` `sha256:2e91301d3496c0753af3678dc82181230f0a3433d52a123007c9f47875cec056` and `tb_digest` `sha256:0091e2601b8721cdc4d1ba2c4e1a9520ef9d0a0c58d58729ddfd620af43acbee` (`build/regress/2026-11-21T00-35-59Z/results.json`, 50 of 50 green). WP-14 added `rtl/csr_file.sv` and lines to `rtl/control.sv`, `rtl/execution.sv`, `rtl/instruction_decode.sv`, `rtl/alu.sv`, `rtl/riscv_definitions_pkg.sv` and `rtl/riscv_small.sv`, so **every citation to those six files and to the two testbench probes was re-read against this tree**, not merely checked for range: a number that still resolves and lands on a different construct is a defect `make docs-check` cannot see. The project forbids automatic commits, so the content digest is the evidence key; `spec.md` still names `bb789bb` as its v0.1 as-built baseline, with v0.2..v0.8 adding intent only |
-| Scope | as built: this document describes `rtl/*.sv`, not the target rows of `spec.md` §4 and §7.1; a target obligation of `spec.md` that the RTL does not meet is written down as **target** and never as built. The spec revision that records WP-14 is v0.8.8, which is in the tree; where the two documents differ, the RTL is the source of truth and the difference is named with its gap |
+| Implements | [spec.md](spec.md) v0.8.9 |
+| Baseline | the WP-14b tree the citations were read from: `rtl_digest` `sha256:2e91301d3496c0753af3678dc82181230f0a3433d52a123007c9f47875cec056` — **unchanged from WP-14** — and `tb_digest` `sha256:fdd8a2fdfba11466bb6a79cdd86918825e0a2b8a4bce91b9ff5a143355a6aaad` (was `0091e260`), `build/regress/2026-11-23T22-28-57Z/results.json`, 56 of 56 green. WP-14b changed `tb/**` and the verification scripts (`scripts/verify/`), not `rtl/`: the monitor's publication order, the `exception[3:0]` route from the top through the sequence and driver to the pin and back through the monitor, one prediction per beat from the reference model, the three trap tests, the `rv32mi` sanity environment and six new manifest rows (50 → 56). The RTL content is the same, so every `rtl/` citation still resolves to the construct WP-14 pinned, and **every `tb/` citation was re-read against this tree**, not merely checked for range: a number that still resolves and lands on a different construct is a defect `make docs-check` cannot see. The project forbids automatic commits, so the content digest is the evidence key; `spec.md` still names `bb789bb` as its v0.1 as-built baseline, with `v0.2`..`v0.7` adding intent only and the revisions after that recording the behaviour the tree already had |
+| Scope | as built: this document describes `rtl/*.sv`, not the target rows of `spec.md` §4 and §7.1; a target obligation of `spec.md` that the RTL does not meet is written down as **target** and never as built. The spec revision in the tree is v0.8.9, which records WP-14b and carries one status change over v0.8.8, the revision that records WP-14; where the two documents differ, the RTL is the source of truth and the difference is named with its gap |
 
 Everything below is read from the RTL. Where a `file:line` citation is missing, the sentence is a
 pointer to another section, not a behavioural claim. Where the target of `spec.md` differs from the
 code, the difference is named with its existing gap ID and the code is described as it is. The
-requirement table of `spec.md` v0.8.8 has 59 rows, of which 25 are `verified`, 6 `implemented`, 5 `partial` and 23 `deferred` in that revision, and **nine rows moved to `verified` with WP-14**: the trap entry at `mtvec` (`FR-29`) with `mepc`/`mcause` (`FR-23`), `ECALL`/`EBREAK` (`FR-25`), `misa` from the build parameters (`FR-37`), `mhartid` from the new `hart_id` port (`FR-32`), the six `Zicsr` instructions (`FR-47`), the counters and their views (`FR-49`), and `mscratch` and `mtval` (`FR-51`, `FR-52`). Three of the work package's rows stopped short, and each has a gap rather than a claim: `FR-22` is `implemented`, because no test drives the external `exception[3:0]` request (`G-37`); `FR-24` is `partial`, because `ECALL`/`EBREAK` with a non-zero `rd`/`rs1` still retire instead of trapping (`G-38`); and `FR-50`, the CSR file and its address map, is `partial`, because its read-only-view clause is not met — `minstret` reads the raw register while `instret` reads a derived value, so the two addresses of one architectural counter disagree (`G-39`). The rows that are still target only are the debug group — `FR-53` (debug mode with `dcsr`/`dpc`/`dscratch`), `FR-54` (run control), `FR-55` (abstract commands), `FR-56` (the program buffer), `FR-57` (`Sdtrig` triggers), `FR-58` (single step) and `FR-59` (`dbg_auth` strap) — plus the three interrupt inputs `mtip`/`meip`/`msip` (`FR-39`, `FR-40`, `G-14`) and the trap return `MRET` (`FR-45`), which decodes as a legal no-operation. No module, port or register implements any of those, and no sentence of this document claims otherwise. The reset vector left the target list with WP-11 P3a: `RESET_VECTOR` is a parameter and `pc` takes it on the
+requirement table of `spec.md` v0.8.9 has 59 rows, of which 26 are `verified`, 5 `implemented`, 5 `partial` and 23 `deferred`, with **25 of the 26 inside the phase-1 bar of 47 rows** (`A-09`, `doc/spec.md:981`). **Nine of the `verified` rows moved there with WP-14**: the trap entry at `mtvec` (`FR-29`) with `mepc`/`mcause` (`FR-23`), `ECALL`/`EBREAK` (`FR-25`), `misa` from the build parameters (`FR-37`), `mhartid` from the new `hart_id` port (`FR-32`), the six `Zicsr` instructions (`FR-47`), the counters and their views (`FR-49`), and `mscratch` and `mtval` (`FR-51`, `FR-52`). **The tenth is `FR-22`**: v0.8.8 booked it `implemented` on its external `exception[3:0]` arm (`G-37`), and v0.8.9 promotes it on `T-61`, which asserts that pin for one cycle with cause 5 — a code this decoder cannot raise — and observes `mcause` = 5, `mepc` at the aimed instruction and that instruction's CSR write discarded (`doc/spec.md:69`, `:402`; §4, §10, §11); the promotion covers that clause and no more. Two rows of the work package stopped short, and each has a gap rather than a claim: `FR-24` is `partial`, because `ECALL`/`EBREAK` with a non-zero `rd`/`rs1` still retire instead of trapping (`G-38`); and `FR-50`, the CSR file and its address map, is `partial`, because its read-only-view clause is not met — `minstret` reads the raw register while `instret` reads a derived value, so the two addresses of one architectural counter disagree (`G-39`). The rows that are still target only are the debug group — `FR-53` (debug mode with `dcsr`/`dpc`/`dscratch`), `FR-54` (run control), `FR-55` (abstract commands), `FR-56` (the program buffer), `FR-57` (`Sdtrig` triggers), `FR-58` (single step) and `FR-59` (`dbg_auth` strap) — plus the three interrupt inputs `mtip`/`meip`/`msip` (`FR-39`, `FR-40`, `G-14`) and the trap return `MRET` (`FR-45`), which decodes as a legal no-operation. No module, port or register implements any of those, and no sentence of this document claims otherwise. The reset vector left the target list with WP-11 P3a: `RESET_VECTOR` is a parameter and `pc` takes it on the
 reset edge (section 5).
 
 ## 1. Overview
@@ -254,7 +254,9 @@ Rows marked **target** are the v0.7 contract that
 the RTL does not implement; the target rows are listed so that a figure or a block section can name the
 connection, and they carry a requirement cite instead of an RTL cite. Four rows changed side in WP-14:
 `trap_req_if` is now a four-bit cause bus, `mtime_if` is built, `csr_if` is built and has three
-initiators, and `hartid_if` is new.
+initiators, and `hartid_if` is new. Since WP-14b `trap_req_if` is no longer structural only: the
+testbench driver asserts `exception[3:0]` for one cycle on a scheduled instruction and the monitor
+observes the same wire, which is what `T-61` proves (§10).
 
 ### 4.1 Interface catalogue
 
@@ -283,25 +285,33 @@ initiators, and `hartid_if` is new.
 
 `retire_if` and `trap_evt_if` are the two rows that are not DUT boundaries. They are
 `riscv_small_retire_if` and `riscv_small_trap_if`, declared in
-`tb/riscv_small_interface.sv:157-181` and `:223-233` and bound inside `riscv_small` by
-`tb/riscv_small_tb.sv:50-59` and `:67-73`; nothing drives either, the DUT keeps its eighteen ports, and
+`tb/riscv_small_interface.sv:161-185` and `:227-237` and bound inside `riscv_small` by
+`tb/riscv_small_tb.sv:57-66` and `:74-80`; nothing drives either, the DUT keeps its eighteen ports, and
 both are simulation-only: they are compiled only
 through `srclist/riscv_small_interface.srclist` (`srclist/riscv_small_interface.srclist:1-2`), never
 through the DUT list `srclist/riscv_small.srclist`.
 Because `bind` connects by port name there are no modports: `retire_if` presents the MA/WB slot's
 `valid_wb`, `pc_wb`, `inst_wb` and destination, and derives the commit rule
-`retire_valid = valid_wb && ma_wb_clk_en` itself (`tb/riscv_small_interface.sv:175`) rather than asking
+`retire_valid = valid_wb && ma_wb_clk_en` itself (`tb/riscv_small_interface.sv:179`) rather than asking
 the RTL for a retire signal; `trap_evt_if` derives nothing and presents the four top-level nets of the
-trap event (`:223-233`). Their contracts and the reason each rule lives in the probe are in §10.
+trap event (`:227-237`). Their contracts and the reason each rule lives in the probe are in §10.
 
-> **`trap_req_if` — the bus is built, the stimulus is not.** The row above is the as-built contract since
+> **`trap_req_if` — built, driven and observed.** The row above is the as-built contract since
 > WP-14: `exception` is `[3:0]` (`rtl/riscv_small.sv:54`) and `control` maps it to a cause with
 > `trapCause_e'(exception)` when no internal cause is pending (`rtl/control.sv:373-376`), so the
-> `exception != 4'b0000` test replaces the one-bit level. Two limits stay written down: the testbench
-> binds the DUT's `exception` to a **local constant zero** (`tb/riscv_small_tb.sv:32`, `:79`) and never
-> drives the interface's copy, so no test in the manifest exercises the external arm of
-> `proc_trap_priority`; and the phase-2 interrupt inputs `mtip`/`meip`/`msip` are still absent
-> (`G-14`, `FR-39`, `FR-40`).
+> `exception != 4'b0000` test replaces the one-bit level. Two ends used to be missing, and WP-14b
+> supplied both. **The pin is routed**: the TB top connects the DUT port to the interface member the
+> driver drives, `.exception(intf.exception)` (`tb/riscv_small_tb.sv:86`), where WP-14 tied it to a
+> local constant. **The request is scheduled**: the sequence names the instruction address and the
+> cause in the item (`tb/env/agents/riscv_small_agent/riscv_small_transaction.sv:28-29`), the driver
+> asserts the four-bit code for exactly one core cycle with a non-blocking assignment
+> (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:457-466`), and the monitor samples the same
+> wire into `obs_exception` on the trap event
+> (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:305-309`), so the model predicts an
+> external cause from the observation and never from configuration. `T-61` is the test that proves
+> it: cause 5, which no internal path produces, `mepc` at the aimed instruction, and the aimed
+> instruction's CSR write discarded (§10). What is still absent is the phase-2 interrupt group
+> `mtip`/`meip`/`msip` (`G-14`, `FR-39`, `FR-40`).
 
 > **`csr_if` — one truth table, three initiators.** The interface is the `FR-50` map, and it is the
 > reason the CSR decode and the CSR storage cannot drift: `instruction_decode` decides legality from
@@ -354,7 +364,7 @@ except in the rows marked **target**, which name signals the target adds and the
 |---|---|---|---|---|---|
 | `clk_rst_if` | `integrator` | out | `clk`, `clk_en`, `rst_n` | free-running; `rst_n` asserts and releases asynchronously (`G-21`) | `rtl/riscv_small.sv:51-53` |
 | `clk_rst_if` | `core` | in | `clk`, `clk_en`, `rst_n` | every `always_ff` | `rtl/riscv_small.sv:51-53` |
-| `trap_req_if` | `integrator` | out | `exception[3:0]` | level; the external cause, taken on the next edge the pipeline advances | `rtl/riscv_small.sv:54` |
+| `trap_req_if` | `integrator` | out | `exception[3:0]` | level; the external cause, taken on the next edge the pipeline advances. Driven by the testbench for exactly one cycle on a scheduled instruction and observed by the monitor in that same cycle (`T-61`) | `rtl/riscv_small.sv:54`, `tb/env/agents/riscv_small_agent/riscv_small_driver.sv:457-466`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:305-309` |
 | `trap_req_if` | `control` | in | `exception[3:0]` | second priority, after the internal cause, and only when `!= 4'b0000` | `rtl/control.sv:373-376` |
 | `mtime_if` | `platform` | out | `mtime[63:0]` | free-running; read as `time`/`timeh` with no memory access | `rtl/riscv_small.sv:55` |
 | `mtime_if` | `csrfile` | in | `mtime[63:0]` | sampled combinationally in the CSR read path | `rtl/csr_file.sv:151`, `:154` |
@@ -396,10 +406,10 @@ except in the rows marked **target**, which name signals the target adds and the
 | `dbg_if` — target | `hart` | out | the nine outputs listed above | target: driven from debug state | `spec.md` §6 (`FR-53`, `FR-55`) |
 | `auth_if` — target | `integrator` | out | `dbg_auth` | target: a static platform strap, sampled when the hart considers a halt or reset-halt request | `spec.md` §6 (`FR-59`, `C-14`, `D-11`) |
 | `auth_if` — target | `core` | in | `dbg_auth` | target: low holds the hart out of debug mode and forces `dbg_halted` = 0 | `spec.md` §6 (`FR-59`, `D-11`) |
-| `retire_if` | — (bind, no modport) | out | `valid_wb`, `pc_wb`, `inst_wb`, `rd0_wr_en_wb`, `rd0_addr_wb`, `rd0_data_wb`, `ma_wb_clk_en` | sampled on `posedge clk`; the probe derives `retire_valid = valid_wb && ma_wb_clk_en` | `tb/riscv_small_interface.sv:157-181` |
-| `retire_if` | — (bind, no modport) | in | `retire_valid`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` | read by the monitor at that same edge | `tb/riscv_small_interface.sv:167-179`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:462-500` |
-| `trap_evt_if` | — (bind, no modport) | out | `trap_valid`, `trap_pc`, `trap_inst`, `trap_cause[3:0]` | sampled on every `posedge clk`, **not** gated by `clk_en` | `tb/riscv_small_interface.sv:223-233`, `tb/riscv_small_tb.sv:67-73` |
-| `trap_evt_if` | — (bind, no modport) | in | the same four signals, published verbatim as one transaction per event | one publication per trap; the monitor derives and filters nothing | `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:286-300` |
+| `retire_if` | — (bind, no modport) | out | `valid_wb`, `pc_wb`, `inst_wb`, `rd0_wr_en_wb`, `rd0_addr_wb`, `rd0_data_wb`, `ma_wb_clk_en` | sampled on `posedge clk`; the probe derives `retire_valid = valid_wb && ma_wb_clk_en` | `tb/riscv_small_interface.sv:161-185` |
+| `retire_if` | — (bind, no modport) | in | `retire_valid`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` | read by the monitor at that same edge | `tb/riscv_small_interface.sv:171-183`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:483-516` |
+| `trap_evt_if` | — (bind, no modport) | out | `trap_valid`, `trap_pc`, `trap_inst`, `trap_cause[3:0]` | sampled on every `posedge clk`, **not** gated by `clk_en` | `tb/riscv_small_interface.sv:227-237`, `tb/riscv_small_tb.sv:74-80` |
+| `trap_evt_if` | — (bind, no modport) | in | the same four signals, published verbatim as one transaction per event | one publication per trap; the monitor derives and filters nothing, samples it first and publishes it **last** in the cycle so the commit and data beat of the same cycle come first | `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:294-315`, `:518-522` |
 
 Four interfaces (`id_ex_if`, `ex_ma_if`, `ma_wb_if`, `ctrl_if`) repeat §4.1 rather than duplicating a
 20-signal list four times; the payload is identical on both sides of a pipeline register by construction.
@@ -447,7 +457,7 @@ between the DTM and the Debug Module. C12, C14, C15, C21 and C23 are as built si
 the hart id are plain input ports read by the CSR file (`rtl/riscv_small.sv:55-56`), and the CSR
 contract is one interface with three initiators and one consumer of `mtvec_base`
 (`rtl/riscv_small.sv:175-181`, `:201`). C17 and C22 exist in the tree but not in `rtl/`: they are the
-`bind` instances of `tb/riscv_small_tb.sv:50-59` and `:67-73`, which read the MA/WB slot and the trap
+`bind` instances of `tb/riscv_small_tb.sv:57-66` and `:74-80`, which read the MA/WB slot and the trap
 event and are compiled only in
 simulation. C18–C20 are the split block's three connections and are the reason C6 hangs off
 `misaligned_split` rather than off `execution`: the EX/MA register no longer reaches the port
@@ -463,7 +473,7 @@ Direction is from the core's point of view.
 | `clk` | in | 1 | integrator | every `always_ff` | rising edge; single domain (`C-01`) | — |
 | `clk_en` | in | 1 | integrator | `control` (`rtl/riscv_small.sv:364`), the register-file enable of `instruction_decode` (`:208`), `misaligned_split` (`:319`) and `csr_file` (`:343`) | level; inside `control` it gates `branch_taken_q`/`trap_taken_q`, and it gates the whole CSR file (`G-12`); the split block takes the global enable so it can release its own hold (§7.5) | — |
 | `rst_n` | in | 1 | integrator | every `always_ff` | active low; assertion and release both asynchronous as built — no de-assertion synchroniser and no reset-style macro (`G-21`); target: asynchronous assertion, synchronous release through `RESET_SYNC_STAGES`, default 2 (`C-01`, `FR-41`, `A-06`) | — |
-| `exception` | in | 4 | integrator | `control` | level; a non-zero value is the external cause, taken on the next edge the pipeline advances and reported in `mcause` (`rtl/control.sv:373-376`) | 0 |
+| `exception` | in | 4 | integrator (the testbench driver, in simulation) | `control`, and the monitor as an observation | level; a non-zero value is the external cause, taken on the next edge the pipeline advances and reported in `mcause` (`rtl/control.sv:373-376`); the monitor samples the same wire into the trap event (`T-61`) | 0 |
 | `mtime` | in | 64 | platform timer | `csr_file` | free-running counter; read as `time` (0xC01) and `timeh` (0xC81) with no memory access (`FR-49`) | — |
 | `hart_id` | in | 4 | integrator | `csr_file` | static strap; read as `mhartid` (0xF14), zero-extended (`FR-32`) | — |
 | `inst_ready` | in | 1 | instruction memory | `control` | level; low flushes IF/ID for that cycle; the PC is **not** held (`G-09`) | — |
@@ -530,13 +540,13 @@ one-beat access (`rtl/misaligned_split.sv:124-126`).
 > that group is absent when `DEBUG_ENABLED` = 0 (`C-13`, `spec.md` §6); and the
 > store-conditional success indication on the data response side that `FR-35` requires, which is not
 > one of the eighteen rows. This document counted sixteen ports until WP-14, and `spec.md` §6 records
-> the same eighteen as of v0.8.8 — the two agree, and a reader of an older revision is reading the
+> the same eighteen as of v0.8.9 — the two agree, and a reader of an older revision is reading the
 > data path of that revision.
 
 WP-8 added the validity chain and the retire observation without adding a port: `valid_id`,
 `valid_ex`, `valid_ma` and `valid_wb` are internal `logic` nets of the top
 (`rtl/riscv_small.sv:79`, `:96`, `:121`, `:132`), and the probe that reads them is a `bind` inside
-`riscv_small` (`tb/riscv_small_tb.sv:50-59`, §4.5). WP-13 added the split block and its three nets —
+`riscv_small` (`tb/riscv_small_tb.sv:57-66`, §4.5). WP-13 added the split block and its three nets —
 `rs2_raw_ma`, `data_wr_strb_ma` and the `split_stall`/`ld_split_en`/`ld_split_word` triple
 (`rtl/riscv_small.sv:140-144`) — and WP-14 added the four trap nets and the CSR nets
 (`:146-167`) — again without touching the header beyond the three ports above. The table above is
@@ -569,18 +579,18 @@ Four internal connections are part of this contract and are easy to miss:
 ### 4.5 Simulation probes — `riscv_small_retire_if` and `riscv_small_trap_if`
 
 `riscv_small_retire_if` is the commit observation of `G-28`, and it is deliberately not a DUT port. It
-is declared in `tb/riscv_small_interface.sv:157-181` with eight inputs — `clk`, `valid_wb`, `pc_wb`,
+is declared in `tb/riscv_small_interface.sv:161-185` with eight inputs — `clk`, `valid_wb`, `pc_wb`,
 `inst_wb`, `rd0_wr_en_wb`, `rd0_addr_wb`, `rd0_data_wb` and `ma_wb_clk_en` — and bound inside the target,
-`bind riscv_small riscv_small_retire_if u_retire (...)`, by `tb/riscv_small_tb.sv:50-59`. The testbench
-reads the bound instance through `uvm_config_db` as `retire_vif` (`tb/riscv_small_tb.sv:107`).
+`bind riscv_small riscv_small_retire_if u_retire (...)`, by `tb/riscv_small_tb.sv:57-66`. The testbench
+reads the bound instance through `uvm_config_db` as `retire_vif` (`tb/riscv_small_tb.sv:114`).
 
 The probe derives the commit rule rather than reading one: `retire_valid = valid_wb && ma_wb_clk_en`
-(`tb/riscv_small_interface.sv:175`), with `retire_pc = pc_wb`, `retire_inst = inst_wb`,
-`retire_rd = rd0_addr_wb` and `retire_wdata = rd0_data_wb` (`:176-179`). The rule lives here, not in
+(`tb/riscv_small_interface.sv:179`), with `retire_pc = pc_wb`, `retire_inst = inst_wb`,
+`retire_rd = rd0_addr_wb` and `retire_wdata = rd0_data_wb` (`:180-183`). The rule lives here, not in
 `rtl/`, because it is an observation and not a behaviour: a write-back slot held by the data-wait stall
 has `valid_wb` high for several cycles, and only counting the cycle in which the MA/WB register
 advances (`ma_wb_clk_en`) makes one instruction one event. The monitor reads the probe at the same
-`posedge clk` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:462-469`), so the sample is the
+`posedge clk` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:483-492`), so the sample is the
 value the register file commits at that edge. The probe is simulation-only: it is compiled only through
 `srclist/riscv_small_interface.srclist` (`srclist/riscv_small_interface.srclist:1-2`) and never through
 the DUT list, so it adds no port and the DUT's port count is still eighteen (§4.4).
@@ -590,16 +600,21 @@ for symmetry: **an instruction that traps never retires.** The trap path flushes
 (`rtl/control.sv:355-359`), so the trapping instruction is discarded before write-back and the retire
 probe of §4.5 above cannot see it. A model fed only by retire is therefore blind to exactly the event
 the trap path implements, and inferring the event from a PC discontinuity does not work either, because
-a jump produces the same discontinuity. The probe is declared in `tb/riscv_small_interface.sv:223-233`
+a jump produces the same discontinuity. The probe is declared in `tb/riscv_small_interface.sv:227-237`
 with five inputs — `clk`, `trap_valid`, `trap_pc`, `trap_inst` and `trap_cause[3:0]` — and bound by
-`tb/riscv_small_tb.sv:67-73`; the testbench reads it as `trap_vif` (`:110`). It derives nothing and
+`tb/riscv_small_tb.sv:74-80`; the testbench reads it as `trap_vif` (`:117`). It derives nothing and
 filters nothing: the four signals are the top-level nets of §7.0 (`rtl/riscv_small.sv:150-153`,
-`:178-181`), so one `trap_valid` pulse is one trap, and the monitor publishes `trap_pc`, `trap_inst`
-and `trap_cause` verbatim (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:286-300`).
+`:178-181`), so one `trap_valid` pulse is one trap, and the monitor publishes `trap_pc`, `trap_inst`,
+`trap_cause` and the `exception[3:0]` it read beside them verbatim
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:294-315`).
 **`trap_inst` is published on purpose**: it is what lets the reference model *derive* the expected cause
 from the instruction — an unallocated encoding 2, `EBREAK` 3, `ECALL` 11
-(`tb/env/ref_model/riscv_small_ref_model.sv:340-420`) — and compare it against the cause the core took.
+(`tb/env/ref_model/riscv_small_ref_model.sv:367-438`) — and compare it against the cause the core took.
 Publishing only `trap_cause` would leave the model repeating the DUT's value, which is not evidence.
+Since WP-14b the trap is also published **last** among the events of its cycle, because the stream
+order is the architectural order: the commit in WB and the data beat in MA are older than the trap
+decided in ID, and a consumer applies them in arrival order
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:27-36`, `:518-522`, §10).
 
 ## 5. Clocks and resets
 
@@ -622,8 +637,8 @@ The fetch stage takes the parameter as the reset value of `pc` — `pc <= RESET_
 asynchronous assertion edge (`rtl/instruction_fetch.sv:108-110`) — so the first address presented on
 `inst_addr` after release is that value. `T-50` makes the observation: `riscv_small_reset_checker`
 compares the first fetch the monitor publishes after reset with the value the testbench top published
-from the elaborated parameter (`tb/env/top/riscv_small_reset_checker.sv:81-98`,
-`tb/riscv_small_tb.sv:116`, §10). Only the default elaboration has been run, so parameter
+from the elaborated parameter (`tb/env/top/riscv_small_reset_checker.sv:84-96`,
+`tb/riscv_small_tb.sv:123`, §10). Only the default elaboration has been run, so parameter
 configurability — the second build with another value that `FR-41`'s acceptance asks for — is not
 demonstrated; `G-33` is closed on the default value alone (section 11).
 
@@ -861,7 +876,7 @@ omits. Internally it also crosses the module boundaries with `pc_id`, `inst_id`,
 group (`csr_op_ex`, `csr_valid_ex`, `csr_write_ex`, `csr_we`, `csr_addr`, `csr_rdata`, `csr_wdata`,
 `mtvec_base`, `trap_cause_id`, `ctrl_trap_valid`, `ctrl_trap_cause`)
 (`rtl/riscv_small.sv:73-167`). The `bind` probes of §4.5 are not created here: the testbench binds them
-inside this scope (`tb/riscv_small_tb.sv:50-59`, `:67-73`), and they are simulation-only.
+inside this scope (`tb/riscv_small_tb.sv:57-66`, `:74-80`), and they are simulation-only.
 
 **State.** None. No `always_ff` and no register is declared in the top; every internal `logic`,
 `dataBus_*` and enum is driven by a port of a submodule or by the one remaining continuous assignment.
@@ -1585,7 +1600,9 @@ trap_valid = trap_request && valid_id && clk_en && if_id_clk_en && id_ex_clk_en 
 so `trap_valid` is high for exactly one cycle per trap and **never while the pipeline is held** — which
 is `D12`/`D12b`: the trap fires on the edge the beat completes, not inside the freeze, and the monitor
 samples it on every `posedge` without masking with `clk_en`
-(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:275-301`). On that edge
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:282-315`). That contract now has a test: `T-62`
+raises an `ECALL` behind a crossing store whose grant the memory withholds for two cycles, and observes
+exactly one trap, on the releasing edge, with no instruction lost (§10). On that edge
 `control` raises both `if_id_flush` and `id_ex_flush` and selects `pc_sel = TRAP`
 (`rtl/control.sv:355-359`), so the trapping instruction is discarded before it can write anything and
 the fetch stage loads `mtvec.BASE` (§7.11). One cycle later `trap_taken_q` repeats `if_id_flush`
@@ -1793,8 +1810,8 @@ that entered ID behind the handler (`.opencode/plan/wp-14-csr-trap.md:282-291`).
   ID, and rewrites `mepc`/`mcause` each time; nothing latches the request (`rtl/control.sv:373-376`).
 - A trap is **held** while a data access or a split beat freezes the pipe, not taken: `trap_valid`
   requires all four enables (`rtl/control.sv:353-354`), so the event fires on the releasing edge with
-  the same PC and the access is not aborted. `D12` is the decision and its consequence is a trap that
-  is one or more cycles late under back-pressure.
+  the same PC and the access is not aborted. `D12` is the decision, its consequence is a trap that
+  is one or more cycles late under back-pressure, and `T-62` is the test that raises it (§10).
 - `clk_en` is used by this block only for `branch_taken_q`/`trap_taken_q` and, through the
   `trap_valid` qualification, for the trap event itself
   (`rtl/control.sv:116-125`, `:353`). Deasserting it does not stop the core (`G-12`). The split hold
@@ -2116,7 +2133,7 @@ write.
    of the instruction ahead of it, so a bare `mcycle_q` would lag by one against a model that counts
    the same edges. The RTL reads `mcycle_q + 1` (`rtl/csr_file.sv:114-116`), the value after the
    increment of the cycle it is read in; the model does not predict the low halves at all
-   (`tb/env/ref_model/riscv_small_ref_model.sv:529-534`), so this is a documented convention and not a
+   (`tb/env/ref_model/riscv_small_ref_model.sv:563-565`), so this is a documented convention and not a
    comparison. The absolute value of `mcycle` at a given PC is implementation-defined, which is what
    makes the choice legal — and what makes it invisible to any test that does not fix the
    convention.
@@ -2124,7 +2141,7 @@ write.
    writing `mcycle` with `0xFFFF_FFFF` and letting the increment carry, are the cases the `FR-50`
    acceptance names; they only hold if the halves are a 64-bit register and not two independent
    counters. The model keeps one 64-bit value per counter for the same reason
-   (`tb/env/ref_model/riscv_small_ref_model.sv:126-148`).
+   (`tb/env/ref_model/riscv_small_ref_model.sv:155-159`).
 
 The read and the write in one cycle are what T5 draws: the value EX reads is the value before the
 edge, the write lands on that edge, and the next `CSR*` sees the new value with no bubble.
@@ -2147,7 +2164,7 @@ result costs a bubble. Hand-derived from the RTL, not captured. Source:
   Both addresses are the same architectural counter, so in a cycle where an older instruction is still
   in MA or WB the two reads differ by one or two — while `mcycle`/`cycle` are consistent because both
   read `mcycle_view` (`:146`, `:150`). The module's own comment (`:118-127`) and the model
-  (`tb/env/ref_model/riscv_small_ref_model.sv:496-513`, which treats the two addresses identically)
+  (`tb/env/ref_model/riscv_small_ref_model.sv:530-545`, which treats the two addresses identically)
   both assume the aliasing that the RTL does not implement for this pair. No test covers it: `T-03`
   reads `instret` (0xC02) and never `minstret` (0xB02). It is `G-39`.
 - `mstatus` and `mie` are storage without behaviour: a write is stored and read back, and nothing reads
@@ -2189,9 +2206,11 @@ the contract between them, and it is the reason `BLK-TRAP` has no row in the §7
 | 7 | `control` | `trap_taken_q` repeats `if_id_flush` one cycle later and discards the fetch in flight | `:293-296` |
 
 **Interface.** The trap contract is carried by two catalogue interfaces over three edges: `trap_req_if`
-(`C10`, the external cause bus) and `csr_if` (`C15`, the entry write; `C23`, the vector). The observation is the probe
-`trap_evt_if` (`C22`, §4.5), which publishes `trap_valid`/`trap_pc`/`trap_inst`/`trap_cause` because a
-trapping instruction never retires.
+(`C10`, the external cause bus, driven by the testbench since WP-14b) and `csr_if` (`C15`, the entry write; `C23`, the vector). The observation is the probe
+`trap_evt_if` (`C22`, §4.5), which publishes `trap_valid`/`trap_pc`/`trap_inst`/`trap_cause`, and the
+`exception[3:0]` the monitor read beside them, because a trapping instruction never retires. The trap
+is the **last** publication of its cycle on the one analysis port, after the commit in WB and the data
+beat in MA: those are older, and a consumer applies the stream in arrival order (§10).
 
 **State.** None in this "block": the state is `csr_file`'s `mepc`/`mcause` (§7.11) and the two echo
 flops are `control`'s (§7.6).
@@ -2202,20 +2221,25 @@ instruction already past ID — in EX, MA or WB — completes and may write the 
 (`rtl/memory_access.sv:108-134`). The handler starts at `mtvec.BASE` with `mstatus.MIE` untouched,
 because there is no `mstatus` stack to enter; `mepc` holds the trapping instruction's PC and `mcause`
 its cause. `trap_valid` is observable for exactly one cycle, which is the contract the monitor's
-trap publication rests on (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:275-301`).
+trap publication rests on (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:282-315`), and the
+publish-last order is what `T-60` proves: a `CSR*` retiring in the trap's own cycle reads the pre-trap
+`mepc`/`mcause` (§10).
 
 **Corner cases.**
 
 - A trap under back-pressure is **late, not lost**: while `split_stall` or a data grant freezes the
   pipe, `trap_valid` cannot assert (`rtl/control.sv:353-354`), and the trap is taken on the releasing
-  edge with the same PC. `D12` is the decision; no test in the manifest raises it
-  (`.opencode/plan/wp-14-csr-trap.md:339-345`).
+  edge with the same PC. `D12` is the decision and `T-62` is its test: a crossing store whose grant the
+  memory withholds keeps MA frozen while the `ECALL` waits in ID, the run observes exactly one trap,
+  and the retire checker proves no placed instruction was lost (`tb/tests/riscv_small_trap_split_test.sv:4-30`, §10).
 - A trap in the same cycle as a taken branch resolves to the trap (`rtl/control.sv:283`, `:355`), and
   `branch_taken_q` may still raise its echo on the next cycle; the two flushes coincide and do no harm.
-- The external cause bus has **no stimulus in the manifest**: the testbench binds the DUT's `exception`
-  to a constant zero (`tb/riscv_small_tb.sv:32`, `:79`) and the driver does not drive
-  `intf.exception`. The external arm of `proc_trap_priority` is therefore structural, not observed —
-  one of the two debts the WP-14 plan leaves named (`.opencode/plan/wp-14-csr-trap.md:343`).
+- The external cause bus **is driven** since WP-14b: the testbench connects the DUT port to the
+  interface member (`.exception(intf.exception)`, `tb/riscv_small_tb.sv:86`), the driver asserts it for
+  one core cycle on a scheduled instruction, and the monitor observes the same wire. `T-61` presents
+  cause 5 on it and observes `mcause` = 5, `mepc` at the aimed instruction, and that instruction's CSR
+  write discarded. The arms it does not cover are the interrupt inputs, the priority between two
+  requests and a request held across several cycles (§10, `G-37`).
 - `MRET` and the interrupt entry of `FR-48` are still absent: the handler cannot return, and no
   `mtip`/`meip`/`msip` input exists (`G-14`, `FR-45`).
 
@@ -2461,7 +2485,7 @@ target (`G-27`); both are fixed, and the cycles below are re-counted from the ne
 | not-taken branch | 0 | `pc_sel` stays `PC_PLUS4`; the branch is decoded in ID and writes nothing | `rtl/jump_decision.sv:161-163`, `rtl/instruction_decode.sv:414-417` |
 | trap | 2 | the trap's own `if_id_flush`/`id_ex_flush` discard the instruction in ID and the one behind it, and `trap_taken_q` discards the fetch in flight on the next cycle; anything in MA or WB completes (T4) | `rtl/control.sv:353-359`, `:293-296`, `rtl/memory_access.sv:108-134` |
 | `Zicsr` access, and its consumer | 0 | the read is combinational in EX and the write lands on the same edge, so a following `CSR*` reads the new value and a consumer of `rd` takes the ordinary EX/MA or WB forward (T5) | `rtl/csr_file.sv:134-159`, `:205-237`, `rtl/control.sv:234-249` |
-| trap under back-pressure (a split beat or a withheld data grant) | as long as the freeze | `trap_valid` needs all four enables, so the trap waits for the releasing edge instead of aborting the access | `rtl/control.sv:353-354` |
+| trap under back-pressure (a split beat or a withheld data grant) | as long as the freeze | `trap_valid` needs all four enables, so the trap waits for the releasing edge instead of aborting the access (`T-62` measures it on a withheld crossing store) | `rtl/control.sv:353-354` |
 | load-use, ALU or store-data consumer one instruction behind | 1 | consumer held in EX, `ex_ma_flush` inserts the bubble, value arrives by the WB forward on the next cycle | `rtl/control.sv:238-245`, `:263-270`, `:234-236` |
 | load-use, branch consumer one instruction behind | 2 | one `id_ex_flush` while the load is in EX, then one `ex_ma_flush` while it is in MA, then the WB forward; the redirect is suppressed until then (`branch_op_stall`), so a taken branch pays its own two cycles on top | `rtl/control.sv:175-181`, `:161-168`, `:283-286` |
 | load-use, consumer two instructions behind | 0 | the consumer reaches EX in the load's WB cycle and forwards from WB | `rtl/control.sv:234-236`, `:256-261` |
@@ -2488,8 +2512,8 @@ No workload CPI is quoted: the only directed test (`T-01`) withdraws 31 loads, 5
 
 ## 10. Verification hooks
 
-Observability is the port list of section 4 plus the simulation-only observations below. The first three
-rows are DUT ports; the fourth and fifth are the probes of §4.5, bound inside the DUT and adding no
+Observability is the port list of section 4 plus the simulation-only observations below. The first five
+rows are DUT ports; the next two are the probes of §4.5, bound inside the DUT and adding no
 port; the last is a `$display` in simulation.
 
 | Hook | What it shows | Cite |
@@ -2497,9 +2521,10 @@ port; the last is a `$display` in simulation.
 | `inst_addr`, `inst_rd_en`, `inst_data` | the fetch stream, one address per cycle | `rtl/riscv_small.sv:58-61` |
 | `data_addr`, `data_wr`, `data_wr_strb`, `data_rd_en_ma`, `data_wr_en_ma`, `data_rd_wr_ctrl` | every beat of every data access with its width, its byte strobes and its direction | `rtl/riscv_small.sv:63-70` |
 | `data_rd` | the word of the beat being granted; a split load commits the merged word instead (§7.4) | `rtl/riscv_small.sv:64` |
-| `mtime`, `hart_id` | the platform straps, sampled with every retire and every trap so the model predicts `time`/`timeh` and `mhartid` from the observation and not from configuration (`FR-49`, `FR-32`, `D13`) | `rtl/riscv_small.sv:55-56`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:294-296` |
-| `riscv_small_retire_if` (`retire_valid`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata`) | one event per instruction that leaves write-back, with the word it carried | `tb/riscv_small_interface.sv:157-181` |
-| `riscv_small_trap_if` (`trap_valid`, `trap_pc`, `trap_inst`, `trap_cause`) | one event per trap taken: the encoding that trapped and the cause the core chose | `tb/riscv_small_interface.sv:223-233` |
+| `mtime`, `hart_id` | the platform straps, sampled with every retire and every trap so the model predicts `time`/`timeh` and `mhartid` from the observation and not from configuration (`FR-49`, `FR-32`, `D13`) | `rtl/riscv_small.sv:55-56`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:302-304`, `:495-496` |
+| `exception[3:0]` | the external trap request as the testbench presented it, sampled into the trap event so the model predicts an external cause from the observation (`FR-22`, `Q-35`, `D13`; `T-61`) | `rtl/riscv_small.sv:54`, `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:305-309` |
+| `riscv_small_retire_if` (`retire_valid`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata`) | one event per instruction that leaves write-back, with the word it carried | `tb/riscv_small_interface.sv:161-185` |
+| `riscv_small_trap_if` (`trap_valid`, `trap_pc`, `trap_inst`, `trap_cause`) | one event per trap taken: the encoding that trapped and the cause the core chose | `tb/riscv_small_interface.sv:227-237` |
 | `$display("RTL REG_WRITE: x%0d = 0x%0h", ...)` | one line per architectural register write | `rtl/reg_file.sv:101` |
 
 **The trap probe, and why retire alone is not enough.** The four trap signals are top-level nets
@@ -2508,43 +2533,58 @@ reason is architectural rather than cosmetic: **the instruction that traps never
 flushes IF/ID and ID/EX (`rtl/control.sv:355-359`) — so a model fed only by the retire stream would miss
 exactly the event the trap path implements, and inferring it from a PC discontinuity cannot work either,
 because a jump produces the same discontinuity. The monitor samples the probe on **every** `posedge clk`
-and does **not** mask it with `clk_en` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:271-301`),
+and does **not** mask it with `clk_en`
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:282-315`),
 because `clk_en` qualifies the pipeline's advance and not an event; the RTL's side of that contract is
 that `trap_valid` is high for exactly one clock per trap (`D12b`, §7.6). The event is published
-verbatim as one transaction, with the straps of the moment attached
-(`:286-300`). **`trap_inst` travels with `trap_cause` on purpose**: the model derives the expected cause
+verbatim as one transaction, with the straps of the moment and the `exception[3:0]` the monitor read
+attached (`:294-315`). **`trap_inst` travels with `trap_cause` on purpose**: the model derives the expected cause
 from the encoding — an unallocated encoding 2, `EBREAK` 3, `ECALL` 11
-(`tb/env/ref_model/riscv_small_ref_model.sv:339-423`) — and the scoreboard compares the two. Publishing
+(`tb/env/ref_model/riscv_small_ref_model.sv:367-438`) — and the scoreboard compares the two. Publishing
 only the cause would leave the model repeating the DUT's value, which is not evidence.
+
+**The order of the four streams is architectural.** One analysis port carries the fetch, the data beat,
+the commit and the trap, so a position in that stream is a claim about time. WB (the commit) and MA (the
+data beat) are **older** than ID (the trap decided there) in the same cycle, so the monitor samples the
+trap first, because `trap_valid` is unmasked, and publishes it **last**
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:27-36`, `:518-522`). The reference model applies
+whatever arrives in arrival order (`tb/env/ref_model/riscv_small_ref_model.sv:263-281`), so publishing
+the trap first made it apply the trap before the commit that shares its cycle: a `CSR*` retiring in the
+trap's own cycle was predicted from the post-trap state. `T-60` is the test that separates the two: its
+program reads `mepc` and `mcause` in the write-back slot of the trap's own cycle, so the values must be
+the pre-trap ones, and the scoreboard's `trap_cocycle_check` refuses the run unless a commit really was
+observed in that cycle (`tb/env/top/riscv_small_scoreboard.sv:395-411`).
 
 **The retire probe.** `valid_wb`, `pc_wb`, `inst_wb`, `rd0_wr_en_wb`, `rd0_addr_wb`, `rd0_data_wb` and
 `ma_wb_clk_en` are read by the bound interface, which derives the commit rule itself:
-`retire_valid = valid_wb && ma_wb_clk_en` (`tb/riscv_small_interface.sv:175`). The rule is in the
+`retire_valid = valid_wb && ma_wb_clk_en` (`tb/riscv_small_interface.sv:179`). The rule is in the
 probe, not in `rtl/`, for two reasons. `valid_wb` alone would count a slot several times, because the
 MA/WB register is held by the data-wait stall while `ma_wb_clk_en` is low (`rtl/control.sv:309-314`);
 and a slot that never carried an instruction (`valid_wb = 0`) must advance without an event, which is
 how a flushed fetch is proven not to execute. The probe is read at the same `posedge clk` the register
-file commits on (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:462-500`), so the event and the
+file commits on (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:483-516`), so the event and the
 architectural write describe the same instruction, because the probe samples the pre-edge value the
-register file commits at that edge (`tb/riscv_small_interface.sv:143-148`). The monitor publishes it
+register file commits at that edge (`tb/riscv_small_interface.sv:150-155`). The monitor publishes it
 verbatim with `op_is_retire`, `retire_pc`, `retire_inst`, `retire_rd`, `retire_wdata` and `retire_seq`
-(`:465-475`); it does not pair a fetch with a commit. When `+RETIRE_LOG=<file>` is passed on the
-simulator command line (`:94-102`, `:479-490`), the monitor also writes one canonical commit
+(`:484-499`); it does not pair a fetch with a commit. When `+RETIRE_LOG=<file>` is passed on the
+simulator command line (`:100-105`, `:500-510`), the monitor also writes one canonical commit
 line per retired instruction (`0x<pc:08x> <xN|-> <0xval|-> 0x<inst:08x>`, printing `- -` when
-`rd0_wr_en_wb == 0` or `retire_rd == 0`, `:479-490`); the plusarg is off by default (`retire_log_fd == 0`),
+`rd0_wr_en_wb == 0` or `retire_rd == 0`, `:500-510`); the plusarg is off by default (`retire_log_fd == 0`),
 so default runs do no file I/O and add no log lines (§10.2).
 
 **The model is fed by the monitor only.** `riscv_small_ref_model` has one input,
-`uvm_analysis_imp_mon` (`tb/env/ref_model/riscv_small_ref_model.sv:96`), and `write_mon` executes the
-retire and trap events and ignores the fetch and data events (`:250-268`). There is no FIFO, no
+`uvm_analysis_imp_mon` (`tb/env/ref_model/riscv_small_ref_model.sv:109`), and `write_mon` executes the
+retire and trap events and ignores the fetch and data events (`:263-281`). There is no FIFO, no
 `run_phase` and no `get()` in the class, so the same model runs unchanged in a passive agent.
-Its architectural state is its own `reg_file`, `iss_mem` and CSR file (`:121-148`), and it models the
+Its architectural state is its own `reg_file`, `iss_mem` and CSR file (`:121-150`), and it models the
 machine-mode CSR file and the trap entry as of WP-14: the six `Zicsr` encodings with the address map,
 the counters as views of `mcycle`/`minstret`, `misa`, `mhartid`, `time`/`timeh`, `mscratch`, `mtval`,
-and `mepc`/`mcause` written by the trap event (`:293-334`, `:482-535`). What it still does **not** model
+and `mepc`/`mcause` written by the trap event (`:306-365`, the write itself at `:349-354`), with the counter views read at `:530-545`. Since WP-14b its external-trap
+prediction reads `obs_exception` from the trap event rather than from configuration (`:312-327`). What it
+still does **not** model
 is the rest of the instruction set (`G-04`): the five load forms and `SW` have a data-path prediction,
-one per retired store on `rm2sb_port`. The environment connects only the monitor's analysis port
-to it (`tb/env/top/riscv_small_env.sv:108-112`).
+one per retired store and **two** for a store that crosses a word boundary (`:760-864`), on `rm2sb_port`. The environment connects only the monitor's analysis port
+to it (`tb/env/top/riscv_small_env.sv:121-123`).
 
 **The program image is configuration.** `riscv_small_program_image` is a `uvm_object` holding
 `inst[byte_pc]`, `data[byte_a]`, the placement order `inst_order` and the declared skip addresses
@@ -2555,7 +2595,7 @@ through `uvm_config_db` (`tb/tests/riscv_small_monitor_model_test.sv:44-45`,
 also declare the addresses their branches skip
 (`tb/tests/sequence_lib/riscv_small_branch_seq.sv:145-151`,
 `tb/tests/sequence_lib/riscv_small_skip3_seq.sv:47-153`). The model reads it once, lazily at the
-first retire, for the initial data memory (`tb/env/ref_model/riscv_small_ref_model.sv:192-209`). It is
+first retire, for the initial data memory (`tb/env/ref_model/riscv_small_ref_model.sv:251-263`, called from `:619`). It is
 state written before the run and read afterwards, not an analysis stream: the model never receives the
 program as a transaction, and the two mechanisms that used to carry one — `program_port` and
 `rm_export`/`publish_program()` — are deleted (both return nothing under
@@ -2564,11 +2604,11 @@ program as a transaction, and the two mechanisms that used to carry one — `pro
 **Two BFM defects fixed while measuring.** The directed driver answered a fetch during reset; the core
 latched that word on the first post-reset edge and again one cycle later, so the reset PC retired twice
 (an extra commit at pc 0). It now skips the responder while `rst_n` is low
-(`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:243-251`), so the request presented during reset
+(`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:247-254`), so the request presented during reset
 is answered on the first post-reset edge — the one-cycle latency the `pc_fetch`/`pc_id` pair expects.
 The same driver left `inst_ready` high after the program's last fetch, so the core could fetch and
 retire past the end of the program; it now waits for the last response and then deasserts `inst_ready`
-(`:364-384`). The retire observation found both, not a directed test.
+(`:372-393`). The retire observation found both, not a directed test.
 
 **Measured on the directed corpus and the set invariant.** Every count in this paragraph — the three
 `T-44`/`T-45`/`T-46` runs and the `beq`/`jalr` corpus totals at the end of it — was measured by
@@ -2589,14 +2629,17 @@ fetches and 9 commits (`build/regress/<run>/T-46.log`): `0x0c` and `0x10` are fe
 flushed at IF/ID while `0x14` is never fetched, because the front end discards a fixed **2** words on a
 taken branch regardless of jump distance (measured across the corpus: `beq` `T-12` = 284 commits / 342
 fetches, `jalr` `T-17` = 108 / 138, `T-46` = 9 / 11). `riscv_small_retire_checker`
-(`tb/env/top/riscv_small_retire_checker.sv:62-283`) therefore replaced the unconditional
+(`tb/env/top/riscv_small_retire_checker.sv:62-305`) therefore replaced the unconditional
 `fetch_count == retire_count + |skip_pc|` with a **set** claim — every fetched PC inside the image is
-either executed (retired at least once) or in `skip_pc`, raising `RETIRE_FETCH_LOST` and naming the
-offending PC otherwise (`:201-224`) — plus a **gated count** claim
-(`fetch_count == retire_count + skipped_fetch_count`, raising `RETIRE_FETCH_COUNT` and naming the first
-unaccounted PC through `count_offender()`, `:171-178`, `:235-247`), asserted only when every fetched PC
+either executed (retired at least once), in `skip_pc`, or a **declared trap site** (claim 6b, added by
+WP-14b: a trapping instruction is fetched and never retires by definition, so `T-62` declares its
+`ECALL` with `image.add_no_retire` and a commit at it still fails) — raising `RETIRE_FETCH_LOST` and
+naming the offending PC otherwise (`:201-251`, trap site at `:227-232`) — plus a **gated count** claim
+(`fetch_count == retire_count + skipped_fetch_count + trap_site_fetch_count`, raising
+`RETIRE_FETCH_COUNT` and naming the first unaccounted PC through `count_offender()`, `:183-190`,
+`:253-270`), asserted only when every fetched PC
 is inside the image and was fetched once (`unmapped_fetch_count == 0 && fetch_count == fetched_pc_order.size()`)
-and reported as `NOT asserted` when a loop or re-fetched target fetches a PC more than once (`:275-280`).
+and reported as `NOT asserted` when a loop or re-fetched target fetches a PC more than once (`:295-300`).
 
 The sanity harness is the one testbench path that does not come from a sequence of directed
 transactions, and it is split by responsibility rather than concentrated in the driver. The test owns
@@ -2604,39 +2647,39 @@ the configuration, the objection and the timeout: `riscv_small_sanity_test` read
 `+HEX`/`+TOHOST`/`+MAX_CYCLES`/`+TRACE`/`+RETIRE_LOG` and publishes `sanity_mode`, `tohost`,
 `image_name` and `trace` through `uvm_config_db` (`tb/tests/riscv_small_sanity_test.sv:70-109`), then
 waits `+MAX_CYCLES` on `vif.clk` and calls `sanity_checker.report_timeout()` if no verdict has arrived
-(`:115-141`). When `+RETIRE_LOG=<file>` is set (`commit_dump`, `:48-49`, `:92-96`), the test drains
+(`:115-140`). When `+RETIRE_LOG=<file>` is set (`commit_dump`, `:48-49`, `:92-96`), the test drains
 `RETIRE_DRAIN = 8` cycles (`:48`, `:135`) after `sanity_checker.done` before dropping the objection so
 the `tohost` store — whose verdict fires on the MA-stage data write — reaches WB and commits into the
 dump; when the dump is off, no extra cycle runs. The sequence owns the image: `riscv_small_sanity_seq`
 is the only component that calls `$readmemh`, builds the program item from the non-zero words as
-`program_addr[]`/`program_data[]` (`tb/tests/sequence_lib/riscv_small_sanity_seq.sv:30-67`) and sends
-the item on the sequencer (`:58-59`); this path configures no program image and builds no reference
+`program_addr[]`/`program_data[]` (`tb/tests/sequence_lib/riscv_small_sanity_seq.sv:30-68`) and sends
+the item on the sequencer (`:65-66`); this path configures no program image and builds no reference
 model, because its oracle is `+TOHOST`. The driver is a memory
 BFM and nothing else: `run_image_mode()` clears its 64K-word `mem`, loads the item word by word,
 completes the item and then hands the phase to `run_memory_responder()`, which answers the instruction
 and data ports for the rest of the phase
-(`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:422-432`, `:434-512`); it reads no plusarg,
+(`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:473-483`, `:485-566`); it reads no plusarg,
 decodes no verdict address and raises no report error (`:18-21`). A store is a
-read-modify-write of the byte lanes its `data_wr_strb` names (`:93-107`, `:495-515`), so the BFM
+read-modify-write of the byte lanes its `data_wr_strb` names (`:148-165`, `:540-565`), so the BFM
 applies the DUT's strobes and neither judges nor derives them. The monitor publishes the
 instruction fetch, the data transaction, the retire event and now the trap event on `mon2sb_port`,
-including the strobe (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:331-356`, `:238-268`,
-`:462-500`, `:286-300`) and prints
-them only under `+TRACE` (`:259-266`, `:330-340`, `:491-493`). The driver prints its own `TRACE[<cycle>] IFETCH`/`DREAD`/`DWRITE`
-lines under the same `+TRACE` (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:468-470`,
-`:488-490`, `:508-510`); its `cycles` counter is zeroed and incremented in `run_memory_responder` and
-read only by those three prints (`:434-441`), so it labels the trace and nothing else; `+MAX_CYCLES` is
+including the strobe (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:349-379`, `:249-280`,
+`:483-516`, `:294-315`) and prints
+them only under `+TRACE` (`:271-278`, `:361-374`, `:511-514`). The driver prints its own `TRACE[<cycle>] IFETCH`/`DREAD`/`DWRITE`
+lines under the same `+TRACE` (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:519-522`,
+`:540-542`, `:560-562`); its `cycles` counter is zeroed and incremented in `run_memory_responder` and
+read only by those three prints (`:489-495`), so it labels the trace and nothing else; `+MAX_CYCLES` is
 the test's budget and the driver holds neither. The sanity checker owns the verdict: it subscribes to
 the monitor (`tb/env/top/riscv_small_sanity_checker.sv:61-63`), decodes the data write to `tohost`,
 prints `SANITY: PASS` for 1 and `SANITY: FAIL testnum=n` for `(n << 1) | 1`, prints `SANITY: TIMEOUT`
 when the test reports the cycle budget exhausted, raises `uvm_error` on FAIL and TIMEOUT and triggers
-`done` in all three cases (`:106-128`). The environment builds the checker — and no reference model
-and no scoreboard — only in sanity mode (`tb/env/top/riscv_small_env.sv:85-90`); in directed mode it
+`done` in all three cases (`:114-130`). The environment builds the checker — and no reference model
+and no scoreboard — only in sanity mode (`tb/env/top/riscv_small_env.sv:94-100`); in directed mode it
 adds the reference model and the scoreboard, while the fetch-pair checker and the retire checker are
-built in both modes and stay inert without an image (`:73-80`), and the model's only input is the
-monitor (`:108-112`). The environment also builds `riscv_small_strb_checker`
-in **both** modes and connects it to the same monitor port (`tb/env/top/riscv_small_env.sv:73-75`,
-`:101`): it checks that every observed write beat carries strobes
+built in both modes and stay inert without an image (`:87-90`), and the model's only input is the
+monitor (`:121-123`). The environment also builds `riscv_small_strb_checker`
+in **both** modes and connects it to the same monitor port (`tb/env/top/riscv_small_env.sv:78`,
+`:110`): it checks that every observed write beat carries strobes
 that agree with the width the DUT reported — one bit for byte, two adjacent for halfword, `4'b1111`
 for word — and raises `STRB_WIDTH` on a mismatch
 (`tb/env/top/riscv_small_strb_checker.sv:132-147`). For a **split** write it pins the pair instead of
@@ -2666,16 +2709,44 @@ The WP-13 run measured **43 pass / 0 fail of 43** at RTL `sha256:f84ea86b…d63e
 `isa/rv32ui/*.S` plus one **project-local** image,
 `scripts/verify/sanity/local/rv32ui-p-jalr_unaligned.S`, which adds the odd-target `JALR` case the
 bundled suite never exercises. `scripts/verify/sanity.cmake` globs both directories
-(`scripts/verify/sanity.cmake:108-110`) and compiles a local file with the same project environment,
+(`scripts/verify/sanity.cmake:162-163`, `:193`) and compiles a local file with the same project environment,
 so the image is built, run and counted by `make sanity` exactly like a bundled one, and `T-37` is its
-manifest row (`scripts/verify/tests.tsv:86`). It is not part of the vendored suite, so the result is
+manifest row (`scripts/verify/tests.tsv:88`). It is not part of the vendored suite, so the result is
 quoted twice: 43 of 43 for the run, and 42 of the 42 **bundled** images
 (`doc/measurements/NFR-05-riscv-tests.md`), which is the number `NFR-05` is judged on.
 `rv32ui-p-ma_data` — the last failing image at WP-11, `testnum=1` under `FR-42`/`G-22` — now prints
 `SANITY: PASS` under `T-52`, which is the split's evidence; `rv32ui-p-fence_i` and `rv32ui-p-jalr`
 pass as they did, and `rv32ui-p-ld_st` passes genuinely (section 11).
 
-Thirty-six of those images are tests in their own right, listed in `scripts/verify/tests.tsv` with a
+The WP-14b run measured **46 pass / 0 fail of 46** at RTL `sha256:2e91301d…` and TB `sha256:fdd8a2fd…`
+(`build/sanity/summary.json`, 2026-11-23T22:31:09Z). The 46 images are the 43 above plus three
+`rv32mi` images: `rv32mi-p-csr` (`T-58`), `-mcsr` (`T-54`) and `-zicntr` (`T-55`). **There are two
+environments because the two suites test different things.** `rv32ui` measures the instructions, so its
+environment (`scripts/verify/sanity/riscv_test.h`) keeps the suite's test bodies and replaces the trap
+ceremony around them with a direct store to `tohost`
+(`scripts/verify/sanity/riscv_test.h:6-20`, the stores at `:64`, `:70`): when it was written the SYSTEM
+group decoded as a no-operation (`G-13`), so an `ECALL` wrote nothing and `RVTEST_PASS` could never
+reach `write_tohost`. `rv32mi` measures the **machine trap ceremony itself**, so it compiles against
+`scripts/verify/sanity/mi/riscv_test.h`, the faithful `env/p` ceremony: `_start` jumps to
+`reset_vector`, which zeroes the registers and writes `mtvec` with `trap_vector`
+(`scripts/verify/sanity/mi/riscv_test.h:126-140`), the handler dispatches on `mcause`, and the `ECALL`
+in `RVTEST_PASS`/`RVTEST_FAIL` reaches `write_tohost` (`:95-123`). `SANITY: PASS` on those images is
+therefore the image's own `TESTNUM` arriving **through the core's trap path**, not around it. What the
+`mi` environment omits is the ceremony's *setup*, never its trap path: the PMP, `satp`, `mnstatus` and
+`medeleg`/`mideleg` prologue is absent because those CSRs are outside the `FR-50` map and an access to
+them traps by design (`:20-37`). The suite and its image list are selector values, not code branches:
+`SANITY_SUITES` = `rv32ui;rv32mi` and `SANITY_IMAGES_rv32mi` = `csr;mcsr;zicntr`
+(`scripts/verify/sanity.cmake:110`, `:125-126`), while `rv32ui` builds every file it finds.
+The suite publishes sixteen images and the three above are the ones this package registers. Two of the
+other thirteen are **withheld on purpose**, and they fail against the core rather than the
+environment: `rv32mi-p-illegal` needs `MRET` to return to `mepc` (`FR-45`, where `MRET` is a legal
+no-operation) and stops at `pc=0x800003e4`; `rv32mi-p-breakpoint` needs a trigger CSR
+(`NUM_TRIGGERS` = 0, `FR-57` deferred) and stops at `testnum=2`. Neither is registered in the manifest,
+and their logs are `build/sanity/rv32mi-p-illegal.log` and `-breakpoint.log`. The remaining eleven are
+not registered either — the leg is 3 of the suite's 16 images — and that is a scope statement, not a
+claim that they cannot be built.
+
+Thirty-nine of those images are tests in their own right, listed in `scripts/verify/tests.tsv` with a
 `sanity:<image>` column: `T-08` (`rv32ui-p-simple`), `T-10`/`T-11`/`T-12` (`rv32ui-p-and`,
 `-addi`, `-beq` — the branch redirect of `G-27`, the operand forwarding of `G-26` and the negative
 branch offset of `G-20`), `T-13`..`T-15` (`-sb`, `-sh`, `-st_ld`, the store lane/strobe evidence of
@@ -2684,7 +2755,8 @@ project-local `-jalr_unaligned`: `T-37` is the only test of the bit-0 mask, beca
 image that jumps to an odd target, while `T-17` observes the `rs1` forward of `G-31`), `T-18`
 (`-jal`), `T-19`..`T-22` and `T-38` (the six branches), `T-23`..`T-28` and `T-39` (the immediates and
 the two immediate shifts), `T-29`..`T-36` and `T-43` (the register-register operations), `T-40`
-(`-slli`), `T-41` (`-lui`), `T-42` (`-auipc`) and `T-52` (`-ma_data`, the split of `FR-42`).
+(`-slli`), `T-41` (`-lui`), `T-42` (`-auipc`), `T-52` (`-ma_data`, the split of `FR-42`), and the three
+`rv32mi` rows `T-54`, `T-55` and `T-58` described above.
 `rv32ui-p-lb`, `-lbu`, `-sb`, `-sh` and `-st_ld` pass, so the `G-19` write-back effect and the `G-08`
 store lane stay closed on this digest.
 
@@ -2694,8 +2766,8 @@ pass as a false positive of the pre-WP-6 alignment defect `G-29`, whose stale PC
 `testnum=2` under `G-30`; closing `G-30` with `branch_op_stall` lets it pass on the operand the load
 actually produced, and `T-16` is its row (section 11).
 
-The manifest has 50 rows (`scripts/verify/tests.tsv:32-163`), all **50/50 passing** under `make regress`
-(`build/regress/2026-11-21T00-35-59Z/results.json`, RTL `sha256:2e91301d…`, TB `sha256:0091e260…`):
+The manifest has 56 rows (`scripts/verify/tests.tsv:32-220`), all **56/56 passing** under `make regress`
+(`build/regress/2026-11-23T22-28-57Z/results.json`, RTL `sha256:2e91301d…`, TB `sha256:fdd8a2fd…`):
 `T-01`, `T-02`, `T-06` (the directed tests, `T-06`
 the sub-word load test of `FR-12`), `T-09` (`riscv_small_passive_test`, the passive-agent topology),
 `T-03` (`riscv_small_csr_test`, the `Zicsr`/trap program of WP-14, described below),
@@ -2704,14 +2776,19 @@ the sub-word load test of `FR-12`), `T-09` (`riscv_small_passive_test`, the pass
 `T-51` (`riscv_small_halfword_lane_test`, the odd halfword offset in both directions, `FR-11`/`FR-12`),
 `T-52` (`riscv_small_sanity_test` on `rv32ui-p-ma_data`, the two-beat split, `FR-42`),
 `T-53` (`riscv_small_store_grant_test`, a store through a memory that withholds the grant for two
-cycles, `FR-38`), `T-08` plus `T-10`..`T-43` and `T-52` (the 36 `sanity:<image>` rows described
+cycles, `FR-38`), the three WP-14b trap tests — `T-60` (`riscv_small_trap_order_test`, the commit of a
+cycle published before the trap of the same cycle, with a co-cycle non-vacuity guard), `T-61`
+(`riscv_small_external_trap_test`, `exception[3:0]` = 5 asserted for one cycle, `mcause` = 5, `mepc` at
+the aimed instruction, its CSR write discarded) and `T-62` (`riscv_small_trap_split_test`, one trap on
+the releasing edge of a withheld crossing store, nothing lost) — `T-08` plus `T-10`..`T-43`, `T-52`,
+`T-54`, `T-55` and `T-58` (the 39 `sanity:<image>` rows described
 above), and `T-47`..`T-49` (the three `spike:<image>` commit-trace comparisons, §10.2). `T-04` and
-`T-05` remain target and neither exists; every row below is absent with the gap that keeps it
-absent.
+`T-05` remain target and neither exists; the table below carries them, plus the one present row
+(`T-03`) whose several claims are worth naming.
 
 | ID | Scope | Status |
 |---|---|---|
-| `T-03` | **as built since WP-14**: one directed program covering the six `CSR*` on `mscratch`, the `rd = x0` and `rs1 = x0` clauses, one read per address group plus one absent address, a write to `mtval` that must **not** trap, and seven traps back to back (`ECALL` 11, `EBREAK` 3, an unallocated encoding 2, an absent CSR 2, two writes to read-only addresses 2) honoured at the `mtvec` the program wrote | present (`scripts/verify/tests.tsv:52`, `tb/tests/riscv_small_csr_test.sv`), `mutant:csr-illegal-noop`; the reset-vector clause is observed separately by `T-50` (§5) |
+| `T-03` | **as built since WP-14**: one directed program covering the six `CSR*` on `mscratch`, the `rd = x0` and `rs1 = x0` clauses, one read per address group plus one absent address, a write to `mtval` that must **not** trap, and seven traps back to back (`ECALL` 11, `EBREAK` 3, an unallocated encoding 2, an absent CSR 2, two writes to read-only addresses 2) honoured at the `mtvec` the program wrote | present (`scripts/verify/tests.tsv:54`, `tb/tests/riscv_small_csr_test.sv`), `mutant:csr-illegal-noop`; the reset-vector clause is observed separately by `T-50` (§5) |
 | `T-04` | target: `mtip`/`meip`/`msip`, `mie`/`mip`, the `mstatus` entry stack and the priority order | target, absent (`G-14`): `mie`/`mip` exist as storage/zero, but nothing reads them and there is no interrupt input |
 | `T-05` | target: hart-side run control, abstract commands, the program buffer, triggers, single step and the `dbg_auth` strap; it needs a Debug Module model | target, absent (`G-23`) |
 
@@ -2726,7 +2803,7 @@ Coverage is collected by `riscv_small_coverage`, a `uvm_subscriber` on the monit
 a value the reference model predicted: the monitor publishes an accepted fetch (`inst_rd_en &&
 inst_ready`), every data **beat** (`data_rd_en || data_wr_en`, with its beat index), every retire event
 and, since WP-14, every trap event on the same port
-(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:286-300`, `:462-500`, and the fetch and data
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:294-315`, `:483-516`, and the fetch and data
 publishers around them). `write()` routes a trap to `cg_csr` and returns, a retire to `cg_csr` and
 returns, a fetch to `cg_inst` and returns, and anything left is a data beat, sampled into both `cg_mem`
 and `cg_beat` (`tb/env/top/riscv_small_coverage.sv:368-408`). Those early returns are what keep a
@@ -2740,17 +2817,17 @@ bins with zeros.
 | `cg_mem` | `cp_dir` | 2 (`read`, `write`) | `op_is_data_write` | `:173-176`, `:401-406` |
 | `cg_mem` | `cp_subword_lane` | 4, `iff (width != 2'b10)` | `captured_data_addr[1:0]` | `:181-186`, `:401-406` |
 | `cg_beat` | `cp_beat` | 2 (`split_beat1`, `split_beat2`), `iff (beats == 2)` | `captured_data_beat`, `captured_data_beats` | `:204-210`, `:407-408` |
-| `cg_inst` | `cp_inst` | 37, one per instruction of `spec.md` §4.1 | `decode_inst(captured_inst_data)` | `:229-330`, `:393-398` |
-| `cg_csr` | `cp_csr_op` | 6 (`csrrw`..`csrrci`), `iff (has_csr)` | `csr_op_code(retire_inst or trap_inst)` | `:332-341`, `:370-385` |
-| `cg_csr` | `cp_csr_group` | 5 (`trap_status`, `counters`, `identification`, `performance`, `illegal`), `iff (has_csr)` | `csr_group_code(inst[31:20])` | `:343-350`, `:370-385` |
-| `cg_csr` | `cp_trap_cause` | 3 (`illegal_instruction`, `breakpoint`, `ecall_m`), `iff (has_cause)` | `trap_cause` | `:352-356`, `:370-373` |
+| `cg_inst` | `cp_inst` | 37, one per instruction of `spec.md` §4.1 | `decode_inst(captured_inst_data)` | `:229-271`, `:395-398` |
+| `cg_csr` | `cp_csr_op` | 6 (`csrrw`..`csrrci`), `iff (has_csr)` | `csr_op_code(retire_inst or trap_inst)` | `:332-343`, `:373-388` |
+| `cg_csr` | `cp_csr_group` | 5 (`trap_status`, `counters`, `identification`, `performance`, `illegal`), `iff (has_csr)` | `csr_group_code(inst[31:20])` | `:345-352`, `:373-388` |
+| `cg_csr` | `cp_trap_cause` | 3 (`illegal_instruction`, `breakpoint`, `ecall_m`), `iff (has_cause)` | `trap_cause` | `:353-357`, `:373-379` |
 
 `cg_csr` is the WP-14 addition, and it samples the **retire and trap streams rather than the fetch
 stream**: a fetched `CSRRW` proves the decoder saw the encoding, while an executed one proves the
 instruction reached write-back — or, for the cause bins, trapped. That is why the `has_csr` and
 `has_cause` guards exist and are not bins of their own: an `ECALL` is a SYSTEM encoding with
 `funct3 = 000`, so without the guard it would look like a CSR access to address `0x000`
-(`tb/env/top/riscv_small_coverage.sv:326-331`, `:366-368`). A trapped instruction never reaches the
+(`tb/env/top/riscv_small_coverage.sv:328-332`, `:366-368`). A trapped instruction never reaches the
 retire stream, so the trap branch of `write()` is the only place its opcode and address group can be
 sampled (`:368-379`).
 
@@ -2760,19 +2837,19 @@ sampled (`:368-379`).
 non-split access too, so a bin on beat 1 without the guard would be hit by every ordinary access.
 There is deliberately no bin for `beats == 1`, and the width is not a bin there: a split `SH` and a
 split `SW` differ only in the spill arithmetic that `riscv_small_strb_checker` pins per width
-(`tb/env/top/riscv_small_coverage.sv:180-194`).
+(`tb/env/top/riscv_small_coverage.sv:197-203`).
 
 The decoder reads `word[6:0]` (`opcode`), `word[14:12]` (`funct3`) and `word[30]` (`funct7` bit 5) — the
 fields `rtl/instruction_decode.sv` examines — and lives inside the collector, so it touches neither the
-monitor nor the reference model (`tb/env/top/riscv_small_coverage.sv:70-82`). A word outside §4.1 (an
+monitor nor the reference model (`tb/env/top/riscv_small_coverage.sv:84-154`). A word outside §4.1 (an
 opcode with no decode arm, an unlisted `funct3`, `FENCE`/`FENCE.I`, `ECALL`/`EBREAK`/`CSR*`) returns
-`INST_NONE = 6'h3f` (`:68`, `:142-144`), a value that names no bin, so such a fetch is counted by nothing
+`INST_NONE = 6'h3f` (`:77`, `:153`), a value that names no bin, so such a fetch is counted by nothing
 instead of being folded into a neighbour (`:204-212`). The 37 bins are the instruction mnemonics of the nine
 instruction rows of `doc/spec.md:563-574`; the two rows of that table that are not an instruction
 (`doc/spec.md:573-574`: `FENCE`, and the `SYSTEM` group with `ECALL`/`EBREAK`/`MRET`/`WFI`/`CSR*`) carry no bin, because `cp_inst` is one bin per *instruction* row
 and the SYSTEM group is not one — `FENCE` because it is still a no-operation (`G-06`), and
 `ECALL`/`EBREAK`/`CSR*` because they either trap or execute, which is what `cg_csr` measures instead
-(`:368-385`).
+(`tb/env/top/riscv_small_coverage.sv:373-388`).
 
 Measured 2026-11-21 by `make coverage` over the 47 `COV-<T-id>` manifest databases (`T-01`, `T-02`,
 `T-03`, `T-06`, `T-08`..`T-46`, `T-50`..`T-53`; the three `spike:<image>` trace rows of §10.2 are
@@ -2791,7 +2868,10 @@ also sums the ten `cp_lane`/`cp_dir`/`cp_subword_lane` bins, the two `cp_beat` b
 `cg_csr` bins; against the bar
 the measurement is **40 of 40** (37 `cp_inst` + 3 `cp_width`). 66/66 is the report sum and 40/40 is the
 bar; a full bar closed `G-03`, and a hit still verifies no `FR` — `cg_csr` is evidence for `FR-47`,
-`FR-50` and `FR-22`..`FR-25` only in the sense that the tests of §10 judge the same events.
+`FR-50` and `FR-22`..`FR-25` only in the sense that the tests of §10 judge the same events. The WP-14b
+artefact (`build/cov_report/summary.json`, recorded 2026-11-23T22:02:17Z at TB `sha256:fdd8a2fd…`)
+merges **53** databases — the 47 above plus `T-60`..`T-62` and the three `rv32mi` rows `T-54`/`T-55`/`T-58` — and reports the same 66/66 and 40/40; the three
+`rv32mi` sanity rows (`T-54`, `T-55`, `T-58`) were registered after that run and have no database in it.
 
 The nineteen `cp_inst` bins that were open at WP-6 are all hit on this digest, and each one is carried
 by its own image (`scripts/verify/tests.tsv`, `T-17`..`T-43`): `jalr` by `T-17`/`T-37`, the four
@@ -2803,7 +2883,7 @@ why the width port now carries the decoded value `2'b10` for a word
 
 **A `cp_inst` hit is still a fetch, not a retire.** A `cp_inst` bin proves the instruction class **was
 accepted on the fetch handshake**, because the monitor samples `inst_rd_en && inst_ready`
-(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:331-356`); it does not prove execution, and it does
+(`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:349-379`); it does not prove execution, and it does
 not prove the word entered IF/ID either, because `if_id_flush` zeroes `pc_id`/`inst_id` and clears
 `valid_id` in the same cycle (`rtl/instruction_fetch.sv:91-94`). A flush discards an accepted fetch on a
 taken branch, on the registered `branch_taken_q`, on `trap_taken_q` and on the trap's own event
@@ -2813,7 +2893,7 @@ not say: that the DUT issued **both** beats of a crossing access, which is the o
 `FR-42` (`T-52` observes the architectural half).
 
 The WP-14 covergroups do not have that limit, and the split is deliberate: `cg_csr` is sampled from
-`op_is_retire` and `op_is_trap` (`tb/env/top/riscv_small_coverage.sv:368-385`), so a `csrrw` bin means
+`op_is_retire` and `op_is_trap` (`tb/env/top/riscv_small_coverage.sv:373-388`), so a `csrrw` bin means
 an instruction that **executed** — or that trapped, for the cause bins — and a fetch that is later
 flushed cannot hit it. `cg_inst` is still sampled only from `op_is_inst` (`:393-398`), and `write()`
 returns on `op_is_retire` and on `op_is_trap` before `cg_mem` (`:368-391`), so migrating the
@@ -2866,8 +2946,7 @@ Both sides emit the same four-field canonical line,
 
 - **DUT producer:** `+RETIRE_LOG=<file>` on `riscv_small_monitor` writes one line per retired
   instruction from the WP-8 `riscv_small_retire_if` probe, printing `- -` when `rd0_wr_en_wb == 0` or
-  `rd0_addr_wb == 0` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:148-152`, `:172-181`,
-  `:479-490`), and `riscv_small_sanity_test` drains `RETIRE_DRAIN = 8` cycles after the `tohost` write
+  `rd0_addr_wb == 0` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:500-510`), and `riscv_small_sanity_test` drains `RETIRE_DRAIN = 8` cycles after the `tohost` write
   so the `tohost` store commits into the log (`tb/tests/riscv_small_sanity_test.sv:48-49`, `:92-96`,
   `:135`).
 - **Spike adapter:** `scripts/verify/spike/normalize.py spike-log [--entry <hex>] <in> <out>`
@@ -2910,9 +2989,9 @@ trace comparison (measured: the `store-width-cast` mutant produces an **identica
 `scripts/verify/spike_trace.cmake:52-64`, `scripts/verify/tests.tsv:125-127`); (2) **protocol
 properties `FR-20` and `FR-21`**, which are bus and control-flow pin properties absent from a commit
 trace; (3) **`FR-14` (`x0` hardwired to zero)**, because `rd = x0` is suppressed to `- -` in the dump by
-construction (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:483-490`,
-`scripts/verify/spike/normalize.py:79-82`); and (4) **breadth** across the suite, as 3 of 43 images are
-compared (`T-47`..`T-49`).
+construction (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:500-510`,
+`scripts/verify/spike/normalize.py:79-82`); and (4) **breadth** across the suite, as 3 of the 46 sanity
+images are compared (`T-47`..`T-49`, all three `rv32ui`).
 
 ## 11. Open issues
 
@@ -2928,9 +3007,10 @@ half closed with `FR-11` in v0.7.9 and left the §9 list and the `A-09` cell wit
 closed the two defects that lived underneath it — the misaligned split (`G-22`) and the store-grant
 wait (`G-18`) — so what used to be the data path's open list is now empty. `G-28` was never one of them — its consequence cell called it **not a release blocker** in the
 `Q-11` sense — and WP-8 closed it together with `G-32`; the gate's `release-blocker gaps:` field once
-listed `G-28`, and that was a substring-match defect in the release-blocker parser (`scripts/verify/signoff_check.cmake:676-690`: a negated claim is stripped before the `release blocker` test), not a status. Every other gap is a dated commitment. All
+listed `G-28`, and that was a substring-match defect in the release-blocker parser (`scripts/verify/signoff_check.cmake:676-690`: a negated claim is stripped before the `release blocker` test), not a status. The gate carried a second blind check of its own, found and fixed on 2026-11-23: **check 2**, the spec × verification `FR` mirror, took an index from the verification list and read the **spec's** status list with it, so it compared the spec with itself whenever the two lists agreed in order — always — and a status disagreement could not be reported; it now reads `VERIF_STATUS` (`scripts/verify/signoff_check.cmake:317-324`). A check that cannot fail is not a check, which is the rule this document applies to every claim it writes. Every other gap is a dated commitment. All
 thirty-nine rows — `G-01` to `G-39` — are canonical in `doc/verification.md`; this summary mirrors
-them, and the canonical table's own rows are updated by its own author. `G-39` was **opened by this
+them — the one place it runs ahead of that table is `G-36`, whose canonical row has not yet taken the
+WP-14b per-beat narrowing — and the canonical table's own rows are updated by its own author. `G-39` was **opened by this
 document at WP-14 F5**, the work package that wrote this revision: it records a counter asymmetry the
 RTL has and no test covers, found while re-reading the citations of §7.11, and its canonical row is in
 that table. This document states the RTL's
@@ -2943,7 +3023,10 @@ and `G-32` are closed 2026-11-07 by WP-8, and WP-9 narrows `G-04`, adds the `T-4
 `G-28` and opens `G-33` without promoting an `FR`; WP-11 P3a closes `G-33` with the `RESET_VECTOR`
 parameter and the reset that consumes it, again without promoting an `FR`. WP-13 closes `G-18` and
 `G-22` and opens and closes `G-34`, the halfword lane, in the same work package; it opens `G-35`, and its
-signoff audit opens `G-36`; both stay open. `G-23`
+signoff audit opens `G-36`; both stay open. WP-14b changes no gap's status: it **narrows** `G-36` (the
+model now publishes one prediction per beat, so a split store no longer desynchronises the pairing) and
+`G-37` (the external request, `D12` and `rv32mi-p-mcsr` now have tests), closes neither and opens
+none. `G-23`
 and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem of
 `FR-53`..`FR-56`, `FR-58` and `FR-59`, the second the target trigger unit of `FR-57`.
 
@@ -2968,7 +3051,7 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   `MRET` to consume `mepc` (`FR-45`). Owner: designer. Target: closed 2026-11-21 for the exception
   clause.
 - **G-03** — **closed by WP-7**: the `A-09` coverage bar was declared but not hit.
-  `cg_inst`/`cp_inst` (`tb/env/top/riscv_small_coverage.sv:229-330`) declares one bin per instruction
+  `cg_inst`/`cp_inst` (`tb/env/top/riscv_small_coverage.sv:229-271`) declares one bin per instruction
   of `spec.md` §4.1 and the monitor samples it on each accepted fetch; WP-5 measured **15 of 37**
   instruction bins — **17 of 40** against the bar — and WP-6 took it to **18 of 37** — **21 of 40**.
   WP-7's nineteen images took it to **37 of 37** — **40 of 40** with `cp_width` 3 of 3 and `cg_mem`
@@ -2982,7 +3065,7 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   the release-blocker list of `Q-11`/`A-09`, which now names `G-04` and `G-11` only. The honest
   caveat stays and is not a blocker: `cp_inst`'s coverage source is still the accepted **fetch**, so an
   instruction bin still says "fetched", not "executed"; the `cg_beat` bins come from the data port and
-  the `cg_csr` bins from the trap and retire events (`tb/env/top/riscv_small_coverage.sv:373-386`,
+  the `cg_csr` bins from the trap and retire events (`tb/env/top/riscv_small_coverage.sv:373-388`,
   `:406`); and §10.1 states what the WP-8 retire stream does and does not add. Owner: verification lead.
   Target: closed 2026-11-06.
 - **G-04** — the in-tree reference model and the scoreboard cover only the load/store subset (`LW`, `LB`,
@@ -2991,7 +3074,7 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   outside the subset — `FR-13`, `FR-14`, `FR-15`, `FR-19`, `FR-20` and `FR-21`, the `implemented` rows
   that cite this gap in the traceability table (`doc/verification.md`) — cannot become `verified`.
   WP-8 narrowed the row by feeding `riscv_small_ref_model` only from the monitor's retire stream
-  (`tb/env/ref_model/riscv_small_ref_model.sv:250-268`, §10), and WP-14 added the CSR file and the
+  (`tb/env/ref_model/riscv_small_ref_model.sv:263-281`, §10), and WP-14 added the CSR file and the
   trap event to the same model without widening the data-path subset. WP-9 **narrows it further without closing
   it** (no `FR` is promoted): `T-47` (`rv32ui-p-add`, 459/459 commits @`0x8000057c`), `T-48`
   (`rv32ui-p-beq`, 285/285 @`0x8000035c`) and `T-49` (`rv32ui-p-st_ld`, 477/477 @`0x80000784`) compare
@@ -3006,8 +3089,8 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   state intact does not change the trace (measured: `store-width-cast` gives an **identical 477/477
   trace** on `rv32ui-p-st_ld`); (2) **protocol properties `FR-20` and `FR-21`**, which are not in a
   commit trace; (3) **`FR-14` (`x0`)**, because `rd = x0` is suppressed to `- -` in the dump by
-  construction (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:483-490`,
-  `scripts/verify/spike/normalize.py:79-82`); and (4) **breadth** — 3 of 43 sanity images are compared,
+  construction (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:500-510`,
+  `scripts/verify/spike/normalize.py:79-82`); and (4) **breadth** — 3 of the 46 sanity images are compared,
   and the in-tree reference model still decodes only the load/store subset. It remains a release
   blocker. Owner: verification lead. Target: 2026-12-31.
 - **G-05** — no timing, area or power measurement exists. Consequence: `NFR-01` to `NFR-04`
@@ -3056,12 +3139,13 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   project environment (`scripts/verify/sanity/`), extracts `tohost` from the ELF and runs the image
   through `riscv_small_sanity_test` with `+HEX`/`+TOHOST`. The harness is UVM-separated: the sequence
   reads the image with `$readmemh` and builds the program item
-  (`tb/tests/sequence_lib/riscv_small_sanity_seq.sv:30-67`), the driver loads that item into its
-  memory and answers the ports (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:422-432`), and
+  (`tb/tests/sequence_lib/riscv_small_sanity_seq.sv:30-68`), the driver loads that item into its
+  memory and answers the ports (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:473-483`, `:485-566`), and
   the sanity checker decides the verdict from the monitor
   (`tb/env/top/riscv_small_sanity_checker.sv:66-131`). Consequence: `NFR-05` (RISC-V suite
   conformance) is **measured**, at 42 of the 42 bundled images — 43 of 43 runs, the extra being the
-  project-local `rv32ui-p-jalr_unaligned` — (WP-13); the image that failed until WP-13,
+  project-local `rv32ui-p-jalr_unaligned` — (WP-13), and re-measured at WP-14b as 46 of 46 over the two
+  suites (43 `rv32ui` + 3 `rv32mi`, §10); the image that failed until WP-13,
   `rv32ui-p-ma_data` (`FR-42`/`G-22`), now passes. Owner: verification lead. Target: closed
   2026-10-30.
 - **G-11** — `T-02` adds no stimulus: `riscv_small_corner_seq::body()` only calls `super.body()`
@@ -3083,7 +3167,7 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   there is no trap return (`FR-45`, §7.2); `mstatus` is storage that nothing reads, so there is no
   entry stack (`FR-48`, `G-14`); and the reserved SYSTEM encodings — `ECALL`/`EBREAK` with non-zero
   `rd`/`rs1` — are taken as `ECALL`/`EBREAK` by the RTL and by the model alike
-  (`tb/env/ref_model/riscv_small_ref_model.sv:38-42`), which is `G-38`. What the row now covers is the
+  (`tb/env/ref_model/riscv_small_ref_model.sv:48-55`), which is `G-38`. What the row now covers is the
   cause it was opened for and nothing else: there is no instruction-address-misaligned path, so a
   jump or branch target whose bit 1 is set is fetched rather than trapped (`FR-07`, §7.9), and closing
   it needs a fetch that can report the offending address. Owner: designer. Target: 2026-12-31 for that
@@ -3194,40 +3278,40 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   v0.8.7 on this row, and no test can cover it until the load is held in MA the way the store now is,
   or until the port gains the request/response form of `E8` — the shape the split already uses for
   its beats (§7.5, §8). Owner: designer. Target: 2026-12-31.
-- **G-36** — **opened 2026-11-19 by the WP-13 signoff audit, open**: the scoreboard does not require every
-  observed data write to be compared. `run_phase` takes one monitor publication and then blocks on one
-  model prediction (`tb/env/top/riscv_small_scoreboard.sv:150-161`), under a positional 1:1 pairing
-  (`:169-186`), while the model publishes exactly one prediction per retired store
-  (`tb/env/ref_model/riscv_small_ref_model.sv:729`, `:804`) and the monitor publishes one event
-  per **beat** (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:363-436`, §10). A split store is
-  therefore **two** publications against one prediction: the pairing shifts by one for the rest of the
-  run, or — when the split store is the last one — the second publication never gets a partner and the
-  `forever` loop is killed at the end of the test. Nothing fails on it: `check_phase` raises
-  `RM_NO_PREDICTION` only at `store_pred_count == 0` (`tb/env/top/riscv_small_scoreboard.sv:342-346`), and
-  `report_phase` prints `obs_count` against `pass_count + fail_count` (`:370-380`) and raises only on
-  `fail_count > 0`, so a run can end green with a publication never compared.
-  **Latent:** no test reaches it — every model-mode store stays inside one word (the basic sequence
-  stores SW at `4`-byte addresses, `tb/tests/sequence_lib/riscv_small_basic_load_store_seq.sv:97`, `:109`;
-  `T-51`'s odd halfword is offset 1 and spans bytes 1-2,
-  `tb/tests/sequence_lib/riscv_small_halfword_lane_seq.sv:5`, `:59`; `T-53` stores SW, `:13`), and the
-  crossing images are `sanity:` rows, which build neither the model nor the scoreboard
-  (`tb/env/top/riscv_small_env.sv:92-96`). WP-13 made the trigger ordinary rather than exceptional: a
-  crossing store is two publications by construction, and WP-14's `T-03` adds retire and trap
-  publications to the same port without adding a store. Consequence: the split is judged elsewhere —
-  `T-52`'s own `tohost` and the beat rules of `riscv_small_strb_checker` (§10) — so `FR-42` does not
-  rest on this row; what it costs is the next directed crossing store, which would desynchronise the
-  pairing rather than be reported as a mismatch. Owner: verification lead. Target: next WP — skip beat 2
-  in the scoreboard or publish per beat from the model, plus a non-vacuity guard that
-  `obs_count == pass_count + fail_count`.
-- **G-37** — **opened 2026-11-21 by WP-14, open**: the arms of the CSR/trap work package that no test
-  exercises. The list is the spec's and this document does not extend it: `FR-22`'s external
-  `exception[3:0]` request, which `T-03` never asserts — the testbench binds the DUT's input to a
-  constant zero (`tb/riscv_small_tb.sv:32`, `:79`) — plus `mepc`'s WARL write and read-back,
-  `mtvec.MODE` legalisation, the `mhartid` identifier sweep, the multi-configuration `misa`,
-  `instret` across traps, `rv32mi-p-mcsr` (which did not run: no `rv32mi` environment exists),
-  the `NUM_TRIGGERS` > 0 window and `D12`, a trap raised while `split_stall` is high. Consequence:
-  `FR-22` stays `implemented` and the rows above rest on their main clause alone. Owner: verification
-  lead. Target: next WP — one directed test per arm, plus the `rv32mi` environment.
+- **G-36** — **opened 2026-11-19 by the WP-13 signoff audit, narrowed 2026-11-23 by WP-14b, open**: the
+  scoreboard does not require every observed data write to be compared. `run_phase` takes one monitor
+  publication and then blocks on one model prediction (`tb/env/top/riscv_small_scoreboard.sv:182-193`,
+  `:218`), under a positional 1:1 pairing (`:195-206`), while the monitor publishes one event
+  per **beat** (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:422-478`, §10). WP-14b removed the
+  half of that mismatch that a crossing store produced: the model now publishes **one prediction per
+  beat** (`tb/env/ref_model/riscv_small_ref_model.sv:760-864`), so the two publications of a split store
+  are compared against two predictions and `T-62` exercises exactly that pair — its log reports
+  `store predictions : 2 (2 observed, 2 PASS)` (`build/regress/2026-11-23T22-28-57Z/T-62.log`). What
+  remains is the **guard**: `check_phase` raises `RM_NO_PREDICTION` only at `store_pred_count == 0`
+  (`tb/env/top/riscv_small_scoreboard.sv:429-435`), and `report_phase` prints `obs_count` against the
+  counts without failing when they differ (`:459-478`, which now raises on `total_fail > 0`), so a run can
+  still end green with a publication never compared. Consequence: the split is also judged by `T-52`'s
+  own `tohost`, the beat rules of `riscv_small_strb_checker` and now the model's per-beat prediction, so
+  `FR-42` does not rest on this row; what it still costs is the missing equality check between
+  observations and comparisons. Owner: verification lead. Target: next WP — a non-vacuity guard that
+  `obs_count == pass_count + fail_count`, and the canonical row in [verification.md](verification.md#gaps)
+  updated with the per-beat narrowing.
+- **G-37** — **opened 2026-11-21 by WP-14, narrowed 2026-11-23 by WP-14b, open**: the arms of the
+  CSR/trap work package that no test exercises. The list is the spec's and this document does not
+  extend it. Two arms it named **are observed now**: `FR-22`'s external `exception[3:0]` request, which
+  `T-03` never asserts, is driven for one cycle by `T-61` — the top connects the pin
+  (`.exception(intf.exception)`, `tb/riscv_small_tb.sv:86`) and the driver asserts it
+  (`tb/env/agents/riscv_small_agent/riscv_small_driver.sv:457-466`) — and `D12`, a trap raised while
+  `split_stall` is high, is `T-62`. The third, `rv32mi-p-mcsr`, **ran and passed** as `T-54` once the
+  `rv32mi` environment existed, and `spec.md` v0.8.9 records all three closings. Still unexercised, as
+  the spec's narrowed row lists them: `mepc[1]` written with bit 1 set under `IALIGN=32` (the WARL write
+  and read-back are observed by `T-60`, which writes `0xAAAA_A7F0` and reads it back), `mtvec.MODE`
+  legalisation and a second vector value, the `mhartid` identifier sweep, the multi-configuration
+  `misa`, `instret` across a trapping `ECALL`/`EBREAK` pair, the `NUM_TRIGGERS` > 0 window, and `FR-52`'s
+  read after an external request and its handler-fetches-the-encoding arm.
+  Consequence: `FR-22` reads `verified` in `spec.md` on `T-61`'s clause and on no more, the
+  rows above rest on their main clause alone, and the `rv32mi` leg of `NFR-05` no longer waits on an
+  environment. Owner: verification lead. Target: next WP — one directed test per remaining arm.
 - **G-38** — **opened 2026-11-21 by WP-14, open**: a reserved configuration of an implemented
   instruction retires instead of trapping. `ECALL` and `EBREAK` with a non-zero `rd`/`rs1` should raise
   cause 2, but the SYSTEM group keys on the CSR field alone and never checks `rd`/`rs1`
@@ -3241,7 +3325,7 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   `instret_view = minstret_q + valid_ma + valid_wb` (`:125-127`, `:152`, `:155`), so in a cycle where an
   older instruction is still in MA or WB the two addresses differ by one or two. `mcycle`/`cycle` do not
   have the defect: both read `mcycle_view` (`:146`, `:150`). The module comment (`:118-127`) and the
-  reference model (`tb/env/ref_model/riscv_small_ref_model.sv:496-503`, which treats the two addresses
+  reference model (`tb/env/ref_model/riscv_small_ref_model.sv:530-545`, which treats the two addresses
   as one) both assume the aliasing the RTL does not implement for this pair, and no test covers it:
   `T-03` reads `instret` (0xC02) and never `minstret` (0xB02). Impact: a handler that reads `minstret`
   sees a count that lags by the instructions in flight, so the two aliases disagree in the same run.
@@ -3275,19 +3359,19 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   `RVTEST_FAIL` path reports the true `testnum` again. Owner: designer. Target: closed 2026-11-04.
 - **G-28** — **closed 2026-11-07 by WP-8**: no retire/commit observation existed, so nothing at the DUT
   ports said an instruction was executed: the only instruction-level visibility was the accepted fetch
-  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:331-356`, `inst_rd_en && inst_ready`), and an
+  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:349-379`, `inst_rd_en && inst_ready`), and an
   accepted fetch can still be discarded by `if_id_flush` (`rtl/control.sv:283-296`). This was a
   **verification-architecture** gap, opened 2026-11-04 by `Q-43`/`C-16`. The fix is a `bind` probe,
-  `riscv_small_retire_if`, inside `riscv_small` (`tb/riscv_small_interface.sv:157-181`,
-  `tb/riscv_small_tb.sv:50-59`), which exposes `valid_wb`, `pc_wb`, `inst_wb`, the destination and
+  `riscv_small_retire_if`, inside `riscv_small` (`tb/riscv_small_interface.sv:161-185`,
+  `tb/riscv_small_tb.sv:57-66`), which exposes `valid_wb`, `pc_wb`, `inst_wb`, the destination and
   `ma_wb_clk_en` and derives `retire_valid = valid_wb && ma_wb_clk_en` in the probe, not in the RTL.
-  The monitor publishes the event (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:462-500`) and
-  the reference model is driven only by it (`tb/env/ref_model/riscv_small_ref_model.sv:250-268`);
+  The monitor publishes the event (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:483-516`) and
+  the reference model is driven only by it (`tb/env/ref_model/riscv_small_ref_model.sv:263-281`);
   `program_port`, `rm_export` and `publish_program()` are deleted. Consequence: (a) the retire stream is
   the program on `T-44` — 72 commits for 72 instructions — and differs from the fetch stream by the two
   discarded fetches on a taken branch (`T-45`: 10 commits for 12 fetches on a 2-word skip; `T-46`: 9
   commits for 11 fetches on a 3-word skip, where `riscv_small_retire_checker` asserts the set claim and
-  the gated count claim, `tb/env/top/riscv_small_retire_checker.sv:201-247`, §10), while the
+  the gated count claim, `tb/env/top/riscv_small_retire_checker.sv:201-270`, §10), while the
   `retire-every-slot` mutant sends the flush bubble to write-back and `T-44`..`T-46` fail on it under
   check 11, and `T-47`..`T-49` independently confirm the retire stream against Spike (§10.2). (b) The
   coverage collector still samples the fetch:
@@ -3334,27 +3418,27 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   to the previous address; a `pc → word` table built on it would have executed the wrong instruction.
   The fix correlates by handshake instead of sampling two pins: a request (`inst_rd_en`, behind the
   `clk_en` gate the monitor applies) pushes its address, and a response (`inst_ready`) pops the oldest
-  and publishes `(address, word)` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:331-356`).
+  and publishes `(address, word)` (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:349-379`).
   A response with nothing outstanding is an orphan, and the monitor only observes it: it publishes the
   response with the transaction field `captured_inst_orphan` set
   (`tb/env/agents/riscv_small_agent/riscv_small_transaction.sv:31-37`,
-  `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:339-346`) and counts it (`:110`, `:338`);
+  `tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:350-364`) and counts it (`:121`, `:356`);
   the monitor raises no `uvm_error`. `riscv_small_fetch_pair_checker` turns that
   observation into `UVM_ERROR [FETCH_ORPHAN]`
   (`tb/env/top/riscv_small_fetch_pair_checker.sv:68-74`), compares every published pair against the
   program image and raises `FETCH_PAIR` on a mismatch (`:93-98`). A request still outstanding when the
   phase ends is reported, never raised: the monitor prints the pending count in `report_phase`
-  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:503-514`, `:56-64`) and the checker leaves it
+  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:547-552`, `:56-64`) and the checker leaves it
   alone (`tb/env/top/riscv_small_fetch_pair_checker.sv:26-29`), because the testbench stops answering once
   the program item completes, so a `FETCH_LOST` error would be an artefact of the run ending. Consequence:
   closed; `T-44` compares 72 of 72 pairs, `T-45` 12 of 12 and `T-46` 11 of 11, all with 0 mismatch, measured
   by `make regress` at RTL `sha256:b914f2e10cf3…54c774` (`build/regress/<run>/T-44.log`, `T-45.log`, `T-46.log`
   beside it). The data port is still sampled at level rather than by handshake; the monitor says so in the
-  code (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:363-390`) and `G-18`/`E8` owned that
+  code (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:422-442`) and `G-18`/`E8` owned that
   change. **Updated by WP-13:** the monitor now publishes one event per **beat**, with
   `captured_data_beat`/`captured_data_beats` and a `captured_data_grant` status, so a store that a
   grant-waiting core holds is one event rather than one per cycle
-  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:363-436`), and the observation and the RTL
+  (`tb/env/agents/riscv_small_agent/riscv_small_monitor.sv:422-478`), and the observation and the RTL
   now agree about what a store is. Owner: verification lead. Target: closed 2026-11-07.
 - **G-33** — **closed 2026-11-18 by WP-11 P3a**: a hardcoded reset to zero and no `RESET_VECTOR`
   parameter. The fix is the parameter `dataBus_t RESET_VECTOR = 32'h8000_0000` on the top
@@ -3363,7 +3447,7 @@ and `G-24` are the v0.7 debug gaps: the first covers the target debug subsystem 
   (`rtl/instruction_fetch.sv:110`), so the first fetch after reset is `0x8000_0000` and not `0x0`.
   `T-50` observes exactly that: `riscv_small_reset_checker` compares the first fetch the monitor
   publishes after reset with the value the testbench top published from the elaborated parameter
-  (`tb/env/top/riscv_small_reset_checker.sv:81-98`, `tb/riscv_small_tb.sv:116`,
+  (`tb/env/top/riscv_small_reset_checker.sv:84-96`, `tb/riscv_small_tb.sv:123`,
   `scripts/verify/tests.tsv:131`), and the `reset-vector-zero` mutant — the row that writes `pc <= 'b0;`
   back — fails it under check 11 (`scripts/verify/mutants.tsv:166`, `build/red/T-50/results.json`). It
   fails **in the checker, not in a timeout**: `riscv_small_reset_checker` raises `UVM_ERROR [RESET_VECTOR]`

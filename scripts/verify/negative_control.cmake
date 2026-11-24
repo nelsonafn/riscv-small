@@ -511,7 +511,11 @@ foreach(ENTRY IN LISTS SELECTED)
     list(GET CELL 0 TID)
     list(GET CELL 1 NAME)
 
-    set(SCRATCH "${BUILD}/mutants/${TID}")
+    # The scratch tree is keyed by the (T-id, mutant) PAIR, not by the T-id: a row
+    # may name several mutants (see the parser above) and two of them can land in
+    # different shards, which run concurrently. Keyed by T-id alone they would
+    # delete each other's tree mid-copy.
+    set(SCRATCH "${BUILD}/mutants/${TID}-${NAME}")
     file(REMOVE_RECURSE "${SCRATCH}")
     file(MAKE_DIRECTORY "${SCRATCH}")
 
@@ -585,7 +589,7 @@ foreach(ENTRY IN LISTS SELECTED)
     riscv_nc_judge(PROBLEM "${TID}" "${NAME}" "${SCRATCH}/build/red/results.json"
         "${SCRATCH}/build/regress/${TID}.log" "${IS_SPIKE}")
     if(PROBLEM)
-        message(FATAL_ERROR "${PROBLEM}; see build/mutants/${TID}/negative.log")
+        message(FATAL_ERROR "${PROBLEM}; see build/mutants/${TID}-${NAME}/negative.log")
     endif()
 
     # results.json keeps the FIRST mutant's record, which is what check 11 reads;

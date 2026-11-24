@@ -5,7 +5,7 @@
 | Requirement | Functional coverage shall close on the instruction set and memory behaviour it claims. |
 | Gap | `G-04`, `G-11` |
 | Owner | verification lead |
-| Status | **bins closed** - 40 of the 40 `A-09` bar bins and **66 of the 66** report bins hit over **9** coverpoints, `G-03` closed 2026-11-06 and the report re-measured on 2026-11-21 at RTL `sha256:2e91301d…`. `NFR-06` itself stays `partial`: its acceptance also needs every **phase-1** `FR` `verified` (`A-09`, re-scoped by the designer on 2026-11-19 to `FR-01`..`FR-31` and `FR-37`..`FR-52`, 47 of the 59 rows), and that is not a coverage question - the bins this file measures are the other half; 24 of the 47 are `verified` today |
+| Status | **bins closed** - 40 of the 40 `A-09` bar bins and **66 of the 66** report bins hit over **9** coverpoints, `G-03` closed 2026-11-06 and the report re-measured on 2026-11-23 at RTL `sha256:2e91301d…` / TB `sha256:fdd8a2fd…` over 53 of the 56 manifest rows. `NFR-06` itself stays `partial`: its acceptance also needs every **phase-1** `FR` `verified` (`A-09`, re-scoped by the designer on 2026-11-19 to `FR-01`..`FR-31` and `FR-37`..`FR-52`, 47 of the 59 rows), and that is not a coverage question - the bins this file measures are the other half; 25 of the 47 are `verified` today |
 
 ## Method
 
@@ -56,10 +56,13 @@ make coverage COVERAGE_ARGS="--require-bins cp_inst.nosuchbin"                  
 
 ## Result
 
-Measured 2026-11-21 over the **47** manifest tests the coverage run executes (`T-01`, `T-02`, `T-03`, `T-06`,
-`T-08`..`T-46`, `T-50`..`T-53`; the three `spike:` rows `T-47`..`T-49` are trace comparisons and not coverage
-runs, so 47 of the 50 manifest rows), at `rtl_digest` `sha256:2e91301d…` and `tb_digest` `sha256:0091e260…`
-(`build/cov_report/summary.json`):
+Measured 2026-11-23 over the **53** manifest tests the coverage run executes (`T-01`, `T-02`, `T-03` and `T-06`
+through `T-55`, plus `T-58` and `T-60`..`T-62`; the three `spike:` rows `T-47`..`T-49` are trace comparisons and
+not coverage runs, so 53 of the 56 manifest rows), at `rtl_digest` `sha256:2e91301d…` and `tb_digest`
+`sha256:fdd8a2fd…` (`build/cov_report/summary.json`). The metric did not move with the manifest: the 2026-11-21
+run covered **47 of the 50** rows at TB `sha256:0091e260…` and returned the same 66 of 66 bins over 9
+coverpoints (it is in History), which is why the report total is a property of the covergroups and not of how many
+tests ran.
 
 | Metric | Value |
 |---|---|
@@ -107,6 +110,7 @@ the coverage clause of the bar and nothing else. Code coverage is instrumented w
 | 2026-11-18 | `sha256:b914f2e1...` | 5 | 50/50 bins, `uncovered` empty (100 %; `cp_inst` 37/37) | **40/40** | Re-run after the driver fix in `tb/env/agents/riscv_small_agent/riscv_small_driver.sv` (an unmatched fetch is answered with `inst_ready` before the program is entered); unchanged, same 5 coverpoints and no uncovered bin, and the RTL digest did not move — only the testbench's (TB `066dce85...`) |
 | 2026-11-19 | `sha256:f84ea86b...` | 6 | 52/52 bins, `uncovered` empty (100 %; `cp_inst` 37/37, `cg_mem` 13/13, `cg_beat` 2/2) | **40/40** | WP-13: `cg_beat`/`cp_beat` added (2 bins; `split_beat1` and `split_beat2` 63 hits each) for the word-crossing split (`FR-42`, `G-22`), so the report grows by 2 and the bar does not; 46 of 49 manifest rows are coverage runs (TB `7860d1b0...`) |
 | 2026-11-21 | `sha256:2e91301d...` | 9 | 66/66 bins, `uncovered` empty (100 %; `cp_inst` 37/37, `cg_mem` 13/13, `cg_beat` 2/2, `cg_csr` 14/14) | **40/40** | WP-14: `cg_csr` added (14 bins: `cp_csr_op` 6, `cp_csr_group` 5, `cp_trap_cause` 3) for the CSR file and the trap path (`FR-47`, `FR-50`, `FR-22`), so the report grows by 14 and the bar does not; the manifest carries 50 rows, 47 of them coverage runs (`T-03` added, the three `spike:` rows excluded) (TB `0091e260...`) |
+| 2026-11-23 | `sha256:2e91301d...` | 9 | 66/66 bins, `uncovered` empty (100 %; `cp_inst` 37/37, `cg_mem` 13/13, `cg_beat` 2/2, `cg_csr` 14/14) | **40/40** | WP-14b: re-measured unchanged after the manifest grew to 56 rows (53 coverage runs; `T-54`/`T-55`/`T-58` and `T-60`..`T-62` added, the three `spike:` rows still excluded) — the covergroups did not move, only the tests that exercise them (TB `fdd8a2fd...`) |
 
 The 2026-11-04 figure is not comparable with the 2026-11-05 one: the first measured four memory coverpoints and
 nothing of the instruction set, so it was true and flattering at the same time. From 2026-11-05 the headline is the

@@ -229,7 +229,17 @@ execute_process(
     OUTPUT_FILE "${BUILD}/regress/elaborate.log"
     ERROR_FILE "${BUILD}/regress/elaborate.log")
 if(NOT RC EQUAL 0)
-    message(FATAL_ERROR "elaboration/image build failed (is the EDA environment sourced?); see build/regress/elaborate.log")
+    # Do not guess the cause: this message used to say "is the EDA environment
+    # sourced?", and a legal-but-invalid `xelab -mt 1` was reported as a missing
+    # tool, sending the reader after the wrong fault. The log names the tool's
+    # own error; point at it and stop there.
+    file(READ "${BUILD}/regress/elaborate.log" ELAB_LOG)
+    set(ELAB_TAIL "")
+    string(REGEX MATCH "(ERROR|Error)[^\n]*" ELAB_TAIL "${ELAB_LOG}")
+    if(ELAB_TAIL STREQUAL "")
+        set(ELAB_TAIL "no ERROR line in the log")
+    endif()
+    message(FATAL_ERROR "elaboration/image build failed: ${ELAB_TAIL} (full log: build/regress/elaborate.log)")
 endif()
 
 # --- run directory and digests -----------------------------------------------

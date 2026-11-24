@@ -9,8 +9,8 @@ that produced it, because a number without its method, date and part is not evid
 | `NFR-02` | [NFR-02-throughput.md](NFR-02-throughput.md) | not measurable |
 | `NFR-03` | [NFR-03-area.md](NFR-03-area.md) | not measurable |
 | `NFR-04` | [NFR-04-power.md](NFR-04-power.md) | not measurable |
-| `NFR-05` | [NFR-05-riscv-tests.md](NFR-05-riscv-tests.md) | measured, **43/43** (42 bundled + 1 project-local `jalr_unaligned`), 0 failures (2026-11-19, `rv32ui-p-ma_data` included); the requirement stays `partial` on its four suite legs |
-| `NFR-06` | [NFR-06-coverage.md](NFR-06-coverage.md) | bins closed, **66/66** report bins over **9** coverpoints and 40/40 `A-09` bar bins (100 %, `uncovered` empty, 2026-11-21); the requirement stays `partial` on the `FR` half (24 of the 47 phase-1 rows `verified`) |
+| `NFR-05` | [NFR-05-riscv-tests.md](NFR-05-riscv-tests.md) | measured, **46/46** (45 bundled — 42 `rv32ui` + 3 `rv32mi` — plus 1 project-local `jalr_unaligned`), 0 failures (2026-11-23, `rv32ui-p-ma_data` included); the requirement stays `partial` on its `rv32um`/`rv32uc` legs and on the thirteen `rv32mi` images `FR-45`/`FR-57` hold out |
+| `NFR-06` | [NFR-06-coverage.md](NFR-06-coverage.md) | bins closed, **66/66** report bins over **9** coverpoints and 40/40 `A-09` bar bins (100 %, `uncovered` empty, 2026-11-23, 53 of the 56 manifest rows); the requirement stays `partial` on the `FR` half (25 of the 47 phase-1 rows `verified`) |
 | `NFR-07` | [NFR-07-lint.md](NFR-07-lint.md) | measured: 0 latches, 0 loops (2026-11-18) |
 
 ## Contract

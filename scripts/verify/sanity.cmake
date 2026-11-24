@@ -4,7 +4,7 @@
 #
 # Included by CMakeLists.txt (configure mode), it owns the whole riscv-tests
 # pipeline:
-#   1. compile each isa/rv32ui/*.S image -- and each project-local
+#   1. compile each isa/<suite>/*.S image -- and each project-local
 #      scripts/verify/sanity/local/*.S image -- with the project's own
 #      environment (scripts/verify/sanity/riscv_test.h + link.ld) -- no
 #      autoconf, no out-of-tree configure, no suite Makefile;
@@ -19,9 +19,16 @@
 # bodies are unmodified; only the pass/fail ceremony is local (see
 # scripts/verify/sanity/riscv_test.h).
 #
+# TWO ENVIRONMENTS, ONE PER SUITE (wp-14 §4.3, §18). The base environment
+# replaces the trap ceremony with a direct store to `tohost`; rv32mi TESTS that
+# ceremony, so it compiles against sanity/mi/riscv_test.h -- the faithful env/p
+# dispatch -- via -I<head-of-that-directory> BEFORE -I<sanity>. A suite whose
+# own riscv_test.h does not exist inherits the base file unchanged, which is
+# what keeps the 43 rv32ui images byte-identical across this refactor.
+#
 # Build targets (unchanged, so the documented commands keep working):
 #   compile_sanity_tests     one image, from the HEX_TEST_NAME cache variable
-#   compile_sanity_images    every rv32ui-p-* image
+#   compile_sanity_images    every image of every enabled suite
 #   compile_sanity_<image>   a single named image
 #
 #   cmake -P scripts/verify/sanity.cmake                  every image
@@ -42,12 +49,13 @@
 # verdict, JUnit), exactly like the regression and the coverage runs; a plain
 # `ctest` skips these tests (exit 77) because it never built the images.
 #
-# Scope: isa/rv32ui plus the project-local sanity/local directory. The second
-# directory exists because some requirements need an image the bundled suite
-# does not provide: rv32ui-p-jalr_unaligned derives from jalr.S and adds the
-# odd-target case FR-07 needs, without touching the src/riscv-tests submodule.
-# rv32mi needs CSR/trap (E6/E7), rv32um/rv32uc need M/C (E8); rv32si is not in
-# NFR-05. The glob is a one-line change when those requirements land.
+# Scope: the ISA suites listed in SANITY_SUITES (rv32ui, rv32mi) plus the
+# project-local sanity/local directory. The local directory exists because some
+# requirements need an image the bundled suite does not provide:
+# rv32ui-p-jalr_unaligned derives from jalr.S and adds the odd-target case FR-07
+# needs, without touching the src/riscv-tests submodule. rv32um/rv32uc need M/C
+# (E8); rv32si is not in NFR-05. Enabling a suite is a SANITY_SUITES value, not
+# an edit -- and a suite that is off is neither built nor declared.
 #
 # Results: build/sanity/summary.json, one log per image, one dump per image.
 # Exit codes: 0 the measurement ran (not measurable is still a run), 1 an image
@@ -59,11 +67,63 @@ set(DOLLAR "$")
 # manifest-independent, but the digest is the same evidence key everywhere.
 include(${CMAKE_CURRENT_LIST_DIR}/common.cmake)
 
+# ----------------------------------------------------------------------------
+# Suite helpers. Both are pure functions of the suite name (and the image's
+# stem), so the compile rule and the run mode cannot disagree about them.
+# ----------------------------------------------------------------------------
+# The directory a suite compiles against: the base environment, plus the
+# suite's own riscv_test.h when it publishes one. rv32mi publishes it under
+# sanity/mi (§4.3); every other suite inherits scripts/verify/sanity.
+function(riscv_sanity_env_dir ENV_DIR SUITE OUT)
+    set(SUB "${SUITE}")
+    if(SUITE STREQUAL "rv32mi")
+        set(SUB "mi")
+    endif()
+    if(EXISTS "${ENV_DIR}/${SUB}/riscv_test.h")
+        set(${OUT} "${ENV_DIR}/${SUB}" PARENT_SCOPE)
+    else()
+        set(${OUT} "${ENV_DIR}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+# -march of one image: the suite's base ISA, plus the extension that image
+# needs. `-march=rv32i` proves an rv32ui image only uses the base ISA (the suite
+# links with -march=rv32g which merely permits M/A/F/D); fence_i.S is Zifencei;
+# the rv32mi bodies use csrr/csrw, so the whole suite is Zicsr.
+function(riscv_sanity_march SUITE STEM OUT)
+    if(SUITE STREQUAL "rv32mi")
+        set(ARCH "rv32i_zicsr")
+    else()
+        set(ARCH "rv32i")
+    endif()
+    if(STEM STREQUAL "fence_i")
+        set(ARCH "rv32i_zifencei")
+    endif()
+    set(${OUT} "${ARCH}" PARENT_SCOPE)
+endfunction()
+
 # =============================================================================
 # Configure mode: the images, their CTest tests and the `sanity` target.
 # =============================================================================
 if(NOT CMAKE_SCRIPT_MODE_FILE)
     set(HEX_TEST_NAME "rv32ui-p-addi" CACHE STRING "One image for the compile_sanity_tests target")
+    set(SANITY_SUITES "rv32ui;rv32mi" CACHE STRING "riscv-tests ISA suites to build (semicolon list: rv32ui;rv32mi)")
+    # Which images a suite contributes. Empty means "every isa/<suite>/*.S", the
+    # rv32ui behaviour: adding a bundled image keeps working with no edit here.
+    # rv32mi is a named list because its directory also holds images that
+    # exercise features this core does not implement, measured 2026-11-23:
+    #   pmpaddr            PMP absent                    -> FAIL testnum=1
+    #   ma_fetch           misaligned fetch absent      -> FAIL testnum=2
+    #   instret_overflow   minstret high half           -> TIMEOUT pc=0x80000190
+    #   illegal            MRET returns nowhere (FR-45) -> TIMEOUT pc=0x800003e4
+    #   breakpoint         NUM_TRIGGERS=0 (FR-57)       -> FAIL testnum=2
+    # so enabling the whole suite would turn `make sanity`, and the signoff gate
+    # that reads it, red on mechanisms no requirement of this WP claims. The
+    # three images below are the ones the vplan names (T-54/T-55/T-58); the two
+    # blocked ones are T-56 (illegal) and T-57 (breakpoint), withheld with that
+    # evidence rather than listed and excluded.
+    set(SANITY_IMAGES_rv32mi "csr;mcsr;zicntr" CACHE STRING
+        "rv32mi images to build (semicolon list; empty = every isa/rv32mi/*.S)")
     set(SANITY_TIMEOUT 300 CACHE STRING "Wall-clock limit of one sanity simulation, in seconds")
     set(SANITY_TEST "riscv_small_sanity_test")
 
@@ -95,27 +155,55 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         endif()
     endforeach()
 
-    if(NOT EXISTS "${RISCV_TESTS_DIR}/isa/rv32ui")
-        message(FATAL_ERROR "No riscv-tests sources under ${RISCV_TESTS_DIR}/isa/rv32ui. Run: git submodule update --init src/riscv-tests")
+    if(NOT SANITY_SUITES)
+        message(FATAL_ERROR "SANITY_SUITES is empty: there is no image to build (e.g. -DSANITY_SUITES=rv32ui;rv32mi)")
     endif()
+    list(GET SANITY_SUITES 0 SANITY_BASE_SUITE)
+    set(SANITY_LOCAL_DIR "${CMAKE_CURRENT_LIST_DIR}/sanity/local")
+    file(GLOB SANITY_LOCAL_SOURCES "${SANITY_LOCAL_DIR}/*.S")
 
     # --- image list ---------------------------------------------------------
-    # Each isa/rv32ui/<stem>.S builds the bare-metal image rv32ui-p-<stem>
-    # ("-p-" is the physical target of the bundled suite). A project-local
-    # sanity/local/<stem>.S builds the same name; a local file that already
-    # carries the image name (local/rv32ui-p-<stem>.S) is used verbatim. The
-    # list is written to images.txt so the run mode never globs twice.
-    file(GLOB SANITY_SOURCES
-         "${RISCV_TESTS_DIR}/isa/rv32ui/*.S"
-         "${CMAKE_CURRENT_LIST_DIR}/sanity/local/*.S")
+    # Each isa/<suite>/<stem>.S builds the bare-metal image <suite>-p-<stem>
+    # ("-p-" is the physical target of the bundled suite), unless the suite
+    # names an explicit image list (SANITY_IMAGES_<suite>, see above). A
+    # project-local sanity/local/<image>.S builds the same name and shadows the
+    # bundled file of the same stem. A local file that already carries a suite
+    # prefix (local/<suite>-p-<stem>.S) belongs to that suite; a bare local stem
+    # (local/<stem>.S) belongs to the FIRST suite, the spelling this directory
+    # has always had. The list is written to images.txt so the run mode never
+    # globs twice.
     set(SANITY_IMAGES "")
-    foreach(SANITY_SOURCE IN LISTS SANITY_SOURCES)
-        get_filename_component(SANITY_STEM "${SANITY_SOURCE}" NAME_WE)
-        if(SANITY_STEM MATCHES "^rv32ui-p-")
-            list(APPEND SANITY_IMAGES "${SANITY_STEM}")
-        else()
-            list(APPEND SANITY_IMAGES "rv32ui-p-${SANITY_STEM}")
+    foreach(SANITY_SUITE IN LISTS SANITY_SUITES)
+        set(SANITY_SUITE_DIR "${RISCV_TESTS_DIR}/isa/${SANITY_SUITE}")
+        if(NOT EXISTS "${SANITY_SUITE_DIR}")
+            message(FATAL_ERROR "No riscv-tests sources under ${SANITY_SUITE_DIR}. Run: git submodule update --init src/riscv-tests, or drop ${SANITY_SUITE} from SANITY_SUITES")
         endif()
+        # The form "if(<var>)" is the dynamic name: SANITY_IMAGES_<suite>.
+        # Empty = the whole directory (rv32ui); otherwise exactly the named
+        # images, each one checked so a typo fails here and not in the build.
+        if(SANITY_IMAGES_${SANITY_SUITE})
+            set(SANITY_SUITE_SOURCES "")
+            foreach(SANITY_STEM IN LISTS SANITY_IMAGES_${SANITY_SUITE})
+                if(NOT EXISTS "${SANITY_SUITE_DIR}/${SANITY_STEM}.S")
+                    message(FATAL_ERROR "SANITY_IMAGES_${SANITY_SUITE} names '${SANITY_STEM}', which is not in ${SANITY_SUITE_DIR}")
+                endif()
+                list(APPEND SANITY_SUITE_SOURCES "${SANITY_SUITE_DIR}/${SANITY_STEM}.S")
+            endforeach()
+        else()
+            file(GLOB SANITY_SUITE_SOURCES "${SANITY_SUITE_DIR}/*.S")
+        endif()
+        foreach(SANITY_SOURCE IN LISTS SANITY_SUITE_SOURCES)
+            get_filename_component(SANITY_STEM "${SANITY_SOURCE}" NAME_WE)
+            list(APPEND SANITY_IMAGES "${SANITY_SUITE}-p-${SANITY_STEM}")
+        endforeach()
+        foreach(SANITY_SOURCE IN LISTS SANITY_LOCAL_SOURCES)
+            get_filename_component(SANITY_STEM "${SANITY_SOURCE}" NAME_WE)
+            if(SANITY_STEM MATCHES "^${SANITY_SUITE}-p-")
+                list(APPEND SANITY_IMAGES "${SANITY_STEM}")
+            elseif(SANITY_SUITE STREQUAL SANITY_BASE_SUITE AND NOT SANITY_STEM MATCHES "^rv32[a-z]+-p-")
+                list(APPEND SANITY_IMAGES "${SANITY_SUITE}-p-${SANITY_STEM}")
+            endif()
+        endforeach()
     endforeach()
     list(SORT SANITY_IMAGES)
     list(LENGTH SANITY_IMAGES SANITY_IMAGE_COUNT)
@@ -123,23 +211,35 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
     file(WRITE "${SANITY_DIR}/images.txt" "${SANITY_IMAGE_LINES}\n")
 
     if(NOT HEX_TEST_NAME IN_LIST SANITY_IMAGES)
-        message(FATAL_ERROR "HEX_TEST_NAME='${HEX_TEST_NAME}' is not one of the ${SANITY_IMAGE_COUNT} bundled images (e.g. ${SANITY_IMAGES})")
+        message(FATAL_ERROR "HEX_TEST_NAME='${HEX_TEST_NAME}' is not one of the ${SANITY_IMAGE_COUNT} images of suites '${SANITY_SUITES}' (e.g. ${SANITY_IMAGES})")
     endif()
 
     # --- one rule and one target per image ----------------------------------
     # elf -> hex + tohost + dump: four artefacts of the same image, each one a
     # real build dependency, so nothing is recomputed at simulation time.
-    # The compile rule is ours: no suite Makefile, no autoconf. `-march=rv32i`
-    # proves the image only uses the base ISA (the suite links with -march=rv32g
-    # which merely permits M/A/F/D). `fence_i.S` is Zifencei.
+    # The compile rule is ours: no suite Makefile, no autoconf. The suite's own
+    # riscv_test.h is on the include path FIRST, so rv32mi compiles against the
+    # faithful trap ceremony and rv32ui keeps the base one.
     set(SANITY_ARTIFACTS "")
     foreach(SANITY_IMAGE IN LISTS SANITY_IMAGES)
+        set(SANITY_SUITE "")
         set(SANITY_STEM "${SANITY_IMAGE}")
-        string(REGEX REPLACE "^rv32ui-p-" "" SANITY_STEM "${SANITY_STEM}")
+        foreach(SUITE IN LISTS SANITY_SUITES)
+            if(SANITY_IMAGE MATCHES "^${SUITE}-p-")
+                set(SANITY_SUITE "${SUITE}")
+                string(REGEX REPLACE "^${SUITE}-p-" "" SANITY_STEM "${SANITY_IMAGE}")
+                break()
+            endif()
+        endforeach()
+        if(SANITY_SUITE STREQUAL "")
+            message(FATAL_ERROR "${SANITY_IMAGE} names no suite in SANITY_SUITES ('${SANITY_SUITES}')")
+        endif()
+        riscv_sanity_env_dir("${SANITY_ENV}" "${SANITY_SUITE}" SANITY_ENV_SUITE)
+        riscv_sanity_march("${SANITY_SUITE}" "${SANITY_STEM}" SANITY_ARCH)
+
         # A project-local image shadows a bundled one of the same stem; the
         # bundled directory is the fallback, so src/riscv-tests stays untouched.
         # Both local spellings are accepted: <stem>.S and <image>.S.
-        set(SANITY_LOCAL_DIR "${CMAKE_CURRENT_LIST_DIR}/sanity/local")
         set(SANITY_LOCAL_SOURCE "${SANITY_LOCAL_DIR}/${SANITY_IMAGE}.S")
         if(NOT EXISTS "${SANITY_LOCAL_SOURCE}")
             set(SANITY_LOCAL_SOURCE "${SANITY_LOCAL_DIR}/${SANITY_STEM}.S")
@@ -147,17 +247,12 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         if(EXISTS "${SANITY_LOCAL_SOURCE}")
             set(SANITY_SOURCE "${SANITY_LOCAL_SOURCE}")
         else()
-            set(SANITY_SOURCE "${RISCV_TESTS_DIR}/isa/rv32ui/${SANITY_STEM}.S")
+            set(SANITY_SOURCE "${RISCV_TESTS_DIR}/isa/${SANITY_SUITE}/${SANITY_STEM}.S")
         endif()
         set(SANITY_ELF "${SANITY_ISA_DIR}/${SANITY_IMAGE}")
         set(SANITY_HEX "${SANITY_HEX_DIR}/${SANITY_IMAGE}.hex")
         set(SANITY_TOHOST "${SANITY_TOHOST_DIR}/${SANITY_IMAGE}")
         set(SANITY_DUMP "${SANITY_DUMP_DIR}/${SANITY_IMAGE}.dump")
-
-        set(SANITY_ARCH "rv32i")
-        if(SANITY_STEM STREQUAL "fence_i")
-            set(SANITY_ARCH "rv32i_zifencei")
-        endif()
 
         add_custom_command(
             OUTPUT "${SANITY_ELF}"
@@ -166,12 +261,14 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
                     -march=${SANITY_ARCH} -mabi=ilp32
                     -static -mcmodel=medany -fvisibility=hidden
                     -nostdlib -nostartfiles
+                    -I${SANITY_ENV_SUITE}
                     -I${SANITY_ENV}
                     -I${RISCV_TESTS_DIR}/env
                     -I${RISCV_TESTS_DIR}/isa/macros/scalar
                     -T${SANITY_ENV}/link.ld
                     ${SANITY_SOURCE} -o ${SANITY_ELF}
-            DEPENDS "${SANITY_SOURCE}" "${SANITY_ENV}/riscv_test.h" "${SANITY_ENV}/link.ld"
+            DEPENDS "${SANITY_SOURCE}" "${SANITY_ENV_SUITE}/riscv_test.h"
+                    "${SANITY_ENV}/riscv_test.h" "${SANITY_ENV}/link.ld"
             COMMENT "Compiling ${SANITY_IMAGE}..."
             VERBATIM
         )
@@ -260,9 +357,9 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
                 TIMEOUT ${SANITY_TIMEOUT}
                 SKIP_RETURN_CODE 77)
         endforeach()
-        message(STATUS "Sanity images: ${SANITY_IMAGE_COUNT} (CTest label 'sanity')")
+        message(STATUS "Sanity images: ${SANITY_IMAGE_COUNT} from ${SANITY_SUITES} (CTest label 'sanity')")
     else()
-        message(STATUS "Sanity images: ${SANITY_IMAGE_COUNT} (no tb/tests/${SANITY_TEST}.sv: NFR-05 not measurable, G-10)")
+        message(STATUS "Sanity images: ${SANITY_IMAGE_COUNT} from ${SANITY_SUITES} (no tb/tests/${SANITY_TEST}.sv: NFR-05 not measurable, G-10)")
     endif()
 
     # The gate deliberately does not depend on `elaborate`: it must be able to
